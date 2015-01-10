@@ -15,6 +15,25 @@ JX.behavior('maniphest-transaction-controls', function(config) {
     tokenizers[k].start();
   }
 
+  var statusSelector = JX.DOM.scry(JX.$(config.statusSelect), 'select')[0];
+
+  function updateOwnerVisibility() {
+    var selectedStatus = statusSelector.value;
+    if (config.closedStatuses.indexOf(selectedStatus) != -1) {
+      JX.DOM.show(JX.$(config.ownerSelect));
+      tokenizers[config.ownerConstant].refresh();
+    } else {
+      JX.DOM.hide(JX.$(config.ownerSelect));
+    }
+  }
+
+  JX.DOM.listen(
+    statusSelector,
+    'change',
+    null,
+    updateOwnerVisibility
+  );
+
   JX.DOM.listen(
     JX.$(config.select),
     'change',
@@ -29,6 +48,9 @@ JX.behavior('maniphest-transaction-controls', function(config) {
         } else {
           JX.DOM.hide(JX.$(config.controlMap[k]));
         }
+      }
+      if(JX.$(config.select).value == config.statusConstant) {
+        updateOwnerVisibility();
       }
     });
 
