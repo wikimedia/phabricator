@@ -65,6 +65,12 @@ final class PhabricatorManiphestConfigOptions
       'open' => array(
         'name' => pht('Open'),
         'special' => ManiphestTaskStatus::SPECIAL_DEFAULT,
+        'prefixes' => array(
+          'open',
+          'opens',
+          'reopen',
+          'reopens',
+        ),
       ),
       'resolved' => array(
         'name' => pht('Resolved'),
@@ -117,7 +123,7 @@ final class PhabricatorManiphestConfigOptions
       'duplicate' => array(
         'name' => pht('Duplicate'),
         'name.full' => pht('Closed, Duplicate'),
-        'transaction.icon' => 'fa-times',
+        'transaction.icon' => 'fa-files-o',
         'special' => ManiphestTaskStatus::SPECIAL_DUPLICATE,
         'closed' => true,
       ),

@@ -20,7 +20,7 @@ final class UserAddStatusConduitAPIMethod extends UserConduitAPIMethod {
       'Calendar application.');
   }
 
-  public function defineParamTypes() {
+  protected function defineParamTypes() {
     $status_const = $this->formatStringConstants(array('away', 'sporadic'));
 
     return array(
@@ -31,11 +31,11 @@ final class UserAddStatusConduitAPIMethod extends UserConduitAPIMethod {
     );
   }
 
-  public function defineReturnType() {
+  protected function defineReturnType() {
     return 'void';
   }
 
-  public function defineErrorTypes() {
+  protected function defineErrorTypes() {
     return array(
       'ERR-BAD-EPOCH' => "'toEpoch' must be bigger than 'fromEpoch'.",
       'ERR-OVERLAP'   =>
@@ -50,17 +50,13 @@ final class UserAddStatusConduitAPIMethod extends UserConduitAPIMethod {
     $status      = $request->getValue('status');
     $description = $request->getValue('description', '');
 
-    try {
-      id(new PhabricatorCalendarEvent())
-        ->setUserPHID($user_phid)
-        ->setDateFrom($from)
-        ->setDateTo($to)
-        ->setTextStatus($status)
-        ->setDescription($description)
-        ->save();
-    } catch (PhabricatorCalendarEventInvalidEpochException $e) {
-      throw new ConduitException('ERR-BAD-EPOCH');
-    }
+    id(new PhabricatorCalendarEvent())
+      ->setUserPHID($user_phid)
+      ->setDateFrom($from)
+      ->setDateTo($to)
+      ->setTextStatus($status)
+      ->setDescription($description)
+      ->save();
   }
 
 }

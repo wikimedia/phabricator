@@ -544,9 +544,22 @@ final class PhabricatorRepository extends PhabricatorRepositoryDAO
     // trusted, Mercurial prints out a warning to stdout, twice, after Feb 2011.
     //
     // http://selenic.com/pipermail/mercurial-devel/2011-February/028541.html
+    //
+    // After Jan 2015, it may also fail to write to a revision branch cache.
+
+    $ignore = array(
+      'ignoring untrusted configuration option',
+      "couldn't write revision branch cache:",
+    );
+
+    foreach ($ignore as $key => $pattern) {
+      $ignore[$key] = preg_quote($pattern, '/');
+    }
+
+    $ignore = '('.implode('|', $ignore).')';
 
     $lines = preg_split('/(?<=\n)/', $stdout);
-    $regex = '/ignoring untrusted configuration option .*\n$/';
+    $regex = '/'.$ignore.'.*\n$/';
 
     foreach ($lines as $key => $line) {
       $lines[$key] = preg_replace($regex, '', $line);
@@ -1150,9 +1163,14 @@ final class PhabricatorRepository extends PhabricatorRepositoryDAO
       $projects = id(new PhabricatorRepositoryArcanistProject())
         ->loadAllWhere('repositoryID = %d', $this->getID());
       foreach ($projects as $project) {
-        // note each project deletes its PhabricatorRepositorySymbols
         $project->delete();
       }
+
+      queryfx(
+        $this->establishConnection('w'),
+        'DELETE FROM %T WHERE repositoryPHID = %s',
+        id(new PhabricatorRepositorySymbol())->getTableName(),
+        $this->getPHID());
 
       $commits = id(new PhabricatorRepositoryCommit())
         ->loadAllWhere('repositoryID = %d', $this->getID());

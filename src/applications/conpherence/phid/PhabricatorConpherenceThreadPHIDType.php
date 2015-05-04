@@ -12,6 +12,10 @@ final class PhabricatorConpherenceThreadPHIDType extends PhabricatorPHIDType {
     return new ConpherenceThread();
   }
 
+  public function getPHIDTypeApplicationClass() {
+    return 'PhabricatorConpherenceApplication';
+  }
+
   protected function buildQueryForObjects(
     PhabricatorObjectQuery $query,
     array $phids) {
@@ -31,7 +35,7 @@ final class PhabricatorConpherenceThreadPHIDType extends PhabricatorPHIDType {
       $data = $thread->getDisplayData($query->getViewer());
       $handle->setName($data['title']);
       $handle->setFullName($data['title']);
-      $handle->setURI('/conpherence/'.$thread->getID().'/');
+      $handle->setURI('/'.$thread->getMonogram());
     }
   }
 

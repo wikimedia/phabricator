@@ -14,9 +14,15 @@ final class DiffusionLowLevelResolveRefsQuery
   extends DiffusionLowLevelQuery {
 
   private $refs;
+  private $types;
 
   public function withRefs(array $refs) {
     $this->refs = $refs;
+    return $this;
+  }
+
+  public function withTypes(array $types) {
+    $this->types = $types;
     return $this;
   }
 
@@ -39,25 +45,80 @@ final class DiffusionLowLevelResolveRefsQuery
         throw new Exception('Unsupported repository type!');
     }
 
+    if ($this->types !== null) {
+      $result = $this->filterRefsByType($result, $this->types);
+    }
+
     return $result;
   }
 
   private function resolveGitRefs() {
     $repository = $this->getRepository();
 
+    $unresolved = array_fuse($this->refs);
+    $results = array();
+
+    // First, resolve branches and tags.
+    $ref_map = id(new DiffusionLowLevelGitRefQuery())
+      ->setRepository($repository)
+      ->withIsTag(true)
+      ->withIsOriginBranch(true)
+      ->execute();
+    $ref_map = mgroup($ref_map, 'getShortName');
+
+    $tag_prefix = 'refs/tags/';
+    foreach ($unresolved as $ref) {
+      if (empty($ref_map[$ref])) {
+        continue;
+      }
+
+      foreach ($ref_map[$ref] as $result) {
+        $fields = $result->getRawFields();
+        $objectname = idx($fields, 'refname');
+        if (!strncmp($objectname, $tag_prefix, strlen($tag_prefix))) {
+          $type = 'tag';
+        } else {
+          $type = 'branch';
+        }
+
+        $info = array(
+          'type' => $type,
+          'identifier' => $result->getCommitIdentifier(),
+        );
+
+        if ($type == 'tag') {
+          $alternate = idx($fields, 'objectname');
+          if ($alternate) {
+            $info['alternate'] = $alternate;
+          }
+        }
+
+        $results[$ref][] = $info;
+      }
+
+      unset($unresolved[$ref]);
+    }
+
+    // If we resolved everything, we're done.
+    if (!$unresolved) {
+      return $results;
+    }
+
+    // Try to resolve anything else. This stuff either doesn't exist or is
+    // some ref like "HEAD^^^".
     $future = $repository->getLocalCommandFuture('cat-file --batch-check');
-    $future->write(implode("\n", $this->refs));
+    $future->write(implode("\n", $unresolved));
     list($stdout) = $future->resolvex();
 
     $lines = explode("\n", rtrim($stdout, "\n"));
-    if (count($lines) !== count($this->refs)) {
+    if (count($lines) !== count($unresolved)) {
       throw new Exception('Unexpected line count from `git cat-file`!');
     }
 
     $hits = array();
     $tags = array();
 
-    $lines = array_combine($this->refs, $lines);
+    $lines = array_combine($unresolved, $lines);
     foreach ($lines as $ref => $line) {
       $parts = explode(' ', $line);
       if (count($parts) < 2) {
@@ -138,15 +199,50 @@ final class DiffusionLowLevelResolveRefsQuery
   private function resolveMercurialRefs() {
     $repository = $this->getRepository();
 
+    // First, pull all of the branch heads in the repository. Doing this in
+    // bulk is much faster than querying each individual head if we're
+    // checking even a small number of refs.
+    $branches = id(new DiffusionLowLevelMercurialBranchesQuery())
+      ->setRepository($repository)
+      ->executeQuery();
+
+    $branches = mgroup($branches, 'getShortName');
+
+    $results = array();
+    $unresolved = $this->refs;
+    foreach ($unresolved as $key => $ref) {
+      if (empty($branches[$ref])) {
+        continue;
+      }
+
+      foreach ($branches[$ref] as $branch) {
+        $fields = $branch->getRawFields();
+
+        $results[$ref][] = array(
+          'type' => 'branch',
+          'identifier' => $branch->getCommitIdentifier(),
+          'closed' => idx($fields, 'closed', false),
+        );
+      }
+
+      unset($unresolved[$key]);
+    }
+
+    if (!$unresolved) {
+      return $results;
+    }
+
+    // If we still have unresolved refs (which might be things like "tip"),
+    // try to resolve them individually.
+
     $futures = array();
-    foreach ($this->refs as $ref) {
+    foreach ($unresolved as $ref) {
       $futures[$ref] = $repository->getLocalCommandFuture(
         'log --template=%s --rev %s',
         '{node}',
         hgsprintf('%s', $ref));
     }
 
-    $results = array();
     foreach (new FutureIterator($futures) as $ref => $future) {
       try {
         list($stdout) = $future->resolvex();
@@ -155,6 +251,10 @@ final class DiffusionLowLevelResolveRefsQuery
           // This indicates that the ref ambiguously matched several things.
           // Eventually, it would be nice to return all of them, but it is
           // unclear how to best do that. For now, treat it as a miss instead.
+          continue;
+        }
+        if (preg_match('/unknown revision/', $ex->getStdErr())) {
+          // No matches for this ref.
           continue;
         }
         throw $ex;

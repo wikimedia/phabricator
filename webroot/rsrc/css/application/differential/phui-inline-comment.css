@@ -132,6 +132,44 @@
     padding-bottom: 4px;
 }
 
+/* - Ghost Comment ------------------------------------------------------------
+
+  Comments from older or newer versions of the changeset.
+
+*/
+
+.differential-inline-comment.inline-comment-ghost {
+  border: 1px solid {$lightgreyborder};
+  opacity: 0.75;
+}
+
+.differential-inline-comment.inline-comment-ghost
+  .differential-inline-comment-head {
+    border-bottom: 1px solid {$lightgreyborder};
+    background-color: {$lightgreybackground};
+}
+
+.differential-inline-comment.inline-comment-ghost
+  .button.simple .phui-icon-view {
+  color: {$lightgreytext};
+}
+
+/* - New/Edit Inline Comment --------------------------------------------------
+
+  Styles for when you are creating or editing an inline comment.
+
+*/
+
+.differential-inline-comment .done-label {
+  display: inline-block;
+  color: {$sh-yellowicon};
+  padding: 4px;
+}
+
+.differential-inline-comment.inline-state-is-draft .done-label,
+.differential-inline-comment.inline-comment-ghost .done-label {
+  color: {$lightgreytext};
+}
 
 /* - New/Edit Inline Comment --------------------------------------------------
 
@@ -213,6 +251,8 @@
 .differential-inline-comment.inline-state-is-draft
   .differential-inline-done-label,
 .differential-inline-comment.inline-state-is-draft
+  .button.simple,
+.differential-inline-comment.inline-comment-ghost
   .button.simple {
   border-color: {$lightgreyborder};
   color: {$lightgreytext};
@@ -238,9 +278,7 @@
   border: 1px solid {$sh-yellowborder};
   border-radius: 3px;
   display: inline-block;
-  overflow: hidden;
-  margin-left: 8px;
-  padding: 3px 8px 4px;
+  padding: 4px 8px 5px;
   cursor: pointer;
 }
 
@@ -273,32 +311,8 @@
     color: {$sky};
 }
 
-.device-desktop .differential-inline-comment.inline-state-is-draft
-  .differential-inline-comment-head .button.simple.button-not-done:hover {
-  color: {$lightgreytext};
-  background-color: transparent;
-  border-color: {$lightgreyborder};
-  cursor: auto;
-}
-
-.device-desktop .differential-inline-comment .differential-inline-comment-head
-  .simple.button.button-not-done:hover {
-    color: {$sh-yellowicon};
-    background-color: transparent;
-    border-color: {$sh-yellowborder};
-    cursor: auto;
-}
-
 .differential-inline-comment.inline-is-done .differential-inline-comment-head
-  .button.simple.button-done {
-    background-color: #fff;
-    color: {$sky};
-    border-color: {$sky};
-    cursor: auto;
-}
-
-.differential-inline-comment.inline-is-done .differential-inline-comment-head
-  .button.simple.button-done .phui-icon-view {
+  .button-done {
     color: {$sky};
 }
 
@@ -350,7 +364,7 @@
 }
 
 .differential-inline-comment.inline-state-is-draft .inline-draft-text {
-    display: inline-block;
+  display: inline-block;
 }
 
 .inline-state-is-draft .differential-inline-done-label {
@@ -378,4 +392,61 @@
 
 .differential-inline-undo a {
   font-weight: bold;
+}
+
+/* - Spooky Ghost UI -----------------------------------------------------------
+
+  Hide your codez.
+
+*/
+
+.inline-comment-ghost .differential-inline-comment-head {
+  padding-left: 40px;
+}
+
+.ghost-icon {
+  background: {$darkgreybackground};
+  float: left;
+  margin-right: 8px;
+  padding: 2px 4px 2px 2px;
+  position: absolute;
+  top: 0;
+  left: 0;
+}
+
+.ghost-icon .phui-icon-view {
+  padding: 7px 7px 8px;
+  font-size: 15px;
+  color: {$lightbluetext};
+}
+
+.device-desktop .ghost-icon .phui-icon-view:hover {
+  color: {$sky};
+}
+
+.inline-comment-ghost .differential-inline-comment-content {
+  display: none;
+}
+
+.inline-comment-ghost.ghost-is-expanded .differential-inline-comment-content {
+  display: block;
+}
+
+.differential-inline-comment.inline-comment-ghost
+  .differential-inline-comment-head {
+    border-bottom-color: transparent;
+    position: relative;
+}
+
+.differential-inline-comment.inline-comment-ghost.ghost-is-expanded
+  .differential-inline-comment-head {
+    border-bottom-color: {$thinblueborder};
+    position: relative;
+}
+
+.differential-inline-comment.inline-comment-ghost
+  .differential-inline-done-label,
+.differential-inline-comment.inline-comment-ghost {
+    border-color: {$lightgreyborder};
+    color: {$lightgreytext};
 }

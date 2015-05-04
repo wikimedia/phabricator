@@ -9,6 +9,7 @@ final class PhabricatorCalendarEventQuery
   private $rangeEnd;
   private $invitedPHIDs;
   private $creatorPHIDs;
+  private $isCancelled;
 
   public function withIDs(array $ids) {
     $this->ids = $ids;
@@ -36,6 +37,11 @@ final class PhabricatorCalendarEventQuery
     return $this;
   }
 
+  public function withIsCancelled($is_cancelled) {
+    $this->isCancelled = $is_cancelled;
+    return $this;
+  }
+
   protected function loadPage() {
     $table = new PhabricatorCalendarEvent();
     $conn_r = $table->establishConnection('r');
@@ -51,7 +57,7 @@ final class PhabricatorCalendarEventQuery
     return $table->loadAllFromArray($data);
   }
 
-  protected function buildWhereClause($conn_r) {
+  protected function buildWhereClause(AphrontDatabaseConnection $conn_r) {
     $where = array();
 
     if ($this->ids) {
@@ -99,6 +105,13 @@ final class PhabricatorCalendarEventQuery
         $this->creatorPHIDs);
     }
 
+    if ($this->isCancelled !== null) {
+      $where[] = qsprintf(
+        $conn_r,
+        'isCancelled = %d',
+        (int)$this->isCancelled);
+    }
+
     $where[] = $this->buildPagingClause($conn_r);
 
     return $this->formatWhereClause($where);
@@ -106,6 +119,28 @@ final class PhabricatorCalendarEventQuery
 
   public function getQueryApplicationClass() {
     return 'PhabricatorCalendarApplication';
+  }
+
+
+  protected function willFilterPage(array $events) {
+    $phids = array();
+
+    foreach ($events as $event) {
+      $phids[] = $event->getPHID();
+    }
+
+    $invitees = id(new PhabricatorCalendarEventInviteeQuery())
+      ->setViewer($this->getViewer())
+      ->withEventPHIDs($phids)
+      ->execute();
+    $invitees = mgroup($invitees, 'getEventPHID');
+
+    foreach ($events as $event) {
+      $event_invitees = idx($invitees, $event->getPHID(), array());
+      $event->attachInvitees($event_invitees);
+    }
+
+    return $events;
   }
 
 }
