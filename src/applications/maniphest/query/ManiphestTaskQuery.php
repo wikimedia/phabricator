@@ -563,7 +563,7 @@ final class ManiphestTaskQuery extends PhabricatorCursorPagedPolicyAwareQuery {
     $fulltext_query->setParameter('types',
       array(ManiphestTaskPHIDType::TYPECONST));
 
-    $engine = PhabricatorSearchEngineSelector::newSelector()->newEngine();
+    $engine = PhabricatorSearchEngine::loadEngine();
     $fulltext_results = $engine->executeSearch($fulltext_query);
 
     if (empty($fulltext_results)) {
@@ -754,7 +754,7 @@ final class ManiphestTaskQuery extends PhabricatorCursorPagedPolicyAwareQuery {
     $id = $result->getID();
 
     if ($this->groupBy == self::GROUP_PROJECT) {
-      return rtrim($id.'.'.$result->getGroupByProjectPHID(), '.');;
+      return rtrim($id.'.'.$result->getGroupByProjectPHID(), '.');
     }
 
     return $id;

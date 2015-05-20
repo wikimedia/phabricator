@@ -166,7 +166,7 @@ abstract class HeraldAdapter {
     throw new Exception(pht('You must setIsNewObject to a boolean first!'));
   }
   public function setIsNewObject($new) {
-    $this->isNewObject = (bool) $new;
+    $this->isNewObject = (bool)$new;
     return $this;
   }
 
@@ -633,14 +633,16 @@ abstract class HeraldAdapter {
         // dictionary. The first regexp must match the dictionary key, and the
         // second regexp must match the dictionary value. If any key/value pair
         // in the dictionary matches both regexps, the condition is satisfied.
-        $regexp_pair = json_decode($condition_value, true);
-        if (!is_array($regexp_pair)) {
+        $regexp_pair = null;
+        try {
+          $regexp_pair = phutil_json_decode($condition_value);
+        } catch (PhutilJSONParserException $ex) {
           throw new HeraldInvalidConditionException(
-            'Regular expression pair is not valid JSON!');
+            pht('Regular expression pair is not valid JSON!'));
         }
         if (count($regexp_pair) != 2) {
           throw new HeraldInvalidConditionException(
-            'Regular expression pair is not a pair!');
+            pht('Regular expression pair is not a pair!'));
         }
 
         $key_regexp   = array_shift($regexp_pair);
@@ -679,9 +681,9 @@ abstract class HeraldAdapter {
         }
         return $result;
       case self::CONDITION_HAS_BIT:
-        return (($condition_value & $field_value) === (int) $condition_value);
+        return (($condition_value & $field_value) === (int)$condition_value);
       case self::CONDITION_NOT_BIT:
-        return (($condition_value & $field_value) !== (int) $condition_value);
+        return (($condition_value & $field_value) !== (int)$condition_value);
       default:
         throw new HeraldInvalidConditionException(
           "Unknown condition '{$condition_type}'.");
@@ -705,8 +707,10 @@ abstract class HeraldAdapter {
         }
         break;
       case self::CONDITION_REGEXP_PAIR:
-        $json = json_decode($condition_value, true);
-        if (!is_array($json)) {
+        $json = null;
+        try {
+          $json = phutil_json_decode($condition_value);
+        } catch (PhutilJSONParserException $ex) {
           throw new HeraldInvalidConditionException(
             pht(
               'The regular expression pair "%s" is not valid JSON. Enter a '.
@@ -1079,7 +1083,7 @@ abstract class HeraldAdapter {
   public static function getEnabledAdapterMap(PhabricatorUser $viewer) {
     $map = array();
 
-    $adapters = HeraldAdapter::getAllAdapters();
+    $adapters = self::getAllAdapters();
     foreach ($adapters as $adapter) {
       if (!$adapter->isAvailableToUser($viewer)) {
         continue;

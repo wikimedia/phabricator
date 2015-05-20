@@ -531,7 +531,8 @@ final class DifferentialRevision extends DifferentialDAO
     $query->adjustInlinesForChangesets(
       $inlines,
       array_select_keys($changesets, $old_ids),
-      array_select_keys($changesets, $new_ids));
+      array_select_keys($changesets, $new_ids),
+      $this);
 
     return $timeline
       ->setChangesets($changesets)
@@ -549,7 +550,7 @@ final class DifferentialRevision extends DifferentialDAO
 
     $this->openTransaction();
       $diffs = id(new DifferentialDiffQuery())
-        ->setViewer(PhabricatorUser::getOmnipotentUser())
+        ->setViewer($engine->getViewer())
         ->withRevisionIDs(array($this->getID()))
         ->execute();
       foreach ($diffs as $diff) {

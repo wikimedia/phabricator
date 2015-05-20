@@ -13,8 +13,7 @@ final class PhabricatorCalendarEventEditController
     return !$this->id;
   }
 
-  public function processRequest() {
-    $request = $this->getRequest();
+  public function handleRequest(AphrontRequest $request) {
     $user = $request->getUser();
     $user_phid = $user->getPHID();
     $error_name = true;
@@ -73,7 +72,8 @@ final class PhabricatorCalendarEventEditController
 
     $name = $event->getName();
     $description = $event->getDescription();
-    $type = $event->getStatus();
+    $is_all_day = $event->getIsAllDay();
+    $icon = $event->getIcon();
 
     $current_policies = id(new PhabricatorPolicyQuery())
       ->setViewer($user)
@@ -83,7 +83,6 @@ final class PhabricatorCalendarEventEditController
     if ($request->isFormPost()) {
       $xactions = array();
       $name = $request->getStr('name');
-      $type = $request->getInt('status');
 
       $start_value = AphrontFormDateControlValue::newFromRequest(
         $request,
@@ -95,6 +94,8 @@ final class PhabricatorCalendarEventEditController
       $subscribers = $request->getArr('subscribers');
       $edit_policy = $request->getStr('editPolicy');
       $view_policy = $request->getStr('viewPolicy');
+      $is_all_day = $request->getStr('isAllDay');
+      $icon = $request->getStr('icon');
 
       $invitees = $request->getArr('invitees');
       $new_invitees = $this->getNewInviteeList($invitees, $event);
@@ -113,6 +114,16 @@ final class PhabricatorCalendarEventEditController
 
       $xactions[] = id(new PhabricatorCalendarEventTransaction())
         ->setTransactionType(
+          PhabricatorCalendarEventTransaction::TYPE_ALL_DAY)
+        ->setNewValue($is_all_day);
+
+      $xactions[] = id(new PhabricatorCalendarEventTransaction())
+        ->setTransactionType(
+          PhabricatorCalendarEventTransaction::TYPE_ICON)
+        ->setNewValue($icon);
+
+      $xactions[] = id(new PhabricatorCalendarEventTransaction())
+        ->setTransactionType(
           PhabricatorCalendarEventTransaction::TYPE_START_DATE)
         ->setNewValue($start_value);
 
@@ -120,11 +131,6 @@ final class PhabricatorCalendarEventEditController
         ->setTransactionType(
           PhabricatorCalendarEventTransaction::TYPE_END_DATE)
         ->setNewValue($end_value);
-
-      $xactions[] = id(new PhabricatorCalendarEventTransaction())
-        ->setTransactionType(
-          PhabricatorCalendarEventTransaction::TYPE_STATUS)
-        ->setNewValue($type);
 
       $xactions[] = id(new PhabricatorCalendarEventTransaction())
         ->setTransactionType(
@@ -172,31 +178,47 @@ final class PhabricatorCalendarEventEditController
       }
     }
 
+    $all_day_id = celerity_generate_unique_node_id();
+    $start_date_id = celerity_generate_unique_node_id();
+    $end_date_id = celerity_generate_unique_node_id();
+
+    Javelin::initBehavior('event-all-day', array(
+      'allDayID' => $all_day_id,
+      'startDateID' => $start_date_id,
+      'endDateID' => $end_date_id,
+    ));
+
     $name = id(new AphrontFormTextControl())
       ->setLabel(pht('Name'))
       ->setName('name')
       ->setValue($name)
       ->setError($error_name);
 
-    $status_select = id(new AphrontFormSelectControl())
-      ->setLabel(pht('Status'))
-      ->setName('status')
-      ->setValue($type)
-      ->setOptions($event->getStatusOptions());
+    $all_day_checkbox = id(new AphrontFormCheckboxControl())
+      ->addCheckbox(
+        'isAllDay',
+        1,
+        pht('All Day Event'),
+        $is_all_day,
+        $all_day_id);
 
     $start_control = id(new AphrontFormDateControl())
       ->setUser($user)
       ->setName('start')
       ->setLabel(pht('Start'))
       ->setError($error_start_date)
-      ->setValue($start_value);
+      ->setValue($start_value)
+      ->setID($start_date_id)
+      ->setIsTimeDisabled($is_all_day);
 
     $end_control = id(new AphrontFormDateControl())
       ->setUser($user)
       ->setName('end')
       ->setLabel(pht('End'))
       ->setError($error_end_date)
-      ->setValue($end_value);
+      ->setValue($end_value)
+      ->setID($end_date_id)
+      ->setIsTimeDisabled($is_all_day);
 
     $description = id(new AphrontFormTextAreaControl())
       ->setLabel(pht('Description'))
@@ -230,17 +252,32 @@ final class PhabricatorCalendarEventEditController
       ->setUser($user)
       ->setDatasource(new PhabricatorMetaMTAMailableDatasource());
 
+    if ($this->isCreate()) {
+      $icon_uri = $this->getApplicationURI('icon/');
+    } else {
+      $icon_uri = $this->getApplicationURI('icon/'.$event->getID().'/');
+    }
+    $icon_display = PhabricatorCalendarIcon::renderIconForChooser($icon);
+    $icon = id(new AphrontFormChooseButtonControl())
+      ->setLabel(pht('Icon'))
+      ->setName('icon')
+      ->setDisplayValue($icon_display)
+      ->setButtonText(pht('Choose Icon...'))
+      ->setChooseURI($icon_uri)
+      ->setValue($icon);
+
     $form = id(new AphrontFormView())
       ->setUser($user)
       ->appendChild($name)
-      ->appendChild($status_select)
+      ->appendChild($all_day_checkbox)
       ->appendChild($start_control)
       ->appendChild($end_control)
       ->appendControl($view_policies)
       ->appendControl($edit_policies)
       ->appendControl($subscribers)
       ->appendControl($invitees)
-      ->appendChild($description);
+      ->appendChild($description)
+      ->appendChild($icon);
 
 
     if ($request->isAjax()) {

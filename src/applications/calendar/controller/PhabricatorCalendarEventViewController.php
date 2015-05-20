@@ -76,7 +76,7 @@ final class PhabricatorCalendarEventViewController
     $is_cancelled = $event->getIsCancelled();
     $icon = $is_cancelled ? ('fa-times') : ('fa-calendar');
     $color = $is_cancelled ? ('grey') : ('green');
-    $status = $is_cancelled ? ('Cancelled') : ('Active');
+    $status = $is_cancelled ? pht('Cancelled') : pht('Active');
 
     $invite_status = $event->getUserInviteStatus($viewer->getPHID());
     $status_invited = PhabricatorCalendarEventInvitee::STATUS_INVITED;
@@ -179,37 +179,96 @@ final class PhabricatorCalendarEventViewController
       ->setUser($viewer)
       ->setObject($event);
 
-    $properties->addProperty(
-      pht('Starts'),
-      phabricator_datetime($event->getDateFrom(), $viewer));
+    if ($event->getIsAllDay()) {
+      $date_start = phabricator_date($event->getDateFrom(), $viewer);
+      $date_end = phabricator_date($event->getDateTo(), $viewer);
 
-    $properties->addProperty(
-      pht('Ends'),
-      phabricator_datetime($event->getDateTo(), $viewer));
-
-    $invitees = $event->getInvitees();
-    $invitee_list = new PHUIStatusListView();
-    foreach ($invitees as $invitee) {
-      if ($invitee->isUninvited()) {
-        continue;
+      if ($date_start == $date_end) {
+        $properties->addProperty(
+          pht('Time'),
+          phabricator_date($event->getDateFrom(), $viewer));
+      } else {
+        $properties->addProperty(
+          pht('Starts'),
+          phabricator_date($event->getDateFrom(), $viewer));
+        $properties->addProperty(
+          pht('Ends'),
+          phabricator_date($event->getDateTo(), $viewer));
       }
-      $item = new PHUIStatusItemView();
-      $invitee_phid = $invitee->getInviteePHID();
-      $target = $viewer->renderHandle($invitee_phid);
-      $item->setNote($invitee->getStatus())
-        ->setTarget($target);
-      $invitee_list->addItem($item);
+    } else {
+      $properties->addProperty(
+        pht('Starts'),
+        phabricator_datetime($event->getDateFrom(), $viewer));
+
+      $properties->addProperty(
+        pht('Ends'),
+        phabricator_datetime($event->getDateTo(), $viewer));
     }
 
     $properties->addProperty(
       pht('Host'),
       $viewer->renderHandle($event->getUserPHID()));
 
+    $invitees = $event->getInvitees();
+    foreach ($invitees as $key => $invitee) {
+      if ($invitee->isUninvited()) {
+        unset($invitees[$key]);
+      }
+    }
+
+    if ($invitees) {
+      $invitee_list = new PHUIStatusListView();
+
+      $icon_invited = PHUIStatusItemView::ICON_OPEN;
+      $icon_attending = PHUIStatusItemView::ICON_ACCEPT;
+      $icon_declined = PHUIStatusItemView::ICON_REJECT;
+
+      $status_invited = PhabricatorCalendarEventInvitee::STATUS_INVITED;
+      $status_attending = PhabricatorCalendarEventInvitee::STATUS_ATTENDING;
+      $status_declined = PhabricatorCalendarEventInvitee::STATUS_DECLINED;
+
+      $icon_map = array(
+        $status_invited => $icon_invited,
+        $status_attending => $icon_attending,
+        $status_declined => $icon_declined,
+      );
+
+      $icon_color_map = array(
+        $status_invited => null,
+        $status_attending => 'green',
+        $status_declined => 'red',
+      );
+
+      foreach ($invitees as $invitee) {
+        $item = new PHUIStatusItemView();
+        $invitee_phid = $invitee->getInviteePHID();
+        $status = $invitee->getStatus();
+        $target = $viewer->renderHandle($invitee_phid);
+        $icon = $icon_map[$status];
+        $icon_color = $icon_color_map[$status];
+
+        $item->setIcon($icon, $icon_color)
+          ->setTarget($target);
+        $invitee_list->addItem($item);
+      }
+    } else {
+      $invitee_list = phutil_tag(
+        'em',
+        array(),
+        pht('None'));
+    }
+
     $properties->addProperty(
       pht('Invitees'),
       $invitee_list);
 
     $properties->invokeWillRenderEvent();
+
+    $icon_display = PhabricatorCalendarIcon::renderIconForChooser(
+      $event->getIcon());
+    $properties->addProperty(
+      pht('Icon'),
+      $icon_display);
 
     $properties->addSectionHeader(
       pht('Description'),

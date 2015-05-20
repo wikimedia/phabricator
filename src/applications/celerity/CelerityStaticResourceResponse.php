@@ -33,14 +33,16 @@ final class CelerityStaticResourceResponse {
   }
 
   /**
-   * Register a behavior for initialization. NOTE: if $config is empty,
-   * a behavior will execute only once even if it is initialized multiple times.
-   * If $config is nonempty, the behavior will be invoked once for each config.
+   * Register a behavior for initialization.
+   *
+   * NOTE: If `$config` is empty, a behavior will execute only once even if it
+   * is initialized multiple times. If `$config` is nonempty, the behavior will
+   * be invoked once for each configuration.
    */
   public function initBehavior(
     $behavior,
     array $config = array(),
-    $source_name) {
+    $source_name = null) {
 
     $this->requireResource('javelin-behavior-'.$behavior, $source_name);
 
@@ -144,8 +146,11 @@ final class CelerityStaticResourceResponse {
     $uri = $this->getURI($map, $name);
     $type = $map->getResourceTypeForName($name);
 
-    $event_type = MultimeterEvent::TYPE_STATIC_RESOURCE;
-    MultimeterControl::getInstance()->newEvent($event_type, 'rsrc.'.$name, 1);
+    $multimeter = MultimeterControl::getInstance();
+    if ($multimeter) {
+      $event_type = MultimeterEvent::TYPE_STATIC_RESOURCE;
+      $multimeter->newEvent($event_type, 'rsrc.'.$name, 1);
+    }
 
     switch ($type) {
       case 'css':

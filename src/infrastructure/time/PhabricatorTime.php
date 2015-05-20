@@ -25,7 +25,10 @@ final class PhabricatorTime {
 
   public static function popTime($key) {
     if ($key !== last_key(self::$stack)) {
-      throw new Exception('PhabricatorTime::popTime with bad key.');
+      throw new Exception(
+        pht(
+          '%s with bad key.',
+          __METHOD__));
     }
     array_pop(self::$stack);
 
@@ -49,13 +52,24 @@ final class PhabricatorTime {
     $old_zone = date_default_timezone_get();
 
     date_default_timezone_set($user->getTimezoneIdentifier());
-      $timestamp = (int)strtotime($time, PhabricatorTime::getNow());
+      $timestamp = (int)strtotime($time, self::getNow());
       if ($timestamp <= 0) {
         $timestamp = null;
       }
     date_default_timezone_set($old_zone);
 
     return $timestamp;
+  }
+
+  public static function getTodayMidnightDateTime($viewer) {
+    $timezone = new DateTimeZone($viewer->getTimezoneIdentifier());
+    $today = new DateTime('@'.time());
+    $today->setTimeZone($timezone);
+    $year = $today->format('Y');
+    $month = $today->format('m');
+    $day = $today->format('d');
+    $today = new DateTime("{$year}-{$month}-{$day}", $timezone);
+    return $today;
   }
 
 }

@@ -25,7 +25,7 @@
 JX.install('Quicksand', {
 
   statics: {
-    _id: 0,
+    _id: null,
     _onpage: 0,
     _cursor: 0,
     _current: 0,
@@ -53,6 +53,7 @@ JX.install('Quicksand', {
       var path = self._getRelativeURI(window.location);
       self._id = window.history.state || 0;
       var id = self._id;
+      self._onpage = id;
       self._history.push({path: path, id: id});
 
       self._responses[id] = first_response;
@@ -70,7 +71,11 @@ JX.install('Quicksand', {
 
 
     getCurrentPageID: function() {
-      return JX.Quicksand._id;
+      var self = JX.Quicksand;
+      if (self._id === null) {
+        self._id = window.history.state || 0;
+      }
+      return self._id;
     },
 
     /**

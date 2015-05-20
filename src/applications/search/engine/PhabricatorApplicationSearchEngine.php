@@ -33,7 +33,7 @@ abstract class PhabricatorApplicationSearchEngine {
 
   protected function requireViewer() {
     if (!$this->viewer) {
-      throw new Exception('Call setViewer() before using an engine!');
+      throw new PhutilInvalidStateException('setViewer');
     }
     return $this->viewer;
   }
@@ -566,11 +566,13 @@ abstract class PhabricatorApplicationSearchEngine {
     AphrontRequest $request,
     $key) {
 
-    return id(new AphrontFormDateControl())
-      ->setUser($this->requireViewer())
-      ->setName($key)
-      ->setAllowNull(true)
-      ->readValueFromRequest($request);
+    $value = AphrontFormDateControlValue::newFromRequest($request, $key);
+
+    if ($value->isEmpty()) {
+      return null;
+    }
+
+    return $value->getDictionary();
   }
 
   protected function readBoolFromRequest(

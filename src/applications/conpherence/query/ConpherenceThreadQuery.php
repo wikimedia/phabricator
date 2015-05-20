@@ -11,6 +11,8 @@ final class ConpherenceThreadQuery
   private $isRoom;
   private $needParticipants;
   private $needWidgetData;
+  private $needCropPics;
+  private $needOrigPics;
   private $needTransactions;
   private $needParticipantCache;
   private $needFilePHIDs;
@@ -36,6 +38,16 @@ final class ConpherenceThreadQuery
 
   public function needWidgetData($need_widget_data) {
     $this->needWidgetData = $need_widget_data;
+    return $this;
+  }
+
+  public function needCropPics($need) {
+    $this->needCropPics = $need;
+    return $this;
+  }
+
+  public function needOrigPics($need_widget_data) {
+    $this->needOrigPics = $need_widget_data;
     return $this;
   }
 
@@ -121,6 +133,15 @@ final class ConpherenceThreadQuery
       }
       if ($this->needWidgetData) {
         $this->loadWidgetData($conpherences);
+      }
+      if ($this->needOrigPics || $this->needCropPics) {
+        $this->initImages($conpherences);
+      }
+      if ($this->needOrigPics) {
+        $this->loadOrigPics($conpherences);
+      }
+      if ($this->needCropPics) {
+        $this->loadCropPics($conpherences);
       }
     }
 
@@ -264,10 +285,9 @@ final class ConpherenceThreadQuery
         $conpherence->$method();
     }
     $flat_phids = array_mergev($handle_phids);
-    $handles = id(new PhabricatorHandleQuery())
-      ->setViewer($this->getViewer())
-      ->withPHIDs($flat_phids)
-      ->execute();
+    $viewer = $this->getViewer();
+    $handles = $viewer->loadHandles($flat_phids);
+    $handles = iterator_to_array($handles);
     foreach ($handle_phids as $conpherence_phid => $phids) {
       $conpherence = $conpherences[$conpherence_phid];
       $conpherence->attachHandles(
@@ -334,13 +354,25 @@ final class ConpherenceThreadQuery
       $this->getViewer());
     $start_epoch = $epochs['start_epoch'];
     $end_epoch = $epochs['end_epoch'];
-    $statuses = id(new PhabricatorCalendarEventQuery())
-      ->setViewer($this->getViewer())
-      ->withInvitedPHIDs($participant_phids)
-      ->withDateRange($start_epoch, $end_epoch)
-      ->execute();
 
-    $statuses = mgroup($statuses, 'getUserPHID');
+    if ($participant_phids) {
+      $events = id(new PhabricatorCalendarEventQuery())
+        ->setViewer($this->getViewer())
+        ->withInvitedPHIDs($participant_phids)
+        ->withIsCancelled(false)
+        ->withDateRange($start_epoch, $end_epoch)
+        ->execute();
+      $events = mpull($events, null, 'getPHID');
+    } else {
+      $events = null;
+    }
+
+    $invitees = array();
+    foreach ($events as $event_phid => $event) {
+      foreach ($event->getInvitees() as $invitee) {
+        $invitees[$invitee->getInviteePHID()][$event_phid] = true;
+      }
+    }
 
     // attached files
     $files = array();
@@ -362,9 +394,16 @@ final class ConpherenceThreadQuery
 
     foreach ($conpherences as $phid => $conpherence) {
       $participant_phids = array_keys($conpherence->getParticipants());
-      $statuses = array_select_keys($statuses, $participant_phids);
-      $statuses = array_mergev($statuses);
-      $statuses = msort($statuses, 'getDateFrom');
+      $widget_data = array();
+
+      $event_phids = array();
+      $participant_invites = array_select_keys($invitees, $participant_phids);
+      foreach ($participant_invites as $invite_set) {
+        $event_phids += $invite_set;
+      }
+      $thread_events = array_select_keys($events, array_keys($event_phids));
+      $thread_events = msort($thread_events, 'getDateFrom');
+      $widget_data['events'] = $thread_events;
 
       $conpherence_files = array();
       $files_authors = array();
@@ -384,12 +423,56 @@ final class ConpherenceThreadQuery
         }
         $files_authors[$curr_phid] = $current_author;
       }
-      $widget_data = array(
-        'statuses' => $statuses,
+      $widget_data += array(
         'files' => $conpherence_files,
         'files_authors' => $files_authors,
       );
+
       $conpherence->attachWidgetData($widget_data);
+    }
+
+    return $this;
+  }
+
+  private function loadOrigPics(array $conpherences) {
+    return $this->loadPics(
+      $conpherences,
+      ConpherenceImageData::SIZE_ORIG);
+  }
+
+  private function loadCropPics(array $conpherences) {
+    return $this->loadPics(
+      $conpherences,
+      ConpherenceImageData::SIZE_CROP);
+  }
+
+  private function initImages($conpherences) {
+    foreach ($conpherences as $conpherence) {
+      $conpherence->attachImages(array());
+    }
+  }
+
+  private function loadPics(array $conpherences, $size) {
+    $conpherence_pic_phids = array();
+    foreach ($conpherences as $conpherence) {
+      $phid = $conpherence->getImagePHID($size);
+      if ($phid) {
+        $conpherence_pic_phids[$conpherence->getPHID()] = $phid;
+      }
+    }
+
+    if (!$conpherence_pic_phids) {
+      return $this;
+    }
+
+    $files = id(new PhabricatorFileQuery())
+      ->setViewer($this->getViewer())
+      ->withPHIDs($conpherence_pic_phids)
+      ->execute();
+    $files = mpull($files, null, 'getPHID');
+
+    foreach ($conpherence_pic_phids as $conpherence_phid => $pic_phid) {
+      $conpherences[$conpherence_phid]->setImage($files[$pic_phid], $size);
     }
 
     return $this;
