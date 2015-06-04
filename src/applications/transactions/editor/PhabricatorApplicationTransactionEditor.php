@@ -764,7 +764,12 @@ abstract class PhabricatorApplicationTransactionEditor
 
       $xactions = $this->didApplyInternalEffects($object, $xactions);
 
-      $object->save();
+      try {
+        $object->save();
+      } catch (AphrontDuplicateKeyQueryException $ex) {
+        $object->killTransaction();
+        throw $ex;
+      }
 
       foreach ($xactions as $xaction) {
         $xaction->setObjectPHID($object->getPHID());
@@ -2058,7 +2063,12 @@ abstract class PhabricatorApplicationTransactionEditor
 
     $reply_handler = $this->buildReplyHandler($object);
 
-    $body->addEmailPreferenceSection();
+    if (PhabricatorEnv::getEnvConfig('metamta.email-preferences')) {
+      $this->addEmailPreferenceSectionToMailBody(
+        $body,
+        $object,
+        $xactions);
+    }
 
     $template
       ->setFrom($this->getActingAsPHID())
@@ -2307,6 +2317,21 @@ abstract class PhabricatorApplicationTransactionEditor
     $this->addCustomFieldsToMailBody($body, $object, $xactions);
     return $body;
   }
+
+
+  /**
+   * @task mail
+   */
+  protected function addEmailPreferenceSectionToMailBody(
+    PhabricatorMetaMTAMailBody $body,
+    PhabricatorLiskDAO $object,
+    array $xactions) {
+
+    $href = PhabricatorEnv::getProductionURI(
+      '/settings/panel/emailpreferences/');
+    $body->addLinkSection(pht('EMAIL PREFERENCES'), $href);
+  }
+
 
   /**
    * @task mail
