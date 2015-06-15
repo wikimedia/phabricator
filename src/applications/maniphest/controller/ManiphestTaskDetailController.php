@@ -469,15 +469,23 @@ final class ManiphestTaskDetailController extends ManiphestController {
 
     $source = $task->getOriginalEmailSource();
     if ($source) {
-      $subject = '[T'.$task->getID().'] '.$task->getTitle();
-      $view->addProperty(
-        pht('From Email'),
-        phutil_tag(
-          'a',
-          array(
-            'href' => 'mailto:'.$source.'?subject='.$subject,
-          ),
-          $source));
+      $query = new PhabricatorProjectQuery();
+      $wmf_nda = $query->setViewer($viewer)
+                       ->withNames(array("WMF-NDA"))
+                       ->needMembers(false)
+                       ->executeOne();
+
+      if ($wmf_nda && $wmf_nda->isUserMember($viewer->getPHID())) {
+        $subject = '[T'.$task->getID().'] '.$task->getTitle();
+        $view->addProperty(
+          pht('From Email'),
+          phutil_tag(
+            'a',
+            array(
+              'href' => 'mailto:'.$source.'?subject='.$subject,
+            ),
+            $source));
+      }
     }
 
     $edge_types = array(
