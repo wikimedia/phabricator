@@ -140,6 +140,15 @@ final class PhabricatorCalendarEventEditController
       $cancel_uri = '/'.$event->getMonogram();
     }
 
+    if ($this->isCreate()) {
+      $projects = array();
+    } else {
+      $projects = PhabricatorEdgeQuery::loadDestinationPHIDs(
+        $event->getPHID(),
+        PhabricatorProjectObjectHasProjectEdgeType::EDGECONST);
+      $projects = array_reverse($projects);
+    }
+
     $name = $event->getName();
     $description = $event->getDescription();
     $is_all_day = $event->getIsAllDay();
@@ -167,6 +176,7 @@ final class PhabricatorCalendarEventEditController
         $request,
         'recurrenceEndDate');
       $recurrence_end_date_value->setOptional(true);
+      $projects = $request->getArr('projects');
       $description = $request->getStr('description');
       $subscribers = $request->getArr('subscribers');
       $edit_policy = $request->getStr('editPolicy');
@@ -191,7 +201,7 @@ final class PhabricatorCalendarEventEditController
           PhabricatorCalendarEventTransaction::TYPE_NAME)
         ->setNewValue($name);
 
-      if ($is_parent && $this->isCreate()) {
+      if ($is_recurring && $this->isCreate()) {
         $xactions[] = id(new PhabricatorCalendarEventTransaction())
           ->setTransactionType(
             PhabricatorCalendarEventTransaction::TYPE_RECURRING)
@@ -210,7 +220,7 @@ final class PhabricatorCalendarEventEditController
         }
       }
 
-      if (($is_parent && $this->isCreate()) || !$is_parent) {
+      if (($is_recurring && $this->isCreate()) || !$is_parent) {
         $xactions[] = id(new PhabricatorCalendarEventTransaction())
           ->setTransactionType(
             PhabricatorCalendarEventTransaction::TYPE_ALL_DAY)
@@ -262,6 +272,12 @@ final class PhabricatorCalendarEventEditController
         ->setContinueOnNoEffect(true);
 
       try {
+        $proj_edge_type = PhabricatorProjectObjectHasProjectEdgeType::EDGECONST;
+        $xactions[] = id(new PhabricatorCalendarEventTransaction())
+          ->setTransactionType(PhabricatorTransactions::TYPE_EDGE)
+          ->setMetadataValue('edge:type', $proj_edge_type)
+          ->setNewValue(array('=' => array_fuse($projects)));
+
         $xactions = $editor->applyTransactions($event, $xactions);
         $response = id(new AphrontRedirectResponse());
         switch ($next_workflow) {
@@ -341,10 +357,10 @@ final class PhabricatorCalendarEventEditController
       $recurrence_frequency_select = id(new AphrontFormSelectControl())
         ->setName('frequency')
         ->setOptions(array(
-            'daily' => pht('Daily'),
-            'weekly' => pht('Weekly'),
-            'monthly' => pht('Monthly'),
-            'yearly' => pht('Yearly'),
+            PhabricatorCalendarEvent::FREQUENCY_DAILY => pht('Daily'),
+            PhabricatorCalendarEvent::FREQUENCY_WEEKLY => pht('Weekly'),
+            PhabricatorCalendarEvent::FREQUENCY_MONTHLY => pht('Monthly'),
+            PhabricatorCalendarEvent::FREQUENCY_YEARLY => pht('Yearly'),
           ))
         ->setValue($frequency)
         ->setLabel(pht('Recurring Event Frequency'))
@@ -437,10 +453,18 @@ final class PhabricatorCalendarEventEditController
         ->setValue($end_disabled);
     }
 
-    $description = id(new AphrontFormTextAreaControl())
+    $projects = id(new AphrontFormTokenizerControl())
+      ->setLabel(pht('Projects'))
+      ->setName('projects')
+      ->setValue($projects)
+      ->setUser($viewer)
+      ->setDatasource(new PhabricatorProjectDatasource());
+
+    $description = id(new PhabricatorRemarkupControl())
       ->setLabel(pht('Description'))
       ->setName('description')
-      ->setValue($description);
+      ->setValue($description)
+      ->setUser($viewer);
 
     $view_policies = id(new AphrontFormPolicyControl())
       ->setUser($viewer)
@@ -510,6 +534,7 @@ final class PhabricatorCalendarEventEditController
       ->appendControl($edit_policies)
       ->appendControl($subscribers)
       ->appendControl($invitees)
+      ->appendChild($projects)
       ->appendChild($description)
       ->appendChild($icon);
 

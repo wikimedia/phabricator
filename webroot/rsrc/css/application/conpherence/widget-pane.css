@@ -46,8 +46,12 @@
   border: 0;
 }
 
-.conpherence-widget-pane .widgets-header {
-  border-bottom: 1px solid {$thinblueborder};
+.conpherence-widget-pane .widgets-header .phui-header-shell {
+  padding: 6px 8px;
+}
+
+.conpherence-widget-pane .widgets-header .phui-header-header {
+  font-size: 14px;
 }
 
 .device .conpherence-widget-pane .widgets-header {
@@ -58,7 +62,7 @@
   float: none;
   height: 0px;
   width: 0px;
-  margin-right: 0px;
+  margin: 10px 0 0 4px;
   border-top-color: #000;
 }
 
@@ -83,7 +87,7 @@
 }
 
 .device-desktop .conpherence-widget-pane .widgets-body {
-  top: 108px;
+  top: 111px;
   width: 240px;
 }
 

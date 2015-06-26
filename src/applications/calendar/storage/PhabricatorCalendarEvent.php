@@ -2,6 +2,7 @@
 
 final class PhabricatorCalendarEvent extends PhabricatorCalendarDAO
   implements PhabricatorPolicyInterface,
+  PhabricatorProjectInterface,
   PhabricatorMarkupInterface,
   PhabricatorApplicationTransactionInterface,
   PhabricatorSubscribableInterface,
@@ -37,6 +38,12 @@ final class PhabricatorCalendarEvent extends PhabricatorCalendarDAO
   private $invitees = self::ATTACHABLE;
   private $appliedViewer;
 
+  // Frequency Constants
+  const FREQUENCY_DAILY = 'daily';
+  const FREQUENCY_WEEKLY = 'weekly';
+  const FREQUENCY_MONTHLY = 'monthly';
+  const FREQUENCY_YEARLY = 'yearly';
+
   public static function initializeNewCalendarEvent(
     PhabricatorUser $actor,
     $mode) {
@@ -50,10 +57,10 @@ final class PhabricatorCalendarEvent extends PhabricatorCalendarDAO
 
     if ($mode == 'public') {
       $view_policy = PhabricatorPolicies::getMostOpenPolicy();
-    } else if ($mode == 'recurring') {
+    }
+
+    if ($mode == 'recurring') {
       $is_recurring = true;
-    } else {
-      $view_policy = $actor->getPHID();
     }
 
     return id(new PhabricatorCalendarEvent())
@@ -371,6 +378,29 @@ final class PhabricatorCalendarEvent extends PhabricatorCalendarDAO
       return true;
     }
     return false;
+  }
+
+  public function getDuration() {
+    $seconds = $this->dateTo - $this->dateFrom;
+    $minutes = round($seconds / 60, 1);
+    $hours = round($minutes / 60, 3);
+    $days = round($hours / 24, 2);
+
+    $duration = '';
+
+    if ($days >= 1) {
+      return pht(
+        '%s day(s)',
+        round($days, 1));
+    } else if ($hours >= 1) {
+      return pht(
+          '%s hour(s)',
+          round($hours, 1));
+    } else if ($minutes >= 1) {
+      return pht(
+          '%s minute(s)',
+          round($minutes, 0));
+    }
   }
 
 /* -(  Markup Interface  )--------------------------------------------------- */

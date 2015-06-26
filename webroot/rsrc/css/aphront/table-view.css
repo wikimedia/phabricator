@@ -15,6 +15,13 @@
   border-bottom: 1px solid {$blueborder};
 }
 
+.aphront-table-view td.aphront-table-notice {
+  padding: 12px 16px;
+  font-size: 13px;
+  color: {$darkbluetext};
+  border-bottom: 1px solid {$thinblueborder};
+}
+
 .aphront-table-view tr.alt {
   background: {$lightgreybackground};
 }
@@ -204,11 +211,11 @@ span.single-display-line-content {
 }
 
 .aphront-table-view tr.highlighted {
-  background: #fcf8e2;
+  background: #fdf9e4;
 }
 
 .aphront-table-view tr.alt-highlighted {
-  background: #fcf2bb;
+  background: {$sh-yellowbackground};
 }
 
 .aphront-table-view tr.diff-removed,
@@ -266,11 +273,6 @@ span.single-display-line-content {
 .device-tablet .aphront-table-view-nodevice,
 .device-phone .aphront-table-view-nodevice {
   display: none;
-}
-
-.aphront-table-view-device-ready {
-  width: 99%;
-  margin: 8px auto;
 }
 
 .aphront-table-view td.link {

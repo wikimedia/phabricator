@@ -34,7 +34,7 @@
 
 .conpherence-layout .phui-crumbs-view {
   padding: 0 0 0 8px;
-  background: #EBECEE;
+  background: #f7f7f7;
 }
 
 .conpherence-show-more-messages {
@@ -178,6 +178,7 @@
   background-size: 35px;
   position: absolute;
   top: 5px;
+  box-shadow: {$borderinset};
 }
 
 .device-phone .conpherence-message-pane .conpherence-transaction-image {
@@ -283,7 +284,7 @@
 .conpherence-message-pane .conpherence-transaction-info,
 .conpherence-message-pane .anchor-link,
 .conpherence-message-pane .phabricator-content-source-view {
-  color: {$lightbluetext};
+  color: {$lightgreytext};
   line-height: 16px;
   font-size: 12px;
 }

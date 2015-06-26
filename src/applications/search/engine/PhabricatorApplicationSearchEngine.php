@@ -266,7 +266,7 @@ abstract class PhabricatorApplicationSearchEngine extends Phobject {
     }
 
     $query = $this->newQuery();
-    if ($query) {
+    if ($query && $this->shouldShowOrderField()) {
       $orders = $query->getBuiltinOrders();
       $orders = ipull($orders, 'name');
 
@@ -291,6 +291,10 @@ abstract class PhabricatorApplicationSearchEngine extends Phobject {
     }
 
     return $field_map;
+  }
+
+  protected function shouldShowOrderField() {
+    return true;
   }
 
   private function adjustFieldsForDisplay(array $field_map) {
@@ -962,7 +966,7 @@ abstract class PhabricatorApplicationSearchEngine extends Phobject {
 
   public function newPagerForSavedQuery(PhabricatorSavedQuery $saved) {
     if ($this->shouldUseOffsetPaging()) {
-      $pager = new AphrontPagerView();
+      $pager = new PHUIPagerView();
     } else {
       $pager = new AphrontCursorPagerView();
     }
