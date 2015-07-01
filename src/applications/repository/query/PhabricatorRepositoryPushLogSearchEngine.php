@@ -108,10 +108,8 @@ final class PhabricatorRepositoryPushLogSearchEngine
       ->setHandles($handles)
       ->setLogs($logs);
 
-    $result = new PhabricatorApplicationSearchResultView();
-    $result->setTable($table);
-
-    return $result;
+    return id(new PhabricatorApplicationSearchResultView())
+      ->setTable($table);
   }
 
 }

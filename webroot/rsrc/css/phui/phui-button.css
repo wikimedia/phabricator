@@ -31,9 +31,9 @@ input[type="submit"] {
   color: white;
   cursor: pointer;
   font-weight: bold;
-  font-size: 13px;
+  font-size: {$normalfontsize};
   display: inline-block;
-  padding: 4px 14px 5px;
+  padding: 3px 12px 4px;
   text-align: center;
   white-space: nowrap;
   border-radius: 3px;
@@ -146,7 +146,7 @@ a.small,
 a.small:visited {
   padding: 2px 8px;
   height: auto;
-  font-size: 11px;
+  font-size: {$smallestfontsize};
   line-height: 16px;
 }
 
@@ -255,16 +255,16 @@ a.policy-control .caret {
   display: inline-block;
   position: absolute;
   top: 6px;
-  left: 12px;
+  left: 10px;
 }
 
 .button.icon-last .phui-icon-view {
   left: auto;
-  right: 12px;
+  right: 10px;
 }
 
 .phui-button-bar .button .phui-icon-view {
-  left: 11px;
+  left: 9px;
 }
 
 .button.has-icon .phui-button-text {
@@ -285,22 +285,47 @@ a.policy-control .caret {
 
 .button.big.has-icon .phui-button-text {
   margin-left: 40px;
-  font-size: 14px;
+  font-size: {$biggerfontsize};
   display: block;
 }
 
 .button.big.has-icon .phui-button-subtext {
   color: {$lightgreytext};
-  font-size: 12px;
+  font-size: {$smallerfontsize};
   line-height: 15px;
   font-weight: normal;
 }
 
 /* PHUI Button Bar */
 
+.phui-button-bar-borderless .button {
+  border: 0;
+  background-color: transparent;
+  padding-left: 10px;
+  padding-right: 10px;
+}
+
+.phui-button-bar-borderless .button .phui-icon-view {
+  font-size: 15px;
+  color: rgba(55,55,55,.4);
+}
+
+.phui-button-bar-borderless .button:hover {
+  background-color: transparent;
+  border-radius: 3px;
+}
+
+.phui-button-bar-borderless .button:hover .phui-icon-view {
+  color: rgba(55,55,55,.9);
+}
+
+.phui-button-bar-borderless .button {
+  border: 0;
+}
+
 .phui-button-bar a.button.has-icon {
   display: inline-block;
-  height: 16px;
+  height: 18px;
   width: 6px;
 }
 
