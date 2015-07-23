@@ -2,6 +2,13 @@
  * @provides phabricator-standard-page-view
  */
 
+/* wmf local hack to fix left-margin due to broken float:left in the header */
+.phabricator-standard-page-body:before {
+  display:block;
+  clear:both;
+  content:"";
+}
+
 .phabricator-anchor-view,
 .phabricator-anchor-navigation-marker {
   position: absolute;
