@@ -45,7 +45,6 @@ final class FundInitiativeViewController
       $initiative->getStatus());
 
     $header = id(new PHUIHeaderView())
-      ->setObjectName($initiative->getMonogram())
       ->setHeader($initiative->getName())
       ->setUser($viewer)
       ->setPolicyObject($initiative)
@@ -57,7 +56,7 @@ final class FundInitiativeViewController
 
     $box = id(new PHUIObjectBoxView())
       ->setHeader($header)
-      ->appendChild($properties);
+      ->addPropertyList($properties);
 
 
     $timeline = $this->buildTransactionTimeline(

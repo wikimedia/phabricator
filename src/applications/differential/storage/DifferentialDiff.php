@@ -27,7 +27,6 @@ final class DifferentialDiff
   protected $branch;
   protected $bookmark;
 
-  protected $arcanistProjectPHID;
   protected $creationMethod;
   protected $repositoryUUID;
 
@@ -39,6 +38,7 @@ final class DifferentialDiff
   private $changesets = self::ATTACHABLE;
   private $revision = self::ATTACHABLE;
   private $properties = array();
+  private $buildable = self::ATTACHABLE;
 
   protected function getConfiguration() {
     return array(
@@ -57,7 +57,6 @@ final class DifferentialDiff
         'lineCount' => 'uint32',
         'branch' => 'text255?',
         'bookmark' => 'text255?',
-        'arcanistProjectPHID' => 'phid?',
         'repositoryUUID' => 'text64?',
 
         // T6203/NULLABILITY
@@ -323,6 +322,15 @@ final class DifferentialDiff
     return $this->assertAttachedKey($this->properties, $key);
   }
 
+  public function attachBuildable(HarbormasterBuildable $buildable = null) {
+    $this->buildable = $buildable;
+    return $this;
+  }
+
+  public function getBuildable() {
+    return $this->assertAttached($this->buildable);
+  }
+
 
 /* -(  PhabricatorPolicyInterface  )----------------------------------------- */
 
@@ -381,14 +389,16 @@ final class DifferentialDiff
     $results = array();
 
     $results['buildable.diff'] = $this->getID();
-    $revision = $this->getRevision();
-    $results['buildable.revision'] = $revision->getID();
-    $repo = $revision->getRepository();
+    if ($this->revisionID) {
+      $revision = $this->getRevision();
+      $results['buildable.revision'] = $revision->getID();
+      $repo = $revision->getRepository();
 
-    if ($repo) {
-      $results['repository.callsign'] = $repo->getCallsign();
-      $results['repository.vcs'] = $repo->getVersionControlSystem();
-      $results['repository.uri'] = $repo->getPublicCloneURI();
+      if ($repo) {
+        $results['repository.callsign'] = $repo->getCallsign();
+        $results['repository.vcs'] = $repo->getVersionControlSystem();
+        $results['repository.uri'] = $repo->getPublicCloneURI();
+      }
     }
 
     return $results;

@@ -43,13 +43,13 @@ final class ManiphestTaskSearchEngine
       ->needProjectPHIDs(true);
   }
 
-  public function buildCustomSearchFields() {
+  protected function buildCustomSearchFields() {
     return array(
-      id(new PhabricatorSearchOwnersField())
+      id(new PhabricatorOwnersSearchField())
         ->setLabel(pht('Assigned To'))
         ->setKey('assignedPHIDs')
         ->setAliases(array('assigned')),
-      id(new PhabricatorSearchUsersField())
+      id(new PhabricatorUsersSearchField())
         ->setLabel(pht('Authors'))
         ->setKey('authorPHIDs')
         ->setAliases(array('author', 'authors')),
@@ -105,7 +105,7 @@ final class ManiphestTaskSearchEngine
     );
   }
 
-  public function getDefaultFieldOrder() {
+  protected function getDefaultFieldOrder() {
     return array(
       'assignedPHIDs',
       'projectPHIDs',
@@ -128,7 +128,7 @@ final class ManiphestTaskSearchEngine
     );
   }
 
-  public function getHiddenFields() {
+  protected function getHiddenFields() {
     $keys = array();
 
     if ($this->getIsBoardView()) {
@@ -140,7 +140,7 @@ final class ManiphestTaskSearchEngine
     return $keys;
   }
 
-  public function buildQueryFromParameters(array $map) {
+  protected function buildQueryFromParameters(array $map) {
     $query = id(new ManiphestTaskQuery())
       ->needProjectPHIDs(true);
 
@@ -316,13 +316,18 @@ final class ManiphestTaskSearchEngine
         ManiphestBulkEditCapability::CAPABILITY);
     }
 
-    return id(new ManiphestTaskResultListView())
+    $list = id(new ManiphestTaskResultListView())
       ->setUser($viewer)
       ->setTasks($tasks)
       ->setSavedQuery($saved)
       ->setCanEditPriority($can_edit_priority)
       ->setCanBatchEdit($can_bulk_edit)
       ->setShowBatchControls($this->showBatchControls);
+
+    $result = new PhabricatorApplicationSearchResultView();
+    $result->setContent($list);
+
+    return $result;
   }
 
   protected function willUseSavedQuery(PhabricatorSavedQuery $saved) {

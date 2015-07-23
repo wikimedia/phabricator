@@ -6,7 +6,7 @@
  * @task compose  Composition
  * @task render   Rendering
  */
-final class PhabricatorMetaMTAMailBody {
+final class PhabricatorMetaMTAMailBody extends Phobject {
 
   private $sections = array();
   private $htmlSections = array();
@@ -20,6 +20,7 @@ final class PhabricatorMetaMTAMailBody {
 
   public function setViewer($viewer) {
     $this->viewer = $viewer;
+    return $this;
   }
 
 /* -(  Composition  )-------------------------------------------------------- */

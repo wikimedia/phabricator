@@ -117,6 +117,8 @@ final class PhabricatorCountdownSearchEngine
       $id = $countdown->getID();
 
       $item = id(new PHUIObjectItemView())
+        ->setUser($viewer)
+        ->setObject($countdown)
         ->setObjectName("C{$id}")
         ->setHeader($countdown->getTitle())
         ->setHref($this->getApplicationURI("{$id}/"))
@@ -140,7 +142,11 @@ final class PhabricatorCountdownSearchEngine
       $list->addItem($item);
     }
 
-    return $list;
+    $result = new PhabricatorApplicationSearchResultView();
+    $result->setObjectList($list);
+    $result->setNoDataString(pht('No countdowns found.'));
+
+    return $result;
   }
 
 }

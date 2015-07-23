@@ -45,8 +45,7 @@ final class ManiphestBatchEditController extends ManiphestController {
 
     if (!$tasks) {
       throw new Exception(
-        pht(
-          "You don't have permission to edit any of the selected tasks."));
+        pht("You don't have permission to edit any of the selected tasks."));
     }
 
     if ($project) {
@@ -62,27 +61,32 @@ final class ManiphestBatchEditController extends ManiphestController {
       $actions = phutil_json_decode($actions);
     }
 
-    if ($request->isFormPost() && is_array($actions)) {
-      foreach ($tasks as $task) {
-        $field_list = PhabricatorCustomField::getObjectFields(
-          $task,
-          PhabricatorCustomField::ROLE_EDIT);
-        $field_list->readFieldsFromStorage($task);
+    if ($request->isFormPost() && $actions) {
+      $job = PhabricatorWorkerBulkJob::initializeNewJob(
+        $viewer,
+        new ManiphestTaskEditBulkJobType(),
+        array(
+          'taskPHIDs' => mpull($tasks, 'getPHID'),
+          'actions' => $actions,
+          'cancelURI' => $cancel_uri,
+          'doneURI' => $redirect_uri,
+        ));
 
-        $xactions = $this->buildTransactions($actions, $task);
-        if ($xactions) {
-          // TODO: Set content source to "batch edit".
+      $type_status = PhabricatorWorkerBulkJobTransaction::TYPE_STATUS;
 
-          $editor = id(new ManiphestTransactionEditor())
-            ->setActor($viewer)
-            ->setContentSourceFromRequest($request)
-            ->setContinueOnNoEffect(true)
-            ->setContinueOnMissingFields(true)
-            ->applyTransactions($task, $xactions);
-        }
-      }
+      $xactions = array();
+      $xactions[] = id(new PhabricatorWorkerBulkJobTransaction())
+        ->setTransactionType($type_status)
+        ->setNewValue(PhabricatorWorkerBulkJob::STATUS_CONFIRM);
 
-      return id(new AphrontRedirectResponse())->setURI($redirect_uri);
+      $editor = id(new PhabricatorWorkerBulkJobEditor())
+        ->setActor($viewer)
+        ->setContentSourceFromRequest($request)
+        ->setContinueOnMissingFields(true)
+        ->applyTransactions($job, $xactions);
+
+      return id(new AphrontRedirectResponse())
+        ->setURI($job->getMonitorURI());
     }
 
     $handles = ManiphestTaskListView::loadTaskHandles($viewer, $tasks);
@@ -193,7 +197,7 @@ final class ManiphestBatchEditController extends ManiphestController {
 
     $task_box = id(new PHUIObjectBoxView())
       ->setHeaderText(pht('Selected Tasks'))
-      ->appendChild($list);
+      ->setObjectList($list);
 
     $form_box = id(new PHUIObjectBoxView())
       ->setHeaderText(pht('Batch Editor'))

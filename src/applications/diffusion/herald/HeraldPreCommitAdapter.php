@@ -5,6 +5,8 @@ abstract class HeraldPreCommitAdapter extends HeraldAdapter {
   private $log;
   private $hookEngine;
 
+  abstract public function isPreCommitRefAdapter();
+
   public function setPushLog(PhabricatorRepositoryPushLog $log) {
     $this->log = $log;
     return $this;
@@ -21,6 +23,14 @@ abstract class HeraldPreCommitAdapter extends HeraldAdapter {
 
   public function getAdapterApplicationClass() {
     return 'PhabricatorDiffusionApplication';
+  }
+
+  protected function initializeNewAdapter() {
+    $this->log = new PhabricatorRepositoryPushLog();
+  }
+
+  public function isSingleEventAdapter() {
+    return true;
   }
 
   public function getObject() {
@@ -82,10 +92,6 @@ abstract class HeraldPreCommitAdapter extends HeraldAdapter {
           ),
           parent::getActions($rule_type));
     }
-  }
-
-  public function getPHID() {
-    return $this->getObject()->getPHID();
   }
 
   public function applyHeraldEffects(array $effects) {
