@@ -8,23 +8,38 @@ final class PhabricatorDashboard extends PhabricatorDashboardDAO
     PhabricatorApplicationTransactionInterface,
     PhabricatorPolicyInterface,
     PhabricatorFlaggableInterface,
-    PhabricatorDestructibleInterface {
+    PhabricatorDestructibleInterface,
+    PhabricatorProjectInterface {
 
   protected $name;
   protected $viewPolicy;
   protected $editPolicy;
+  protected $status;
   protected $layoutConfig = array();
+
+  const STATUS_ACTIVE = 'active';
+  const STATUS_ARCHIVED = 'archived';
 
   private $panelPHIDs = self::ATTACHABLE;
   private $panels = self::ATTACHABLE;
+  private $edgeProjectPHIDs = self::ATTACHABLE;
+
 
   public static function initializeNewDashboard(PhabricatorUser $actor) {
     return id(new PhabricatorDashboard())
       ->setName('')
       ->setViewPolicy(PhabricatorPolicies::POLICY_USER)
       ->setEditPolicy($actor->getPHID())
+      ->setStatus(self::STATUS_ACTIVE)
       ->attachPanels(array())
       ->attachPanelPHIDs(array());
+  }
+
+  public static function getStatusNameMap() {
+    return array(
+      self::STATUS_ACTIVE => pht('Active'),
+      self::STATUS_ARCHIVED => pht('Archived'),
+    );
   }
 
   public static function copyDashboard(
@@ -45,6 +60,7 @@ final class PhabricatorDashboard extends PhabricatorDashboardDAO
       ),
       self::CONFIG_COLUMN_SCHEMA => array(
         'name' => 'text255',
+        'status' => 'text32',
       ),
     ) + parent::getConfiguration();
   }
@@ -65,6 +81,15 @@ final class PhabricatorDashboard extends PhabricatorDashboardDAO
     return $this;
   }
 
+  public function getProjectPHIDs() {
+    return $this->assertAttached($this->edgeProjectPHIDs);
+  }
+
+  public function attachProjectPHIDs(array $phids) {
+    $this->edgeProjectPHIDs = $phids;
+    return $this;
+  }
+
   public function attachPanelPHIDs(array $phids) {
     $this->panelPHIDs = $phids;
     return $this;
@@ -82,6 +107,10 @@ final class PhabricatorDashboard extends PhabricatorDashboardDAO
 
   public function getPanels() {
     return $this->assertAttached($this->panels);
+  }
+
+  public function isClosed() {
+    return ($this->getStatus() == self::STATUS_ARCHIVED);
   }
 
 

@@ -4,12 +4,18 @@ final class PhabricatorCountdown extends PhabricatorCountdownDAO
   implements
     PhabricatorPolicyInterface,
     PhabricatorFlaggableInterface,
-    PhabricatorSpacesInterface {
+    PhabricatorSubscribableInterface,
+    PhabricatorApplicationTransactionInterface,
+    PhabricatorTokenReceiverInterface,
+    PhabricatorSpacesInterface,
+    PhabricatorProjectInterface {
 
   protected $title;
   protected $authorPHID;
   protected $epoch;
+  protected $description;
   protected $viewPolicy;
+  protected $editPolicy;
 
   protected $spacePHID;
 
@@ -34,6 +40,7 @@ final class PhabricatorCountdown extends PhabricatorCountdownDAO
       self::CONFIG_AUX_PHID => true,
       self::CONFIG_COLUMN_SCHEMA => array(
         'title' => 'text255',
+        'description' => 'text',
       ),
     ) + parent::getConfiguration();
   }
@@ -41,6 +48,55 @@ final class PhabricatorCountdown extends PhabricatorCountdownDAO
   public function generatePHID() {
     return PhabricatorPHID::generateNewPHID(
       PhabricatorCountdownCountdownPHIDType::TYPECONST);
+  }
+
+  public function getMonogram() {
+    return 'C'.$this->getID();
+  }
+
+
+/* -(  PhabricatorSubscribableInterface  )----------------------------------- */
+
+
+  public function isAutomaticallySubscribed($phid) {
+    return ($phid == $this->getAuthorPHID());
+  }
+
+  public function shouldShowSubscribersProperty() {
+    return true;
+  }
+
+  public function shouldAllowSubscription($phid) {
+    return true;
+  }
+
+/* -(  PhabricatorApplicationTransactionInterface  )------------------------- */
+
+
+  public function getApplicationTransactionEditor() {
+    return new PhabricatorCountdownEditor();
+  }
+
+  public function getApplicationTransactionObject() {
+    return $this;
+  }
+
+  public function getApplicationTransactionTemplate() {
+    return new PhabricatorCountdownTransaction();
+  }
+
+  public function willRenderTimeline(
+    PhabricatorApplicationTransactionView $timeline,
+    AphrontRequest $request) {
+
+    return $timeline;
+  }
+
+/* -(  PhabricatorTokenReceiverInterface  )---------------------------------- */
+
+
+  public function getUsersToNotifyOfTokenGiven() {
+    return array($this->getAuthorPHID());
   }
 
 
@@ -59,16 +115,16 @@ final class PhabricatorCountdown extends PhabricatorCountdownDAO
       case PhabricatorPolicyCapability::CAN_VIEW:
         return $this->getViewPolicy();
       case PhabricatorPolicyCapability::CAN_EDIT:
-        return PhabricatorPolicies::POLICY_NOONE;
+        return $this->getEditPolicy();
     }
   }
 
   public function hasAutomaticCapability($capability, PhabricatorUser $viewer) {
-    return ($viewer->getPHID() == $this->getAuthorPHID());
+    return false;
   }
 
   public function describeAutomaticCapability($capability) {
-    return pht('The author of a countdown can always view and edit it.');
+    return false;
   }
 
 /* -( PhabricatorSpacesInterface )------------------------------------------- */
