@@ -3,12 +3,12 @@
 final class PonderQuestionEditController extends PonderController {
 
   public function handleRequest(AphrontRequest $request) {
-    $user = $request->getViewer();
+    $viewer = $request->getViewer();
     $id = $request->getURIData('id');
 
     if ($id) {
       $question = id(new PonderQuestionQuery())
-        ->setViewer($user)
+        ->setViewer($viewer)
         ->withIDs(array($id))
         ->requireCapabilities(
           array(
@@ -23,18 +23,19 @@ final class PonderQuestionEditController extends PonderController {
         $question->getPHID(),
         PhabricatorProjectObjectHasProjectEdgeType::EDGECONST);
       $v_projects = array_reverse($v_projects);
+      $is_new = false;
     } else {
-      $question = id(new PonderQuestion())
-        ->setStatus(PonderQuestionStatus::STATUS_OPEN)
-        ->setAuthorPHID($user->getPHID())
-        ->setVoteCount(0)
-        ->setAnswerCount(0)
-        ->setHeat(0.0);
+      $is_new = true;
+      $question = PonderQuestion::initializeNewQuestion($viewer);
       $v_projects = array();
     }
 
     $v_title = $question->getTitle();
     $v_content = $question->getContent();
+    $v_view = $question->getViewPolicy();
+    $v_space = $question->getSpacePHID();
+    $v_status = $question->getStatus();
+
 
     $errors = array();
     $e_title = true;
@@ -42,6 +43,9 @@ final class PonderQuestionEditController extends PonderController {
       $v_title = $request->getStr('title');
       $v_content = $request->getStr('content');
       $v_projects = $request->getArr('projects');
+      $v_view = $request->getStr('viewPolicy');
+      $v_space = $request->getStr('spacePHID');
+      $v_status = $request->getStr('status');
 
       $len = phutil_utf8_strlen($v_title);
       if ($len < 1) {
@@ -64,6 +68,20 @@ final class PonderQuestionEditController extends PonderController {
           ->setTransactionType(PonderQuestionTransaction::TYPE_CONTENT)
           ->setNewValue($v_content);
 
+        if (!$is_new) {
+          $xactions[] = id(clone $template)
+            ->setTransactionType(PonderQuestionTransaction::TYPE_STATUS)
+            ->setNewValue($v_status);
+        }
+
+        $xactions[] = id(clone $template)
+          ->setTransactionType(PhabricatorTransactions::TYPE_VIEW_POLICY)
+          ->setNewValue($v_view);
+
+        $xactions[] = id(clone $template)
+          ->setTransactionType(PhabricatorTransactions::TYPE_SPACE)
+          ->setNewValue($v_space);
+
         $proj_edge_type = PhabricatorProjectObjectHasProjectEdgeType::EDGECONST;
         $xactions[] = id(new PonderQuestionTransaction())
           ->setTransactionType(PhabricatorTransactions::TYPE_EDGE)
@@ -71,7 +89,7 @@ final class PonderQuestionEditController extends PonderController {
           ->setNewValue(array('=' => array_fuse($v_projects)));
 
         $editor = id(new PonderQuestionEditor())
-          ->setActor($user)
+          ->setActor($viewer)
           ->setContentSourceFromRequest($request)
           ->setContinueOnNoEffect(true);
 
@@ -82,8 +100,13 @@ final class PonderQuestionEditController extends PonderController {
       }
     }
 
+    $policies = id(new PhabricatorPolicyQuery())
+      ->setViewer($viewer)
+      ->setObject($question)
+      ->execute();
+
     $form = id(new AphrontFormView())
-      ->setUser($user)
+      ->setUser($viewer)
       ->appendChild(
         id(new AphrontFormTextControl())
           ->setLabel(pht('Question'))
@@ -92,12 +115,30 @@ final class PonderQuestionEditController extends PonderController {
           ->setError($e_title))
       ->appendChild(
         id(new PhabricatorRemarkupControl())
-          ->setUser($user)
+          ->setUser($viewer)
           ->setName('content')
           ->setID('content')
           ->setValue($v_content)
           ->setLabel(pht('Description'))
-          ->setUser($user));
+          ->setUser($viewer))
+      ->appendControl(
+        id(new AphrontFormPolicyControl())
+          ->setName('viewPolicy')
+          ->setPolicyObject($question)
+          ->setSpacePHID($v_space)
+          ->setPolicies($policies)
+          ->setValue($v_view)
+          ->setCapability(PhabricatorPolicyCapability::CAN_VIEW));
+
+
+    if (!$is_new) {
+      $form->appendChild(
+          id(new AphrontFormSelectControl())
+            ->setLabel(pht('Status'))
+            ->setName('status')
+            ->setValue($v_status)
+            ->setOptions(PonderQuestionStatus::getQuestionStatusMap()));
+    }
 
     $form->appendControl(
       id(new AphrontFormTokenizerControl())
@@ -106,20 +147,15 @@ final class PonderQuestionEditController extends PonderController {
         ->setValue($v_projects)
         ->setDatasource(new PhabricatorProjectDatasource()));
 
-    $form ->appendChild(
+    $form->appendChild(
       id(new AphrontFormSubmitControl())
         ->addCancelButton($this->getApplicationURI())
-        ->setValue(pht('Ask Away!')));
+        ->setValue(pht('Submit')));
 
     $preview = id(new PHUIRemarkupPreviewPanel())
       ->setHeader(pht('Question Preview'))
       ->setControlID('content')
       ->setPreviewURI($this->getApplicationURI('preview/'));
-
-    $form_box = id(new PHUIObjectBoxView())
-      ->setHeaderText(pht('Ask New Question'))
-      ->setFormErrors($errors)
-      ->setForm($form);
 
     $crumbs = $this->buildApplicationCrumbs();
 
@@ -127,9 +163,16 @@ final class PonderQuestionEditController extends PonderController {
     if ($id) {
       $crumbs->addTextCrumb("Q{$id}", "/Q{$id}");
       $crumbs->addTextCrumb(pht('Edit'));
+      $title = pht('Edit Question');
     } else {
       $crumbs->addTextCrumb(pht('Ask Question'));
+      $title = pht('Ask New Question');
     }
+
+    $form_box = id(new PHUIObjectBoxView())
+      ->setHeaderText($title)
+      ->setFormErrors($errors)
+      ->setForm($form);
 
     return $this->buildApplicationPage(
       array(
@@ -138,7 +181,7 @@ final class PonderQuestionEditController extends PonderController {
         $preview,
       ),
       array(
-        'title'  => pht('Ask New Question'),
+        'title'  => $title,
       ));
   }
 

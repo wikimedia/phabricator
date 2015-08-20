@@ -66,6 +66,10 @@ final class PonderQuestionEditor
     $types = parent::getTransactionTypes();
 
     $types[] = PhabricatorTransactions::TYPE_COMMENT;
+    $types[] = PhabricatorTransactions::TYPE_VIEW_POLICY;
+    $types[] = PhabricatorTransactions::TYPE_EDIT_POLICY;
+    $types[] = PhabricatorTransactions::TYPE_SPACE;
+
     $types[] = PonderQuestionTransaction::TYPE_TITLE;
     $types[] = PonderQuestionTransaction::TYPE_CONTENT;
     $types[] = PonderQuestionTransaction::TYPE_ANSWERS;
@@ -208,6 +212,19 @@ final class PonderQuestionEditor
     return true;
   }
 
+  public function getMailTagsMap() {
+    return array(
+      PonderQuestionTransaction::MAILTAG_DETAILS =>
+        pht('Someone changes the questions details.'),
+      PonderQuestionTransaction::MAILTAG_ANSWERS =>
+        pht('Someone adds a new answer.'),
+      PonderQuestionTransaction::MAILTAG_COMMENT =>
+        pht('Someone comments on the question.'),
+      PonderQuestionTransaction::MAILTAG_OTHER =>
+        pht('Other question activity not listed above occurs.'),
+    );
+  }
+
   protected function buildReplyHandler(PhabricatorLiskDAO $object) {
     return id(new PonderQuestionReplyHandler())
       ->setMailReceiver($object);
@@ -246,6 +263,20 @@ final class PonderQuestionEditor
       PhabricatorEnv::getProductionURI($uri));
 
     return $body;
+  }
+
+  protected function shouldApplyHeraldRules(
+    PhabricatorLiskDAO $object,
+    array $xactions) {
+    return true;
+  }
+
+  protected function buildHeraldAdapter(
+    PhabricatorLiskDAO $object,
+    array $xactions) {
+
+    return id(new HeraldPonderQuestionAdapter())
+      ->setQuestion($object);
   }
 
 }

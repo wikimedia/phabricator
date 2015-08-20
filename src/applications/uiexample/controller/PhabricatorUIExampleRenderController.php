@@ -2,22 +2,17 @@
 
 final class PhabricatorUIExampleRenderController extends PhabricatorController {
 
-  private $class;
-
   public function shouldAllowPublic() {
     return true;
   }
 
-  public function willProcessRequest(array $data) {
-    $this->class = idx($data, 'class');
-  }
+  public function handleRequest(AphrontRequest $request) {
+    $id = $request->getURIData('class');
 
-  public function processRequest() {
-
-    $classes = id(new PhutilSymbolLoader())
+    $classes = id(new PhutilClassMapQuery())
       ->setAncestorClass('PhabricatorUIExample')
-      ->loadObjects();
-    $classes = msort($classes, 'getName');
+      ->setSortMethod('getName')
+      ->execute();
 
     $nav = new AphrontSideNavFilterView();
     $nav->setBaseURI(new PhutilURI($this->getApplicationURI('view/')));
@@ -27,7 +22,7 @@ final class PhabricatorUIExampleRenderController extends PhabricatorController {
       $nav->addFilter($class, $name);
     }
 
-    $selected = $nav->selectFilter($this->class, head_key($classes));
+    $selected = $nav->selectFilter($id, head_key($classes));
 
     $example = $classes[$selected];
     $example->setRequest($this->getRequest());

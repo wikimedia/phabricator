@@ -1,18 +1,41 @@
 <?php
 
 /**
- * @task  status  Method Status
- * @task  pager   Paging Results
+ * @task info Method Information
+ * @task status Method Status
+ * @task pager Paging Results
  */
 abstract class ConduitAPIMethod
   extends Phobject
   implements PhabricatorPolicyInterface {
 
+
   const METHOD_STATUS_STABLE      = 'stable';
   const METHOD_STATUS_UNSTABLE    = 'unstable';
   const METHOD_STATUS_DEPRECATED  = 'deprecated';
 
+
+  /**
+   * Get a short, human-readable text summary of the method.
+   *
+   * @return string Short summary of method.
+   * @task info
+   */
+  public function getMethodSummary() {
+    return $this->getMethodDescription();
+  }
+
+
+  /**
+   * Get a detailed description of the method.
+   *
+   * This method should return remarkup.
+   *
+   * @return string Detailed description of the method.
+   * @task info
+   */
   abstract public function getMethodDescription();
+
   abstract protected function defineParamTypes();
   abstract protected function defineReturnType();
 
@@ -116,34 +139,10 @@ abstract class ConduitAPIMethod
   }
 
   public static function loadAllConduitMethods() {
-    static $method_map = null;
-
-    if ($method_map === null) {
-      $methods = id(new PhutilSymbolLoader())
-        ->setAncestorClass(__CLASS__)
-        ->loadObjects();
-
-      foreach ($methods as $method) {
-        $name = $method->getAPIMethodName();
-
-        if (empty($method_map[$name])) {
-          $method_map[$name] = $method;
-          continue;
-        }
-
-        $orig_class = get_class($method_map[$name]);
-        $this_class = get_class($method);
-        throw new Exception(
-          pht(
-            'Two Conduit API method classes (%s, %s) both have the same '.
-            'method name (%s). API methods must have unique method names.',
-            $orig_class,
-            $this_class,
-            $name));
-      }
-    }
-
-    return $method_map;
+    return id(new PhutilClassMapQuery())
+      ->setAncestorClass(__CLASS__)
+      ->setUniqueMethod('getAPIMethodName')
+      ->execute();
   }
 
   public static function getConduitMethod($method_name) {
