@@ -22,6 +22,22 @@ final class PhabricatorRobotsController extends PhabricatorController {
     $out[] = 'Disallow: /diffusion/';
     $out[] = 'Disallow: /multimeter/';
     $out[] = 'Disallow: /file/';
+    $out[] = 'Disallow: /project/sprint';
+    $out[] = 'Disallow: /policy/explain';
+    $out[] = 'Disallow: /auth';
+    $out[] = 'Disallow: /login';
+    $out[] = 'Disallow: /maniphest/transaction';
+    $out[] = 'Disallow: /tag';
+    $out[] = 'Disallow: /search/query/all';
+    $out[] = 'Disallow: /conduit';
+    $out[] = 'Disallow: /api';
+    $out[] = 'Disallow: /project';
+    $out[] = 'Disallow: /applications';
+    $out[] = 'Disallow: /token';
+    $out[] = 'Disallow: /pholio';
+    $out[] = 'Disallow: /dashboard';
+    $out[] = 'Disallow: /calendar';
+    $out[] = 'Disallow: /herald';
 
     // Add a small crawl delay (number of seconds between requests) for spiders
     // which respect it. The intent here is to prevent spiders from affecting
