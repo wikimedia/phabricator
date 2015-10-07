@@ -4,6 +4,7 @@
 
 .phabricator-remarkup {
   line-height: 1.51em;
+  word-break: break-word;
 }
 
 .phabricator-remarkup p {
@@ -38,12 +39,12 @@
 }
 
 .phabricator-remarkup .remarkup-code-block pre {
-  background: {$sh-yellowbackground};
+  background: #FEF9ED;
   border: 1px solid {$sh-lightyellowborder};
   display: block;
-  color: #000000;
+  color: #000;
   overflow: auto;
-  padding: 12px 8px;
+  padding: 8px;
 }
 
 .phabricator-remarkup pre.remarkup-counterexample {
@@ -338,12 +339,13 @@
   border-spacing: 1px;
   background: {$lightblueborder};
   margin: 12px 0;
+  word-break: normal;
 }
 
 .phabricator-remarkup table.remarkup-table th {
   font-weight: bold;
   padding: 4px 6px;
-  background: #F8F9FC;
+  background: {$lightbluebackground};
 }
 
 .phabricator-remarkup table.remarkup-table td {

@@ -37,8 +37,15 @@ final class PhabricatorOwnersDetailController
       $repositories = array();
     }
 
+    $field_list = PhabricatorCustomField::getObjectFields(
+      $package,
+      PhabricatorCustomField::ROLE_VIEW);
+    $field_list
+      ->setViewer($viewer)
+      ->readFieldsFromStorage($package);
+
     $actions = $this->buildPackageActionView($package);
-    $properties = $this->buildPackagePropertyView($package);
+    $properties = $this->buildPackagePropertyView($package, $field_list);
     $properties->setActionList($actions);
 
     if ($package->isArchived()) {
@@ -69,27 +76,28 @@ final class PhabricatorOwnersDetailController
           'auditorPHIDs' => $package->getPHID(),
         ));
 
+    $status_concern = DiffusionCommitQuery::AUDIT_STATUS_CONCERN;
+
     $attention_commits = id(new DiffusionCommitQuery())
       ->setViewer($request->getUser())
       ->withAuditorPHIDs(array($package->getPHID()))
-      ->withAuditStatus(DiffusionCommitQuery::AUDIT_STATUS_CONCERN)
+      ->withAuditStatus($status_concern)
       ->needCommitData(true)
       ->setLimit(10)
       ->execute();
-    if ($attention_commits) {
-      $view = id(new PhabricatorAuditListView())
-        ->setUser($viewer)
-        ->setCommits($attention_commits);
+    $view = id(new PhabricatorAuditListView())
+      ->setUser($viewer)
+      ->setNoDataString(pht('This package has no open problem commits.'))
+      ->setCommits($attention_commits);
 
-      $commit_views[] = array(
-        'view'    => $view,
-        'header'  => pht('Commits in this Package that Need Attention'),
-        'button'  => id(new PHUIButtonView())
-          ->setTag('a')
-          ->setHref($commit_uri->alter('status', 'open'))
-          ->setText(pht('View All Problem Commits')),
-      );
-    }
+    $commit_views[] = array(
+      'view'    => $view,
+      'header'  => pht('Commits in this Package that Need Attention'),
+      'button'  => id(new PHUIButtonView())
+        ->setTag('a')
+        ->setHref($commit_uri->alter('status', $status_concern))
+        ->setText(pht('View All Problem Commits')),
+    );
 
     $all_commits = id(new DiffusionCommitQuery())
       ->setViewer($request->getUser())
@@ -156,7 +164,10 @@ final class PhabricatorOwnersDetailController
   }
 
 
-  private function buildPackagePropertyView(PhabricatorOwnersPackage $package) {
+  private function buildPackagePropertyView(
+    PhabricatorOwnersPackage $package,
+    PhabricatorCustomFieldList $field_list) {
+
     $viewer = $this->getViewer();
 
     $view = id(new PHUIPropertyListView())
@@ -179,13 +190,21 @@ final class PhabricatorOwnersDetailController
 
     $description = $package->getDescription();
     if (strlen($description)) {
-      $view->addSectionHeader(pht('Description'));
+      $view->addSectionHeader(
+        pht('Description'), PHUIPropertyListView::ICON_SUMMARY);
       $view->addTextContent(
         $output = PhabricatorMarkupEngine::renderOneObject(
           id(new PhabricatorMarkupOneOff())->setContent($description),
           'default',
           $viewer));
     }
+
+    $view->invokeWillRenderEvent();
+
+    $field_list->appendFieldsToPropertyList(
+      $package,
+      $viewer,
+      $view);
 
     return $view;
   }
