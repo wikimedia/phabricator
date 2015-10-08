@@ -162,18 +162,10 @@ final class ManiphestTaskDetailController extends ManiphestController {
       unset($transaction_types[ManiphestTransaction::TYPE_OWNER]);
     }
 
-    if ($task->getOwnerPHID()) {
-      $owner = id(new PhabricatorUser())->loadOneWhere(
-        'phid = %s',
-        $task->getOwnerPHID());
-      $default_claim = array(
-        $owner->getPHID() => $owner->getUsername().' ('.$owner->getRealName().')',
-      );
-    } else {
-      $default_claim = array(
-        $user->getPHID() => $user->getUsername().' ('.$user->getRealName().')',
-      );
-    }
+    $default_claim = array(
+      $viewer->getPHID() => $viewer->getUsername().
+        ' ('.$viewer->getRealName().')',
+    );
 
     $draft = id(new PhabricatorDraft())->loadOneWhere(
       'authorPHID = %s AND draftKey = %s',
@@ -295,11 +287,6 @@ final class ManiphestTaskDetailController extends ManiphestController {
       Javelin::initBehavior('maniphest-transaction-controls', array(
         'select'     => 'transaction-action',
         'controlMap' => $control_map,
-        'closedStatuses' => array_values(ManiphestTaskStatus::getClosedStatusConstants()),
-        'statusConstant' => ManiphestTransaction::TYPE_STATUS,
-        'ownerConstant' => ManiphestTransaction::TYPE_OWNER,
-        'statusSelect' => 'resolution',
-        'ownerSelect' => 'assign_to',
         'tokenizers' => $tokenizer_map,
       ));
 
