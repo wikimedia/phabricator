@@ -3417,6 +3417,7 @@ phutil_register_library_map(array(
     'PhortunePaymentProviderConfigTransactionQuery' => 'applications/phortune/query/PhortunePaymentProviderConfigTransactionQuery.php',
     'PhortunePaymentProviderPHIDType' => 'applications/phortune/phid/PhortunePaymentProviderPHIDType.php',
     'PhortunePaymentProviderTestCase' => 'applications/phortune/provider/__tests__/PhortunePaymentProviderTestCase.php',
+    'PhortunePaypalPaymentProvider' => 'applications/phortune/provider/PhortunePaypalPaymentProvider.php',
     'PhortuneProduct' => 'applications/phortune/storage/PhortuneProduct.php',
     'PhortuneProductImplementation' => 'applications/phortune/product/PhortuneProductImplementation.php',
     'PhortuneProductListController' => 'applications/phortune/controller/PhortuneProductListController.php',
@@ -7731,6 +7732,7 @@ phutil_register_library_map(array(
     'PhortunePaymentProviderConfigTransactionQuery' => 'PhabricatorApplicationTransactionQuery',
     'PhortunePaymentProviderPHIDType' => 'PhabricatorPHIDType',
     'PhortunePaymentProviderTestCase' => 'PhabricatorTestCase',
+    'PhortunePaypalPaymentProvider' => 'PhortunePaymentProvider',
     'PhortuneProduct' => array(
       'PhortuneDAO',
       'PhabricatorPolicyInterface',
