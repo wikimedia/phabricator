@@ -775,8 +775,6 @@ abstract class PhabricatorApplicationTransactionEditor
         throw new PhabricatorApplicationTransactionValidationException($errors);
       }
 
-      $file_phids = $this->extractFilePHIDs($object, $xactions);
-
       if ($object->getID()) {
         foreach ($xactions as $xaction) {
 
@@ -813,18 +811,16 @@ abstract class PhabricatorApplicationTransactionEditor
       $this->adjustTransactionValues($object, $xaction);
     }
 
-    $xactions = $this->filterTransactions($object, $xactions);
-
-    if (!$xactions) {
+    try {
+      $xactions = $this->filterTransactions($object, $xactions);
+    } catch (Exception $ex) {
       if ($read_locking) {
         $object->endReadLocking();
-        $read_locking = false;
       }
       if ($transaction_open) {
         $object->killTransaction();
-        $transaction_open = false;
       }
-      return array();
+      throw $ex;
     }
 
     // Now that we've merged, filtered, and combined transactions, check for
@@ -834,6 +830,7 @@ abstract class PhabricatorApplicationTransactionEditor
     }
 
     $xactions = $this->sortTransactions($xactions);
+    $file_phids = $this->extractFilePHIDs($object, $xactions);
 
     if ($is_preview) {
       $this->loadHandles($xactions);
@@ -1901,7 +1898,7 @@ abstract class PhabricatorApplicationTransactionEditor
     }
 
     foreach ($no_effect as $key => $xaction) {
-      if ($xaction->getComment()) {
+      if ($xaction->hasComment()) {
         $xaction->setTransactionType($type_comment);
         $xaction->setOldValue(null);
         $xaction->setNewValue(null);
@@ -2668,7 +2665,7 @@ abstract class PhabricatorApplicationTransactionEditor
     $body->addRawSection(implode("\n", $headers));
 
     foreach ($comments as $comment) {
-      $body->addRemarkupSection($comment);
+      $body->addRemarkupSection(null, $comment);
     }
   }
 
@@ -2880,12 +2877,15 @@ abstract class PhabricatorApplicationTransactionEditor
     PhabricatorLiskDAO $object,
     array $xactions) {
 
-    $adapter = $this->buildHeraldAdapter($object, $xactions);
-    $adapter->setContentSource($this->getContentSource());
-    $adapter->setIsNewObject($this->getIsNewObject());
+    $adapter = $this->buildHeraldAdapter($object, $xactions)
+      ->setContentSource($this->getContentSource())
+      ->setIsNewObject($this->getIsNewObject())
+      ->setAppliedTransactions($xactions);
+
     if ($this->getApplicationEmail()) {
       $adapter->setApplicationEmail($this->getApplicationEmail());
     }
+
     $xscript = HeraldEngine::loadAndApplyRules($adapter);
 
     $this->setHeraldAdapter($adapter);

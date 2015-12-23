@@ -8,13 +8,11 @@ final class PhamePost extends PhameDAO
     PhabricatorProjectInterface,
     PhabricatorApplicationTransactionInterface,
     PhabricatorSubscribableInterface,
+    PhabricatorDestructibleInterface,
     PhabricatorTokenReceiverInterface {
 
   const MARKUP_FIELD_BODY    = 'markup:body';
   const MARKUP_FIELD_SUMMARY = 'markup:summary';
-
-  const VISIBILITY_DRAFT     = 0;
-  const VISIBILITY_PUBLISHED = 1;
 
   protected $bloggerPHID;
   protected $title;
@@ -36,8 +34,8 @@ final class PhamePost extends PhameDAO
       ->setBloggerPHID($blogger->getPHID())
       ->setBlogPHID($blog->getPHID())
       ->setBlog($blog)
-      ->setDatePublished(0)
-      ->setVisibility(self::VISIBILITY_DRAFT);
+      ->setDatePublished(PhabricatorTime::getNow())
+      ->setVisibility(PhameConstants::VISIBILITY_PUBLISHED);
     return $post;
   }
 
@@ -66,7 +64,7 @@ final class PhamePost extends PhameDAO
   }
 
   public function isDraft() {
-    return $this->getVisibility() == self::VISIBILITY_DRAFT;
+    return $this->getVisibility() == PhameConstants::VISIBILITY_DRAFT;
   }
 
   public function getHumanName() {
@@ -77,20 +75,6 @@ final class PhamePost extends PhameDAO
     }
 
     return $name;
-  }
-
-  public function setCommentsWidget($widget) {
-    $config_data = $this->getConfigData();
-    $config_data['comments_widget'] = $widget;
-    return $this;
-  }
-
-  public function getCommentsWidget() {
-    $config_data = $this->getConfigData();
-    if (empty($config_data)) {
-      return 'none';
-    }
-    return idx($config_data, 'comments_widget', 'none');
   }
 
   protected function getConfiguration() {
@@ -165,31 +149,6 @@ final class PhamePost extends PhameDAO
     );
   }
 
-  public static function getVisibilityOptionsForSelect() {
-    return array(
-      self::VISIBILITY_DRAFT     => pht('Draft: visible only to me.'),
-      self::VISIBILITY_PUBLISHED => pht(
-        'Published: visible to the whole world.'),
-    );
-  }
-
-  public function getCommentsWidgetOptionsForSelect() {
-    $current = $this->getCommentsWidget();
-    $options = array();
-
-    if ($current == 'facebook' ||
-        PhabricatorFacebookAuthProvider::getFacebookApplicationID()) {
-      $options['facebook'] = pht('Facebook');
-    }
-    if ($current == 'disqus' ||
-        PhabricatorEnv::getEnvConfig('disqus.shortname')) {
-      $options['disqus'] = pht('Disqus');
-    }
-    $options['none'] = pht('None');
-
-    return $options;
-  }
-
 
 /* -(  PhabricatorPolicyInterface Implementation  )-------------------------- */
 
@@ -209,18 +168,23 @@ final class PhamePost extends PhameDAO
       case PhabricatorPolicyCapability::CAN_VIEW:
         if (!$this->isDraft() && $this->getBlog()) {
           return $this->getBlog()->getViewPolicy();
+        } else if ($this->getBlog()) {
+          return $this->getBlog()->getEditPolicy();
         } else {
           return PhabricatorPolicies::POLICY_NOONE;
         }
         break;
       case PhabricatorPolicyCapability::CAN_EDIT:
-        return PhabricatorPolicies::POLICY_NOONE;
+        if ($this->getBlog()) {
+          return $this->getBlog()->getEditPolicy();
+        } else {
+          return PhabricatorPolicies::POLICY_NOONE;
+        }
     }
   }
 
   public function hasAutomaticCapability($capability, PhabricatorUser $user) {
-    // A blog post's author can always view it, and is the only user allowed
-    // to edit it.
+    // A blog post's author can always view it.
 
     switch ($capability) {
       case PhabricatorPolicyCapability::CAN_VIEW:
@@ -287,6 +251,18 @@ final class PhamePost extends PhameDAO
     AphrontRequest $request) {
 
     return $timeline;
+  }
+
+/* -(  PhabricatorDestructibleInterface  )----------------------------------- */
+
+  public function destroyObjectPermanently(
+    PhabricatorDestructionEngine $engine) {
+
+    $this->openTransaction();
+
+      $this->delete();
+
+    $this->saveTransaction();
   }
 
 

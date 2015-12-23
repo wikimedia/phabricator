@@ -4,7 +4,7 @@
  * Renders the "HTTP Parameters" help page for edit engines.
  *
  * This page has a ton of text and specialized rendering on it, this class
- * just pulls it out of the main @{class:PhabricatorApplicationEditEngine}.
+ * just pulls it out of the main @{class:PhabricatorEditEngine}.
  */
 final class PhabricatorApplicationEditHTTPParameterHelpView
   extends AphrontView {
@@ -42,6 +42,7 @@ final class PhabricatorApplicationEditHTTPParameterHelpView
       $type = $field->getHTTPParameterType();
       if ($type === null) {
         unset($fields[$key]);
+        continue;
       }
       $types[$type->getTypeName()] = $type;
     }
@@ -94,7 +95,7 @@ EOTEXT
     foreach ($fields as $field) {
       $rows[] = array(
         $field->getLabel(),
-        $field->getKey(),
+        head($field->getAllReadValueFromRequestKeys()),
         $field->getHTTPParameterType()->getTypeName(),
         $field->getDescription(),
       );
@@ -149,7 +150,7 @@ EOTEXT
 
     $rows = array();
     foreach ($fields as $field) {
-      $aliases = $field->getAliases();
+      $aliases = array_slice($field->getAllReadValueFromRequestKeys(), 1);
       if (!$aliases) {
         continue;
       }

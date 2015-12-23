@@ -1,7 +1,17 @@
 <?php
 
 final class PhabricatorPasteEditEngine
-  extends PhabricatorApplicationEditEngine {
+  extends PhabricatorEditEngine {
+
+  const ENGINECONST = 'paste.paste';
+
+  public function getEngineName() {
+    return pht('Pastes');
+  }
+
+  public function getEngineApplicationClass() {
+    return 'PhabricatorPasteApplication';
+  }
 
   protected function newEditableObject() {
     return PhabricatorPaste::initializeNewPaste($this->getViewer());
@@ -24,8 +34,17 @@ final class PhabricatorPasteEditEngine
     return $object->getMonogram();
   }
 
-  protected function getObjectCreateShortText($object) {
+  protected function getObjectCreateShortText() {
     return pht('Create Paste');
+  }
+
+  protected function getCommentViewHeaderText($object) {
+    $is_serious = PhabricatorEnv::getEnvConfig('phabricator.serious-business');
+    if (!$is_serious) {
+      return pht('Eat Paste');
+    }
+
+    return parent::getCommentViewHeaderText($object);
   }
 
   protected function getObjectViewURI($object) {

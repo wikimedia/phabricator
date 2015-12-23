@@ -38,31 +38,35 @@ final class PhabricatorPhameApplication extends PhabricatorApplication {
   public function getRoutes() {
     return array(
      '/phame/' => array(
-        '' => 'PhamePostListController',
+        '' => 'PhameHomeController',
         'live/(?P<id>[^/]+)/(?P<more>.*)' => 'PhameBlogLiveController',
         'post/' => array(
           '(?:(?P<filter>draft|all)/)?' => 'PhamePostListController',
           '(?:query/(?P<queryKey>[^/]+)/)?' => 'PhamePostListController',
           'blogger/(?P<bloggername>[\w\.-_]+)/' => 'PhamePostListController',
-          'delete/(?P<id>[^/]+)/' => 'PhamePostDeleteController',
           'edit/(?:(?P<id>[^/]+)/)?' => 'PhamePostEditController',
+          'history/(?P<id>\d+)/' => 'PhamePostHistoryController',
           'view/(?P<id>\d+)/' => 'PhamePostViewController',
           'publish/(?P<id>\d+)/' => 'PhamePostPublishController',
+          'preview/(?P<id>\d+)/' => 'PhamePostPreviewController',
           'unpublish/(?P<id>\d+)/' => 'PhamePostUnpublishController',
           'notlive/(?P<id>\d+)/' => 'PhamePostNotLiveController',
-          'preview/' => 'PhamePostPreviewController',
+          'preview/' => 'PhabricatorMarkupPreviewController',
           'framed/(?P<id>\d+)/' => 'PhamePostFramedController',
           'new/' => 'PhamePostNewController',
           'move/(?P<id>\d+)/' => 'PhamePostNewController',
+          'comment/(?P<id>[1-9]\d*)/' => 'PhamePostCommentController',
         ),
         'blog/' => array(
           '(?:(?P<filter>user|all)/)?' => 'PhameBlogListController',
           '(?:query/(?P<queryKey>[^/]+)/)?' => 'PhameBlogListController',
-          'delete/(?P<id>[^/]+)/' => 'PhameBlogDeleteController',
+          'archive/(?P<id>[^/]+)/' => 'PhameBlogArchiveController',
           'edit/(?P<id>[^/]+)/' => 'PhameBlogEditController',
           'view/(?P<id>[^/]+)/' => 'PhameBlogViewController',
+          'manage/(?P<id>[^/]+)/' => 'PhameBlogManageController',
           'feed/(?P<id>[^/]+)/' => 'PhameBlogFeedController',
           'new/' => 'PhameBlogEditController',
+          'picture/(?P<id>[1-9]\d*)/' => 'PhameBlogProfilePictureController',
         ),
       ) + $this->getResourceSubroutes(),
     );
@@ -99,6 +103,15 @@ final class PhabricatorPhameApplication extends PhabricatorApplication {
   public function getQuicksandURIPatternBlacklist() {
     return array(
       '/phame/live/.*',
+    );
+  }
+
+  protected function getCustomCapabilities() {
+    return array(
+      PhameBlogCreateCapability::CAPABILITY => array(
+        'default' => PhabricatorPolicies::POLICY_USER,
+        'caption' => pht('Default create policy for blogs.'),
+      ),
     );
   }
 
