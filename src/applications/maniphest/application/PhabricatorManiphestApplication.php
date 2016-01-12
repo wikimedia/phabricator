@@ -36,13 +36,6 @@ final class PhabricatorManiphestApplication extends PhabricatorApplication {
     );
   }
 
-  public function getEventListeners() {
-    return array(
-      new ManiphestNameIndexEventListener(),
-      new ManiphestHovercardEventListener(),
-    );
-  }
-
   public function getRemarkupRules() {
     return array(
       new ManiphestRemarkupRule(),
@@ -57,15 +50,8 @@ final class PhabricatorManiphestApplication extends PhabricatorApplication {
         'report/(?:(?P<view>\w+)/)?' => 'ManiphestReportController',
         'batch/' => 'ManiphestBatchEditController',
         'task/' => array(
-          'create/' => 'ManiphestTaskEditController',
-          'edit/(?P<id>[1-9]\d*)/' => 'ManiphestTaskEditController',
-          'descriptionpreview/'
-            => 'PhabricatorMarkupPreviewController',
-        ),
-        'transaction/' => array(
-          'save/' => 'ManiphestTransactionSaveController',
-          'preview/(?P<id>[1-9]\d*)/'
-            => 'ManiphestTransactionPreviewController',
+          $this->getEditRoutePattern('edit/')
+            => 'ManiphestTaskEditController',
         ),
         'export/(?P<key>[^/]+)/' => 'ManiphestExportController',
         'subpriority/' => 'ManiphestSubpriorityController',
@@ -105,15 +91,9 @@ final class PhabricatorManiphestApplication extends PhabricatorApplication {
   }
 
   public function getQuickCreateItems(PhabricatorUser $viewer) {
-    $items = array();
-
-    $item = id(new PHUIListItemView())
-      ->setName(pht('Maniphest Task'))
-      ->setIcon('fa-anchor')
-      ->setHref($this->getBaseURI().'task/create/');
-    $items[] = $item;
-
-    return $items;
+    return id(new ManiphestEditEngine())
+      ->setViewer($viewer)
+      ->loadQuickCreateItems();
   }
 
   public function supportsEmailIntegration() {

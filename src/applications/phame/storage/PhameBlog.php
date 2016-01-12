@@ -8,10 +8,10 @@ final class PhameBlog extends PhameDAO
     PhabricatorFlaggableInterface,
     PhabricatorProjectInterface,
     PhabricatorDestructibleInterface,
-    PhabricatorApplicationTransactionInterface {
+    PhabricatorApplicationTransactionInterface,
+    PhabricatorConduitResultInterface {
 
   const MARKUP_FIELD_DESCRIPTION = 'markup:description';
-  const SKIN_DEFAULT = 'oblivious';
 
   protected $name;
   protected $description;
@@ -25,7 +25,6 @@ final class PhameBlog extends PhameDAO
   protected $profileImagePHID;
 
   private $profileImageFile = self::ATTACHABLE;
-  private static $requestBlog;
 
   const STATUS_ACTIVE = 'active';
   const STATUS_ARCHIVED = 'archived';
@@ -82,29 +81,6 @@ final class PhameBlog extends PhameDAO
       ->setViewPolicy(PhabricatorPolicies::getMostOpenPolicy())
       ->setEditPolicy(PhabricatorPolicies::POLICY_USER);
     return $blog;
-  }
-
-  public function getSkinRenderer(AphrontRequest $request) {
-    $spec = PhameSkinSpecification::loadOneSkinSpecification(
-      $this->getSkin());
-
-    if (!$spec) {
-      $spec = PhameSkinSpecification::loadOneSkinSpecification(
-        self::SKIN_DEFAULT);
-    }
-
-    if (!$spec) {
-      throw new Exception(
-        pht(
-          'This blog has an invalid skin, and the default skin failed to '.
-          'load.'));
-    }
-
-    $skin = newv($spec->getSkinClass(), array());
-    $skin->setRequest($request);
-    $skin->setSpecification($spec);
-
-    return $skin;
   }
 
   public function isArchived() {
@@ -196,53 +172,30 @@ final class PhameBlog extends PhameDAO
     return null;
   }
 
-  public function getSkin() {
-    $config = coalesce($this->getConfigData(), array());
-    return idx($config, 'skin', self::SKIN_DEFAULT);
-  }
-
-  public function setSkin($skin) {
-    $config = coalesce($this->getConfigData(), array());
-    $config['skin'] = $skin;
-    return $this->setConfigData($config);
-  }
-
-  public static function getSkinOptionsForSelect() {
-    $classes = id(new PhutilSymbolLoader())
-      ->setAncestorClass('PhameBlogSkin')
-      ->setType('class')
-      ->setConcreteOnly(true)
-      ->selectSymbolsWithoutLoading();
-
-    return ipull($classes, 'name', 'name');
-  }
-
-  public static function setRequestBlog(PhameBlog $blog) {
-    self::$requestBlog = $blog;
-  }
-
-  public static function getRequestBlog() {
-    return self::$requestBlog;
-  }
-
-  public function getLiveURI(PhamePost $post = null) {
-    if ($this->getDomain()) {
-      $base = new PhutilURI('http://'.$this->getDomain().'/');
+  public function getLiveURI() {
+    if (strlen($this->getDomain())) {
+      return $this->getExternalLiveURI();
     } else {
-      $base = '/phame/live/'.$this->getID().'/';
-      $base = PhabricatorEnv::getURI($base);
+      return $this->getInternalLiveURI();
     }
+  }
 
-    if ($post) {
-      $base .= '/post/'.$post->getPhameTitle();
-    }
+  public function getExternalLiveURI() {
+    $domain = $this->getDomain();
+    $uri = new PhutilURI('http://'.$this->getDomain().'/');
+    return (string)$uri;
+  }
 
-    return $base;
+  public function getInternalLiveURI() {
+    return '/phame/live/'.$this->getID().'/';
   }
 
   public function getViewURI() {
-    $uri = '/phame/blog/view/'.$this->getID().'/';
-    return PhabricatorEnv::getProductionURI($uri);
+    return '/phame/blog/view/'.$this->getID().'/';
+  }
+
+  public function getManageURI() {
+    return '/phame/blog/manage/'.$this->getID().'/';
   }
 
   public function getProfileImageURI() {
@@ -389,6 +342,39 @@ final class PhameBlog extends PhameDAO
 
   public function shouldAllowSubscription($phid) {
     return true;
+  }
+
+
+/* -(  PhabricatorConduitResultInterface  )---------------------------------- */
+
+
+  public function getFieldSpecificationsForConduit() {
+    return array(
+      id(new PhabricatorConduitSearchFieldSpecification())
+        ->setKey('name')
+        ->setType('string')
+        ->setDescription(pht('The name of the blog.')),
+      id(new PhabricatorConduitSearchFieldSpecification())
+        ->setKey('description')
+        ->setType('string')
+        ->setDescription(pht('Blog description.')),
+      id(new PhabricatorConduitSearchFieldSpecification())
+        ->setKey('status')
+        ->setType('string')
+        ->setDescription(pht('Archived or active status.')),
+    );
+  }
+
+  public function getFieldValuesForConduit() {
+    return array(
+      'name' => $this->getName(),
+      'description' => $this->getDescription(),
+      'status' => $this->getStatus(),
+    );
+  }
+
+  public function getConduitSearchAttachments() {
+    return array();
   }
 
 
