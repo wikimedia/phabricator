@@ -381,6 +381,12 @@ abstract class PhabricatorCursorPagedPolicyAwareQuery
       $column = $orderable[$key];
       $column['value'] = $value_map[$key];
 
+      // If the vector component is reversed, we need to reverse whatever the
+      // order of the column is.
+      if ($order->getIsReversed()) {
+        $column['reverse'] = !idx($column, 'reverse', false);
+      }
+
       $columns[] = $column;
     }
 
@@ -1870,6 +1876,16 @@ abstract class PhabricatorCursorPagedPolicyAwareQuery
   private function validateEdgeLogicConstraints() {
     if ($this->edgeLogicConstraintsAreValid) {
       return $this;
+    }
+
+    foreach ($this->edgeLogicConstraints as $type => $constraints) {
+      foreach ($constraints as $operator => $list) {
+        switch ($operator) {
+          case PhabricatorQueryConstraint::OPERATOR_EMPTY:
+            throw new PhabricatorEmptyQueryException(
+              pht('This query specifies an empty constraint.'));
+        }
+      }
     }
 
     // This should probably be more modular, eventually, but we only do
