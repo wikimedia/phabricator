@@ -9,9 +9,10 @@ final class PHUIWorkpanelView extends AphrontTagView {
   private $headerActions = array();
   private $headerTag;
   private $headerIcon;
+  private $href;
 
-  public function setHeaderIcon(PHUIIconView $header_icon) {
-    $this->headerIcon = $header_icon;
+  public function setHeaderIcon($icon) {
+    $this->headerIcon = $icon;
     return $this;
   }
 
@@ -47,6 +48,15 @@ final class PHUIWorkpanelView extends AphrontTagView {
   public function setHeaderTag(PHUITagView $tag) {
     $this->headerTag = $tag;
     return $this;
+  }
+
+  public function setHref($href) {
+    $this->href = $href;
+    return $this;
+  }
+
+  public function getHref() {
+    return $this->href;
   }
 
   protected function getTagAttributes() {
@@ -85,12 +95,19 @@ final class PHUIWorkpanelView extends AphrontTagView {
       $header->addActionIcon($action);
     }
 
+    $href = $this->getHref();
+    if ($href !== null) {
+      $header->setHref($href);
+    }
+
     $body = phutil_tag(
       'div',
         array(
-          'class' => 'phui-workpanel-body',
+          'class' => 'phui-workpanel-body-content',
         ),
       $this->cards);
+
+    $body = phutil_tag_div('phui-workpanel-body', $body);
 
     $view = id(new PHUIBoxView())
       ->setColor(PHUIBoxView::GREY)

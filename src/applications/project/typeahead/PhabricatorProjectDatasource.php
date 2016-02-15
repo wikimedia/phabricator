@@ -32,6 +32,14 @@ final class PhabricatorProjectDatasource
       $query->withNameTokens($tokens);
     }
 
+    // If this is for policy selection, prevent users from using milestones.
+    $for_policy = $this->getParameter('policy');
+    if ($for_policy) {
+      $query->withIsMilestone(false);
+    }
+
+    $for_autocomplete = $this->getParameter('autocomplete');
+
     $projs = $this->executeQuery($query);
 
     $projs = mpull($projs, null, 'getPHID');
@@ -52,19 +60,36 @@ final class PhabricatorProjectDatasource
       if (!isset($has_cols[$proj->getPHID()])) {
         continue;
       }
+
+      $slug = $proj->getPrimarySlug();
+      if (!strlen($slug)) {
+        foreach ($proj->getSlugs() as $slug_object) {
+          $slug = $slug_object->getSlug();
+          if (strlen($slug)) {
+            break;
+          }
+        }
+      }
+
+      // If we're building results for the autocompleter and this project
+      // doesn't have any usable slugs, don't return it as a result.
+      if ($for_autocomplete && !strlen($slug)) {
+        continue;
+      }
+
       $closed = null;
       if ($proj->isArchived()) {
         $closed = pht('Archived');
       }
 
       $all_strings = mpull($proj->getSlugs(), 'getSlug');
-      $all_strings[] = $proj->getName();
+      $all_strings[] = $proj->getDisplayName();
       $all_strings = implode(' ', $all_strings);
 
       $proj_result = id(new PhabricatorTypeaheadResult())
         ->setName($all_strings)
-        ->setDisplayName($proj->getName())
-        ->setDisplayType(pht('Project'))
+        ->setDisplayName($proj->getDisplayName())
+        ->setDisplayType($proj->getDisplayIconName())
         ->setURI($proj->getURI())
         ->setPHID($proj->getPHID())
         ->setIcon($proj->getDisplayIconIcon())
@@ -72,7 +97,6 @@ final class PhabricatorProjectDatasource
         ->setPriorityType('proj')
         ->setClosed($closed);
 
-      $slug = $proj->getPrimarySlug();
       if (strlen($slug)) {
         $proj_result->setAutocomplete('#'.$slug);
       }

@@ -9,7 +9,8 @@ final class PhabricatorProject extends PhabricatorProjectDAO
     PhabricatorCustomFieldInterface,
     PhabricatorDestructibleInterface,
     PhabricatorFulltextInterface,
-    PhabricatorConduitResultInterface {
+    PhabricatorConduitResultInterface,
+    PhabricatorColumnProxyInterface {
 
   protected $name;
   protected $status = PhabricatorProjectStatus::STATUS_ACTIVE;
@@ -35,6 +36,8 @@ final class PhabricatorProject extends PhabricatorProjectDAO
   protected $projectDepth;
   protected $projectPathKey;
 
+  protected $properties = array();
+
   private $memberPHIDs = self::ATTACHABLE;
   private $watcherPHIDs = self::ATTACHABLE;
   private $sparseWatchers = self::ATTACHABLE;
@@ -47,6 +50,7 @@ final class PhabricatorProject extends PhabricatorProjectDAO
   const TABLE_DATASOURCE_TOKEN = 'project_datasourcetoken';
 
   const PANEL_PROFILE = 'project.profile';
+  const PANEL_POINTS = 'project.points';
   const PANEL_WORKBOARD = 'project.workboard';
   const PANEL_MEMBERS = 'project.members';
   const PANEL_MANAGE = 'project.manage';
@@ -196,6 +200,9 @@ final class PhabricatorProject extends PhabricatorProjectDAO
   protected function getConfiguration() {
     return array(
       self::CONFIG_AUX_PHID => true,
+      self::CONFIG_SERIALIZATION => array(
+        'properties' => self::SERIALIZATION_JSON,
+      ),
       self::CONFIG_COLUMN_SCHEMA => array(
         'name' => 'sort128',
         'status' => 'text32',
@@ -378,7 +385,7 @@ final class PhabricatorProject extends PhabricatorProjectDAO
       $this->getPHID());
 
     $all_strings = ipull($slugs, 'slug');
-    $all_strings[] = $this->getName();
+    $all_strings[] = $this->getDisplayName();
     $all_strings = implode(' ', $all_strings);
 
     $tokens = PhabricatorTypeaheadDatasource::tokenizeString($all_strings);
@@ -489,6 +496,20 @@ final class PhabricatorProject extends PhabricatorProjectDAO
     return $number;
   }
 
+  public function getDisplayName() {
+    $name = $this->getName();
+
+    // If this is a milestone, show it as "Parent > Sprint 99".
+    if ($this->isMilestone()) {
+      $name = pht(
+        '%s (%s)',
+        $this->getParentProject()->getName(),
+        $name);
+    }
+
+    return $name;
+  }
+
   public function getDisplayIconKey() {
     if ($this->isMilestone()) {
       $key = PhabricatorProjectIconSet::getMilestoneIconKey();
@@ -531,6 +552,31 @@ final class PhabricatorProject extends PhabricatorProjectDAO
     );
 
     return idx($map, $color, $color);
+  }
+
+  public function getProperty($key, $default = null) {
+    return idx($this->properties, $key, $default);
+  }
+
+  public function setProperty($key, $value) {
+    $this->properties[$key] = $value;
+    return $this;
+  }
+
+  public function getDefaultWorkboardSort() {
+    return $this->getProperty('workboard.sort.default');
+  }
+
+  public function setDefaultWorkboardSort($sort) {
+    return $this->setProperty('workboard.sort.default', $sort);
+  }
+
+  public function getDefaultWorkboardFilter() {
+    return $this->getProperty('workboard.filter.default');
+  }
+
+  public function setDefaultWorkboardFilter($filter) {
+    return $this->setProperty('workboard.filter.default', $filter);
   }
 
 
@@ -662,5 +708,26 @@ final class PhabricatorProject extends PhabricatorProjectDAO
         ->setAttachmentKey('watchers'),
     );
   }
+
+
+/* -(  PhabricatorColumnProxyInterface  )------------------------------------ */
+
+
+  public function getProxyColumnName() {
+    return $this->getName();
+  }
+
+  public function getProxyColumnIcon() {
+    return $this->getDisplayIconIcon();
+  }
+
+  public function getProxyColumnClass() {
+    if ($this->isMilestone()) {
+      return 'phui-workboard-column-milestone';
+    }
+
+    return null;
+  }
+
 
 }

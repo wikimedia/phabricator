@@ -76,8 +76,7 @@ final class DiffusionServeController extends DiffusionController {
     }
 
     try {
-      $remote_addr = $request->getRemoteAddr();
-      $remote_addr = ip2long($remote_addr);
+      $remote_addr = $request->getRemoteAddress();
 
       $pull_event = id(new PhabricatorRepositoryPullEvent())
         ->setEpoch(PhabricatorTime::getNow())
@@ -101,7 +100,7 @@ final class DiffusionServeController extends DiffusionController {
           ->setResultCode(500)
           ->setProperties(
             array(
-              'exception.class' => $ex->getClass(),
+              'exception.class' => get_class($ex),
               'exception.message' => $ex->getMessage(),
             ));
       }
@@ -428,11 +427,14 @@ final class DiffusionServeController extends DiffusionController {
           '$PATH'));
     }
 
+    // NOTE: We do not set HTTP_CONTENT_ENCODING here, because we already
+    // decompressed the request when we read the request body, so the body is
+    // just plain data with no encoding.
+
     $env = array(
       'REQUEST_METHOD' => $_SERVER['REQUEST_METHOD'],
       'QUERY_STRING' => $query_string,
       'CONTENT_TYPE' => $request->getHTTPHeader('Content-Type'),
-      'HTTP_CONTENT_ENCODING' => $request->getHTTPHeader('Content-Encoding'),
       'REMOTE_ADDR' => $_SERVER['REMOTE_ADDR'],
       'GIT_PROJECT_ROOT' => $repository_root,
       'GIT_HTTP_EXPORT_ALL' => '1',
@@ -720,11 +722,11 @@ final class DiffusionServeController extends DiffusionController {
   }
 
   private function getCommonEnvironment(PhabricatorUser $viewer) {
-    $remote_addr = $this->getRequest()->getRemoteAddr();
+    $remote_address = $this->getRequest()->getRemoteAddress();
 
     return array(
       DiffusionCommitHookEngine::ENV_USER => $viewer->getUsername(),
-      DiffusionCommitHookEngine::ENV_REMOTE_ADDRESS => $remote_addr,
+      DiffusionCommitHookEngine::ENV_REMOTE_ADDRESS => $remote_address,
       DiffusionCommitHookEngine::ENV_REMOTE_PROTOCOL => 'http',
     );
   }

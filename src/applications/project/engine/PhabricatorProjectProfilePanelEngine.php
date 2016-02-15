@@ -21,12 +21,20 @@ final class PhabricatorProjectProfilePanelEngine
       ->setPanelKey(PhabricatorProjectDetailsProfilePanel::PANELKEY);
 
     $panels[] = $this->newPanel()
+      ->setBuiltinKey(PhabricatorProject::PANEL_POINTS)
+      ->setPanelKey(PhabricatorProjectPointsProfilePanel::PANELKEY);
+
+    $panels[] = $this->newPanel()
       ->setBuiltinKey(PhabricatorProject::PANEL_WORKBOARD)
       ->setPanelKey(PhabricatorProjectWorkboardProfilePanel::PANELKEY);
 
     $panels[] = $this->newPanel()
       ->setBuiltinKey(PhabricatorProject::PANEL_MEMBERS)
       ->setPanelKey(PhabricatorProjectMembersProfilePanel::PANELKEY);
+
+    $panels[] = $this->newPanel()
+      ->setBuiltinKey(PhabricatorProject::PANEL_SUBPROJECTS)
+      ->setPanelKey(PhabricatorProjectSubprojectsProfilePanel::PANELKEY);
 
     $panels[] = $this->newPanel()
       ->setBuiltinKey(PhabricatorProject::PANEL_MANAGE)

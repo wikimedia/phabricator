@@ -22,6 +22,8 @@ final class PhabricatorProjectColumnDetailController
     }
     $this->setProject($project);
 
+    $project_id = $project->getID();
+
     $column = id(new PhabricatorProjectColumnQuery())
       ->setViewer($viewer)
       ->withIDs(array($id))
@@ -45,6 +47,10 @@ final class PhabricatorProjectColumnDetailController
     $actions = $this->buildActionView($column);
     $properties = $this->buildPropertyView($column, $actions);
 
+    $crumbs = $this->buildApplicationCrumbs();
+    $crumbs->addTextCrumb(pht('Workboard'), "/project/board/{$project_id}/");
+    $crumbs->addTextCrumb(pht('Column: %s', $title));
+
     $box = id(new PHUIObjectBoxView())
       ->setHeader($header)
       ->addPropertyList($properties);
@@ -54,6 +60,7 @@ final class PhabricatorProjectColumnDetailController
     return $this->newPage()
       ->setTitle($title)
       ->setNavigation($nav)
+      ->setCrumbs($crumbs)
       ->appendChild(
         array(
           $box,
@@ -113,9 +120,12 @@ final class PhabricatorProjectColumnDetailController
       ->setActionList($actions);
 
     $limit = $column->getPointLimit();
-    $properties->addProperty(
-      pht('Point Limit'),
-      $limit ? $limit : pht('No Limit'));
+    if ($limit === null) {
+      $limit_text = pht('No Limit');
+    } else {
+      $limit_text = $limit;
+    }
+    $properties->addProperty(pht('Point Limit'), $limit_text);
 
     return $properties;
   }

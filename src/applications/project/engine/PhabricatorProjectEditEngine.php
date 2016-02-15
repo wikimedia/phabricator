@@ -43,17 +43,7 @@ final class PhabricatorProjectEditEngine
   }
 
   protected function newEditableObject() {
-    $project = PhabricatorProject::initializeNewProject($this->getViewer());
-
-    $milestone = $this->getMilestoneProject();
-    if ($milestone) {
-      $default_name = pht(
-        'Milestone %s',
-        new PhutilNumber($milestone->loadNextMilestoneNumber()));
-      $project->setName($default_name);
-    }
-
-    return $project;
+    return PhabricatorProject::initializeNewProject($this->getViewer());
   }
 
   protected function newObjectQuery() {
@@ -88,15 +78,11 @@ final class PhabricatorProjectEditEngine
 
   protected function getObjectCreateCancelURI($object) {
     $parent = $this->getParentProject();
-    if ($parent) {
-      $id = $parent->getID();
-      return "/project/subprojects/{$id}/";
-    }
-
     $milestone = $this->getMilestoneProject();
-    if ($milestone) {
-      $id = $milestone->getID();
-      return "/project/milestones/{$id}/";
+
+    if ($parent || $milestone) {
+      $id = nonempty($parent, $milestone)->getID();
+      return "/project/subprojects/{$id}/";
     }
 
     return parent::getObjectCreateCancelURI($object);
@@ -143,6 +129,7 @@ final class PhabricatorProjectEditEngine
         array(
           'parent',
           'milestone',
+          'milestone.previous',
           'name',
           'std:project:internal:description',
           'icon',
@@ -170,13 +157,31 @@ final class PhabricatorProjectEditEngine
       $parent_phid = null;
     }
 
+    $previous_milestone_phid = null;
     if ($milestone) {
       $milestone_phid = $milestone->getPHID();
+
+      // Load the current milestone so we can show the user a hint about what
+      // it was called, so they don't have to remember if the next one should
+      // be "Sprint 287" or "Sprint 278".
+
+      $number = ($milestone->loadNextMilestoneNumber() - 1);
+      if ($number > 0) {
+        $previous_milestone = id(new PhabricatorProjectQuery())
+          ->setViewer($this->getViewer())
+          ->withParentProjectPHIDs(array($milestone->getPHID()))
+          ->withIsMilestone(true)
+          ->withMilestoneNumberBetween($number, $number)
+          ->executeOne();
+        if ($previous_milestone) {
+          $previous_milestone_phid = $previous_milestone->getPHID();
+        }
+      }
     } else {
       $milestone_phid = null;
     }
 
-    return array(
+    $fields = array(
       id(new PhabricatorHandlesEditField())
         ->setKey('parent')
         ->setLabel(pht('Parent'))
@@ -203,6 +208,14 @@ final class PhabricatorProjectEditEngine
         ->setTransactionType(PhabricatorProjectTransaction::TYPE_MILESTONE)
         ->setHandleParameterType(new AphrontPHIDHTTPParameterType())
         ->setSingleValue($milestone_phid)
+        ->setIsReorderable(false)
+        ->setIsDefaultable(false)
+        ->setIsLockable(false)
+        ->setIsLocked(true),
+      id(new PhabricatorHandlesEditField())
+        ->setKey('milestone.previous')
+        ->setLabel(pht('Previous Milestone'))
+        ->setSingleValue($previous_milestone_phid)
         ->setIsReorderable(false)
         ->setIsDefaultable(false)
         ->setIsLockable(false)
@@ -243,6 +256,49 @@ final class PhabricatorProjectEditEngine
         ->setConduitTypeDescription(pht('New list of slugs.'))
         ->setValue($slugs),
     );
+
+    $can_edit_members = (!$milestone) &&
+                        (!$object->isMilestone()) &&
+                        (!$object->getHasSubprojects());
+
+    if ($can_edit_members) {
+
+      // Show this on the web UI when creating a project, but not when editing
+      // one. It is always available via Conduit.
+      $conduit_only = !$this->getIsCreate();
+
+      $members_field = id(new PhabricatorUsersEditField())
+        ->setKey('members')
+        ->setAliases(array('memberPHIDs'))
+        ->setLabel(pht('Initial Members'))
+        ->setIsConduitOnly($conduit_only)
+        ->setUseEdgeTransactions(true)
+        ->setTransactionType(PhabricatorTransactions::TYPE_EDGE)
+        ->setMetadataValue(
+          'edge:type',
+          PhabricatorProjectProjectHasMemberEdgeType::EDGECONST)
+        ->setDescription(pht('Initial project members.'))
+        ->setConduitDescription(pht('Set project members.'))
+        ->setConduitTypeDescription(pht('New list of members.'))
+        ->setValue(array());
+
+      $members_field->setViewer($this->getViewer());
+
+      $edit_add = $members_field->getConduitEditType('members.add')
+        ->setConduitDescription(pht('Add members.'));
+
+      $edit_set = $members_field->getConduitEditType('members.set')
+        ->setConduitDescription(
+          pht('Set members, overwriting the current value.'));
+
+      $edit_rem = $members_field->getConduitEditType('members.remove')
+        ->setConduitDescription(pht('Remove members.'));
+
+      $fields[] = $members_field;
+    }
+
+    return $fields;
+
   }
 
 }
