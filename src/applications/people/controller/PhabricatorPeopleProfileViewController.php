@@ -129,6 +129,7 @@ final class PhabricatorPeopleProfileViewController
     $projects = id(new PhabricatorProjectQuery())
       ->setViewer($viewer)
       ->withMemberPHIDs(array($user->getPHID()))
+      ->withIcons(array('project','group'))
       ->needImages(true)
       ->withStatuses(
         array(
