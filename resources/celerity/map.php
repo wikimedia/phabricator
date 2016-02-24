@@ -7,7 +7,7 @@
  */
 return array(
   'names' => array(
-    'core.pkg.css' => '3f520ffb',
+    'core.pkg.css' => '2d4e979c',
     'core.pkg.js' => 'd7daa6d8',
     'darkconsole.pkg.js' => 'e7393ebb',
     'differential.pkg.css' => '2de124c9',
@@ -160,7 +160,7 @@ return array(
     'rsrc/css/phui/workboards/phui-workpanel.css' => 'a78c0661',
     'rsrc/css/sprite-login.css' => '60e8560e',
     'rsrc/css/sprite-menu.css' => '60ad2d3d',
-    'rsrc/css/sprite-tokens.css' => '4f399012',
+    'rsrc/css/sprite-tokens.css' => '0ef965ac',
     'rsrc/externals/d3/d3.min.js' => 'a11a5ff2',
     'rsrc/externals/font/aleo/aleo-bold.eot' => 'd3d3bed7',
     'rsrc/externals/font/aleo/aleo-bold.svg' => '45899c8e',
@@ -338,8 +338,8 @@ return array(
     'rsrc/image/sprite-login.png' => '03d5af29',
     'rsrc/image/sprite-menu-X2.png' => '30c3ed7b',
     'rsrc/image/sprite-menu.png' => 'badd4aef',
-    'rsrc/image/sprite-tokens-X2.png' => '348f1745',
-    'rsrc/image/sprite-tokens.png' => 'ce0b62be',
+    'rsrc/image/sprite-tokens-X2.png' => 'b1528286',
+    'rsrc/image/sprite-tokens.png' => '8ae0f598',
     'rsrc/image/texture/card-gradient.png' => '815f26e8',
     'rsrc/image/texture/dark-menu-hover.png' => '5fa7ece8',
     'rsrc/image/texture/dark-menu.png' => '7e22296e',
@@ -863,7 +863,7 @@ return array(
     'setup-issue-css' => 'db7e9c40',
     'sprite-login-css' => '60e8560e',
     'sprite-menu-css' => '60ad2d3d',
-    'sprite-tokens-css' => '4f399012',
+    'sprite-tokens-css' => '0ef965ac',
     'syntax-highlighting-css' => '9fd11da8',
     'tokens-css' => '3d0f239e',
     'typeahead-browse-css' => 'd8581d2c',

@@ -43,6 +43,8 @@ final class PhabricatorTokenQuery
       array('misc-2', pht('Evil Spooky Haunted Tree')),
       array('misc-3', pht('Baby Tequila')),
       array('misc-4', pht('The World Burns')),
+      array('wmf-1', pht('Barnstar')),
+      array('wmf-2', pht('Cookie')),
     );
 
     $type = PhabricatorTokenTokenPHIDType::TYPECONST;
