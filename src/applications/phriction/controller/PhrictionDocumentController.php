@@ -203,19 +203,11 @@ final class PhrictionDocumentController
       $crumbs->addCrumb($view);
     }
 
-    $action_button = id(new PHUIButtonView())
-      ->setTag('a')
-      ->setText(pht('Actions'))
-      ->setHref('#')
-      ->setIcon('fa-bars')
-      ->addClass('phui-mobile-menu')
-      ->setDropdownMenu($actions);
-
     $header = id(new PHUIHeaderView())
       ->setUser($viewer)
       ->setPolicyObject($document)
       ->setHeader($page_title)
-      ->addActionLink($action_button);
+      ->setActionList($actions);
 
     if ($content) {
       $header->setEpoch($content->getDateCreated());
@@ -226,6 +218,7 @@ final class PhrictionDocumentController
       $prop_list = new PHUIPropertyGroupView();
       $prop_list->addPropertyList($properties);
     }
+    $prop_list = phutil_tag_div('phui-document-view-pro-box', $prop_list);
 
     $page_content = id(new PHUIDocumentViewPro())
       ->setHeader($header)

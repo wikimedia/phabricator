@@ -56,9 +56,12 @@ final class PhabricatorPeopleProfileViewController
 
     $projects = $this->buildProjectsView($user);
     $badges = $this->buildBadgesView($user);
+    require_celerity_resource('project-view-css');
 
-    $columns = id(new PHUITwoColumnView())
-      ->addClass('project-view-badges')
+    $home = id(new PHUITwoColumnView())
+      ->setHeader($header)
+      ->setFluid(true)
+      ->addClass('project-view-home')
       ->setMainColumn(
         array(
           $properties,
@@ -75,17 +78,6 @@ final class PhabricatorPeopleProfileViewController
 
     $crumbs = $this->buildApplicationCrumbs();
     $crumbs->setBorder(true);
-
-    require_celerity_resource('project-view-css');
-    $home = phutil_tag(
-      'div',
-      array(
-        'class' => 'project-view-home',
-      ),
-      array(
-        $header,
-        $columns,
-      ));
 
     return $this->newPage()
       ->setTitle($user->getUsername())
@@ -115,7 +107,7 @@ final class PhabricatorPeopleProfileViewController
     }
 
     $view = id(new PHUIBoxView())
-      ->setColor(PHUIBoxView::GREY)
+      ->setBorder(true)
       ->appendChild($view)
       ->addClass('project-view-properties');
 
@@ -175,7 +167,7 @@ final class PhabricatorPeopleProfileViewController
     $box = id(new PHUIObjectBoxView())
       ->setHeader($header)
       ->appendChild($list)
-      ->setBackground(PHUIBoxView::GREY);
+      ->setBackground(PHUIObjectBoxView::GREY);
 
     return $box;
   }
@@ -218,8 +210,9 @@ final class PhabricatorPeopleProfileViewController
 
     $box = id(new PHUIObjectBoxView())
       ->setHeaderText(pht('Badges'))
+      ->addClass('project-view-badges')
       ->appendChild($flex)
-      ->setBackground(PHUIBoxView::GREY);
+      ->setBackground(PHUIObjectBoxView::GREY);
 
     return $box;
   }

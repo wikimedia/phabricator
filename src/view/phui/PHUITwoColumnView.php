@@ -5,6 +5,8 @@ final class PHUITwoColumnView extends AphrontTagView {
   private $mainColumn;
   private $sideColumn;
   private $display;
+  private $fluid;
+  private $header;
 
   const DISPLAY_LEFT = 'phui-side-column-left';
   const DISPLAY_RIGHT = 'phui-side-column-right';
@@ -19,12 +21,22 @@ final class PHUITwoColumnView extends AphrontTagView {
     return $this;
   }
 
+  public function setHeader(PHUIHeaderView $header) {
+    $this->header = $header;
+    return $this;
+  }
+
+  public function setFluid($fluid) {
+    $this->fluid = $fluid;
+    return $this;
+  }
+
   public function setDisplay($display) {
     $this->display = $display;
     return $this;
   }
 
-  public function getDisplay() {
+  private function getDisplay() {
     if ($this->display) {
       return $this->display;
     } else {
@@ -35,8 +47,11 @@ final class PHUITwoColumnView extends AphrontTagView {
   protected function getTagAttributes() {
     $classes = array();
     $classes[] = 'phui-two-column-view';
-    $classes[] = 'grouped';
     $classes[] = $this->getDisplay();
+
+    if ($this->fluid) {
+      $classes[] = 'phui-two-column-fluid';
+    }
 
     return array(
       'class' => implode(' ', $classes),
@@ -66,6 +81,22 @@ final class PHUITwoColumnView extends AphrontTagView {
       $order = array($main, $side);
     }
 
-    return phutil_tag_div('phui-two-column-row', $order);
+    $inner = phutil_tag_div('phui-two-column-row', $order);
+    $table = phutil_tag_div('phui-two-column-content', $inner);
+
+    $header = null;
+    if ($this->header) {
+      $header = phutil_tag_div('phui-two-column-header', $this->header);
+    }
+
+    return phutil_tag(
+      'div',
+      array(
+        'class' => 'phui-two-column-container',
+      ),
+      array(
+        $header,
+        $table,
+      ));
   }
 }
