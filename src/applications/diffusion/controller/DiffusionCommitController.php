@@ -110,6 +110,8 @@ final class DiffusionCommitController extends DiffusionController {
         $property_list->addProperty($key, $value);
       }
 
+      $this->addCustomFieldProperties($property_list, $commit);
+
       $message = $commit_data->getCommitMessage();
 
       $revision = $commit->getCommitIdentifier();
@@ -607,8 +609,6 @@ final class DiffusionCommitController extends DiffusionController {
       $props['Tasks'] = $task_list;
     }
 
-    $props = $this->addCustomFieldProperties($props, $commit, $data);
-
     return $props;
   }
 
@@ -1019,47 +1019,21 @@ final class DiffusionCommitController extends DiffusionController {
     return $parser->processCorpus($corpus);
   }
 
-  private function addCustomFieldProperties($props, $commit, $data) {
+  private function addCustomFieldProperties($property_list, $commit) {
     $field_list = PhabricatorCustomField::getObjectFields(
       $commit,
       PhabricatorCustomField::ROLE_VIEW);
     $field_list
-      ->setViewer(PhabricatorUser::getOmnipotentUser())
+      ->setViewer($this->getViewer())
       ->readFieldsFromStorage($commit);
 
     $fields = $field_list->getFields();
-    $field_names = array();
-    $field_map = array();
-    foreach ($fields as $field) {
-      if (!$field->shouldAppearInPropertyView()) {
-        continue;
-      }
-      $label = phutil_utf8_strtolower($field->getFieldName());
-      $field_names[$label] = $field->getFieldName();
-      $field_map[$label] = $field;
-    }
-    $corpus = $data->getCommitMessage();
-    $key_title = id(new DifferentialTitleField())->getFieldKeyForConduit();
-    $key_summary = id(new DifferentialSummaryField())->getFieldKeyForConduit();
 
-    $parser = id(new DifferentialCommitMessageParser())
-      ->setLabelMap($field_names)
-      ->setTitleKey($key_title)
-      ->setSummaryKey($key_summary);
+    phlog($field_list);
 
-    $result = $parser->parseCorpus($corpus);
+    $user = $this->getViewer();
 
-    foreach ($field_map as $name => $field) {
-      $uname = $field->getFieldName();
-      if (isset($result[$uname])) {
-        $value = $result[$uname];
-        $value = $field->parseValueFromCommitMessage($value);
-        $field->readValueFromCommitMessage($value);
-        $props[$uname] = $field->renderPropertyViewValue(array());
-      }
-    }
-
-    return $props;
+    $field_list->appendFieldsToPropertyList($commit, $user, $property_list);
   }
 
   private function buildTableOfContents(array $changesets) {
