@@ -1029,8 +1029,6 @@ final class DiffusionCommitController extends DiffusionController {
 
     $fields = $field_list->getFields();
 
-    phlog($field_list);
-
     $user = $this->getViewer();
 
     $field_list->appendFieldsToPropertyList($commit, $user, $property_list);
