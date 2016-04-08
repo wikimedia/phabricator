@@ -32,6 +32,7 @@ final class FeedQueryConduitAPIMethod extends FeedConduitAPIMethod {
     return array(
       'html' => pht('Full HTML presentation of story'),
       'data' => pht('Dictionary with various data of the story'),
+      'html-data' => pht('Full dictionary of story data plus rendered HTML'),
       'html-summary' => pht('Story contains only the title of the story'),
       'text' => pht('Simple one-line plain text representation of story'),
     );
@@ -131,6 +132,16 @@ final class FeedQueryConduitAPIMethod extends FeedConduitAPIMethod {
               'chronologicalKey' => $story_data->getChronologicalKey(),
               'objectPHID' => $story->getPrimaryObjectPHID(),
               'text' => $story->renderText(),
+            );
+          break;
+          case 'html-data':
+            $data = array(
+              'class' => $story_data->getStoryType(),
+              'epoch' => $story_data->getEpoch(),
+              'authorPHID' => $story_data->getAuthorPHID(),
+              'chronologicalKey' => $story_data->getChronologicalKey(),
+              'html' => $view->render(),
+              'data' => $story_data->getStoryData(),
             );
           break;
           default:
