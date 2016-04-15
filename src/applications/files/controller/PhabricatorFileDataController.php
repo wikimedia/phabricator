@@ -86,7 +86,14 @@ final class PhabricatorFileDataController extends PhabricatorFileController {
     $is_lfs = ($request_type == 'git-lfs');
 
     if ($is_viewable && !$force_download) {
-      $response->setMimeType($file->getViewableMimeType());
+      // Patch for https://phabricator.wikimedia.org/T117621
+      $mime_type = $file->getViewableMimeType();
+      if ($mime_type == 'text/x-php; charset=utf-8') {
+          // force the mime type on php files to text/plain:
+          $mime_type = 'text/plain; charset=utf-8';
+      }
+      $response->setMimeType($mime_type);
+      Header("Content-Disposition: inline; ".$file->getName());
     } else {
       if (!$request->isHTTPPost() && !$is_alternate_domain && !$is_lfs) {
         // NOTE: Require POST to download files from the primary domain. We'd
