@@ -21,67 +21,61 @@ final class AlmanacNamespaceViewController
 
     $title = pht('Namespace %s', $namespace->getName());
 
-    $property_list = $this->buildPropertyList($namespace);
-    $action_list = $this->buildActionList($namespace);
-    $property_list->setActionList($action_list);
+    $curtain = $this->buildCurtain($namespace);
 
     $header = id(new PHUIHeaderView())
       ->setUser($viewer)
       ->setHeader($namespace->getName())
-      ->setPolicyObject($namespace);
-
-    $box = id(new PHUIObjectBoxView())
-      ->setHeader($header)
-      ->addPropertyList($property_list);
+      ->setPolicyObject($namespace)
+      ->setHeaderIcon('fa-asterisk');
 
     $crumbs = $this->buildApplicationCrumbs();
     $crumbs->addTextCrumb($namespace->getName());
+    $crumbs->setBorder(true);
 
     $timeline = $this->buildTransactionTimeline(
       $namespace,
       new AlmanacNamespaceTransactionQuery());
     $timeline->setShouldTerminate(true);
 
+    $view = id(new PHUITwoColumnView())
+      ->setHeader($header)
+      ->setCurtain($curtain)
+      ->setMainColumn(array(
+          $timeline,
+        ));
+
     return $this->newPage()
       ->setTitle($title)
       ->setCrumbs($crumbs)
       ->appendChild(
         array(
-          $box,
-          $timeline,
-      ));
+          $view,
+        ));
   }
 
-  private function buildPropertyList(AlmanacNamespace $namespace) {
+  private function buildCurtain(AlmanacNamespace $namespace) {
     $viewer = $this->getViewer();
-
-    $properties = id(new PHUIPropertyListView())
-      ->setUser($viewer);
-
-    return $properties;
-  }
-
-  private function buildActionList(AlmanacNamespace $namespace) {
-    $viewer = $this->getViewer();
-    $id = $namespace->getID();
 
     $can_edit = PhabricatorPolicyFilter::hasCapability(
       $viewer,
       $namespace,
       PhabricatorPolicyCapability::CAN_EDIT);
 
-    $actions = id(new PhabricatorActionListView())
-      ->setUser($viewer);
+    $id = $namespace->getID();
+    $edit_uri = $this->getApplicationURI("namespace/edit/{$id}/");
 
-    $actions->addAction(
+    $curtain = $this->newCurtainView($namespace);
+
+    $curtain->addAction(
       id(new PhabricatorActionView())
         ->setIcon('fa-pencil')
         ->setName(pht('Edit Namespace'))
-        ->setHref($this->getApplicationURI("namespace/edit/{$id}/"))
+        ->setHref($edit_uri)
         ->setWorkflow(!$can_edit)
         ->setDisabled(!$can_edit));
 
-    return $actions;
+    return $curtain;
   }
 
 }

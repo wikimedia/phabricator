@@ -6,6 +6,7 @@ final class PhabricatorBadgesEditRecipientsController
   public function handleRequest(AphrontRequest $request) {
     $viewer = $request->getViewer();
     $id = $request->getURIData('id');
+    $xactions = array();
 
     $badge = id(new PhabricatorBadgesQuery())
       ->setViewer($viewer)
@@ -21,29 +22,23 @@ final class PhabricatorBadgesEditRecipientsController
       return new Aphront404Response();
     }
 
-    $recipient_phids = $badge->getRecipientPHIDs();
+    $view_uri = $this->getApplicationURI('view/'.$badge->getID().'/');
+    $awards = $badge->getAwards();
+    $recipient_phids = mpull($awards, 'getRecipientPHID');
 
     if ($request->isFormPost()) {
-      $recipient_spec = array();
-
-      $remove = $request->getStr('remove');
-      if ($remove) {
-        $recipient_spec['-'] = array_fuse(array($remove));
-      }
+      $award_phids = array();
 
       $add_recipients = $request->getArr('phids');
       if ($add_recipients) {
-        $recipient_spec['+'] = array_fuse($add_recipients);
+        foreach ($add_recipients as $phid) {
+          $award_phids[] = $phid;
+        }
       }
 
-      $type_recipient = PhabricatorBadgeHasRecipientEdgeType::EDGECONST;
-
-      $xactions = array();
-
       $xactions[] = id(new PhabricatorBadgesTransaction())
-        ->setTransactionType(PhabricatorTransactions::TYPE_EDGE)
-        ->setMetadataValue('edge:type', $type_recipient)
-        ->setNewValue($recipient_spec);
+        ->setTransactionType(PhabricatorBadgesTransaction::TYPE_AWARD)
+        ->setNewValue($award_phids);
 
       $editor = id(new PhabricatorBadgesEditor($badge))
         ->setActor($viewer)
@@ -53,7 +48,7 @@ final class PhabricatorBadgesEditRecipientsController
         ->applyTransactions($badge, $xactions);
 
       return id(new AphrontRedirectResponse())
-        ->setURI($request->getRequestURI());
+        ->setURI($view_uri);
     }
 
     $recipient_phids = array_reverse($recipient_phids);
@@ -76,44 +71,26 @@ final class PhabricatorBadgesEditRecipientsController
     $title = pht('Add Recipient');
     if ($can_edit) {
       $header_name = pht('Edit Recipients');
-      $view_uri = $this->getApplicationURI('view/'.$badge->getID().'/');
 
       $form = new AphrontFormView();
       $form
         ->setUser($viewer)
+        ->setFullWidth(true)
         ->appendControl(
           id(new AphrontFormTokenizerControl())
             ->setName('phids')
             ->setLabel(pht('Add Recipients'))
-            ->setDatasource(new PhabricatorPeopleDatasource()))
-        ->appendChild(
-          id(new AphrontFormSubmitControl())
-            ->addCancelButton($view_uri)
-            ->setValue(pht('Add Recipients')));
-      $form_box = id(new PHUIObjectBoxView())
-        ->setHeaderText($title)
-        ->setForm($form);
+            ->setDatasource(new PhabricatorPeopleDatasource()));
     }
 
-    $recipient_list = id(new PhabricatorBadgesRecipientsListView())
-      ->setBadge($badge)
-      ->setHandles($handles)
-      ->setUser($viewer);
+    $dialog = id(new AphrontDialogView())
+      ->setUser($viewer)
+      ->setTitle(pht('Award Badges'))
+      ->appendForm($form)
+      ->addCancelButton($view_uri)
+      ->addSubmitButton(pht('Add Recipients'));
 
-    $badge_url = $this->getApplicationURI('view/'.$id.'/');
-
-    $crumbs = $this->buildApplicationCrumbs();
-    $crumbs->addTextCrumb($badge->getName(), $badge_url);
-    $crumbs->addTextCrumb(pht('Recipients'));
-
-    return $this->newPage()
-      ->setTitle($title)
-      ->setCrumbs($crumbs)
-      ->appendChild(
-        array(
-          $form_box,
-          $recipient_list,
-      ));
+    return $dialog;
   }
 
 }

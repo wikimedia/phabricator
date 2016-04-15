@@ -235,42 +235,47 @@ final class HeraldRuleController extends HeraldController {
     $this->setupEditorBehavior($rule, $handles, $adapter);
 
     $title = $rule->getID()
-        ? pht('Edit Herald Rule')
-        : pht('Create Herald Rule');
+        ? pht('Edit Herald Rule: %s', $rule->getName())
+        : pht('Create Herald Rule: %s', idx($content_type_map, $content_type));
+
+    $icon = $rule->getID() ? 'fa-pencil' : 'fa-plus-square';
 
     $form_box = id(new PHUIObjectBoxView())
-      ->setHeaderText($title)
       ->setFormErrors($errors)
       ->setForm($form);
 
     $crumbs = $this
       ->buildApplicationCrumbs()
-      ->addTextCrumb($title);
+      ->addTextCrumb($title)
+      ->setBorder(true);
 
-    $title = pht('Edit Rule');
+    $header = id(new PHUIHeaderView())
+      ->setHeader($title)
+      ->setHeaderIcon('fa-plus-square');
+
+    $view = id(new PHUITwoColumnView())
+      ->setHeader($header)
+      ->setFooter($form_box);
 
     return $this->newPage()
       ->setTitle($title)
       ->setCrumbs($crumbs)
       ->appendChild(
         array(
-          $form_box,
+          $view,
       ));
   }
 
   private function saveRule(HeraldAdapter $adapter, $rule, $request) {
-    $rule->setName($request->getStr('name'));
+    $new_name = $request->getStr('name');
     $match_all = ($request->getStr('must_match') == 'all');
-    $rule->setMustMatchAll((int)$match_all);
 
     $repetition_policy_param = $request->getStr('repetition_policy');
-    $rule->setRepetitionPolicy(
-      HeraldRepetitionPolicyConfig::toInt($repetition_policy_param));
 
     $e_name = true;
     $errors = array();
 
-    if (!strlen($rule->getName())) {
+    if (!strlen($new_name)) {
       $e_name = pht('Required');
       $errors[] = pht('Rule must have a name.');
     }
@@ -343,18 +348,40 @@ final class HeraldRuleController extends HeraldController {
       $actions[] = $obj;
     }
 
+    if (!$errors) {
+      $new_state = id(new HeraldRuleSerializer())->serializeRuleComponents(
+        $match_all,
+        $conditions,
+        $actions,
+        $repetition_policy_param);
+
+      $xactions = array();
+      $xactions[] = id(new HeraldRuleTransaction())
+        ->setTransactionType(HeraldRuleTransaction::TYPE_EDIT)
+        ->setNewValue($new_state);
+      $xactions[] = id(new HeraldRuleTransaction())
+        ->setTransactionType(HeraldRuleTransaction::TYPE_NAME)
+        ->setNewValue($new_name);
+
+      try {
+        id(new HeraldRuleEditor())
+          ->setActor($this->getViewer())
+          ->setContinueOnNoEffect(true)
+          ->setContentSourceFromRequest($request)
+          ->applyTransactions($rule, $xactions);
+        return array(null, null);
+      } catch (Exception $ex) {
+        $errors[] = $ex->getMessage();
+      }
+    }
+
+    // mutate current rule, so it would be sent to the client in the right state
+    $rule->setMustMatchAll((int)$match_all);
+    $rule->setName($new_name);
+    $rule->setRepetitionPolicy(
+      HeraldRepetitionPolicyConfig::toInt($repetition_policy_param));
     $rule->attachConditions($conditions);
     $rule->attachActions($actions);
-
-    if (!$errors) {
-      $edit_action = $rule->getID() ? 'edit' : 'create';
-
-      $rule->openTransaction();
-        $rule->save();
-        $rule->saveConditions($conditions);
-        $rule->saveActions($actions);
-      $rule->saveTransaction();
-    }
 
     return array($e_name, $errors);
   }
@@ -363,43 +390,6 @@ final class HeraldRuleController extends HeraldController {
     HeraldRule $rule,
     array $handles,
     HeraldAdapter $adapter) {
-
-    $serial_conditions = array(
-      array('default', 'default', ''),
-    );
-
-    if ($rule->getConditions()) {
-      $serial_conditions = array();
-      foreach ($rule->getConditions() as $condition) {
-        $value = $adapter->getEditorValueForCondition(
-          $this->getViewer(),
-          $condition);
-
-        $serial_conditions[] = array(
-          $condition->getFieldName(),
-          $condition->getFieldCondition(),
-          $value,
-        );
-      }
-    }
-
-    $serial_actions = array(
-      array('default', ''),
-    );
-
-    if ($rule->getActions()) {
-      $serial_actions = array();
-      foreach ($rule->getActions() as $action) {
-        $value = $adapter->getEditorValueForAction(
-          $this->getViewer(),
-          $action);
-
-        $serial_actions[] = array(
-          $action->getAction(),
-          $value,
-        );
-      }
-    }
 
     $all_rules = $this->loadRulesThisRuleMayDependUpon($rule);
     $all_rules = mpull($all_rules, 'getName', 'getPHID');
@@ -492,10 +482,58 @@ final class HeraldRuleController extends HeraldController {
       $config_info['targets'][$action] = $value_key;
     }
 
+    $default_group = head($config_info['fields']);
+    $default_field = head_key($default_group['options']);
+    $default_condition = head($config_info['conditionMap'][$default_field]);
+    $default_actions = head($config_info['actions']);
+    $default_action = head_key($default_actions['options']);
+
+    if ($rule->getConditions()) {
+      $serial_conditions = array();
+      foreach ($rule->getConditions() as $condition) {
+        $value = $adapter->getEditorValueForCondition(
+          $this->getViewer(),
+          $condition);
+
+        $serial_conditions[] = array(
+          $condition->getFieldName(),
+          $condition->getFieldCondition(),
+          $value,
+        );
+      }
+    } else {
+      $serial_conditions = array(
+        array($default_field, $default_condition, null),
+      );
+    }
+
+    if ($rule->getActions()) {
+      $serial_actions = array();
+      foreach ($rule->getActions() as $action) {
+        $value = $adapter->getEditorValueForAction(
+          $this->getViewer(),
+          $action);
+
+        $serial_actions[] = array(
+          $action->getAction(),
+          $value,
+        );
+      }
+    } else {
+      $serial_actions = array(
+        array($default_action, null),
+      );
+    }
+
     Javelin::initBehavior(
       'herald-rule-editor',
       array(
         'root' => 'herald-rule-edit-form',
+        'default' => array(
+          'field' => $default_field,
+          'condition' => $default_condition,
+          'action' => $default_action,
+        ),
         'conditions' => (object)$serial_conditions,
         'actions' => (object)$serial_actions,
         'template' => $this->buildTokenizerTemplates() + array(

@@ -26,6 +26,10 @@ final class ManiphestTaskDetailController extends ManiphestController {
       ->setViewer($viewer)
       ->readFieldsFromStorage($task);
 
+    $edit_engine = id(new ManiphestEditEngine())
+      ->setViewer($viewer)
+      ->setTargetObject($task);
+
     $e_commit = ManiphestTaskHasCommitEdgeType::EDGECONST;
     $e_dep_on = ManiphestTaskDependsOnTaskEdgeType::EDGECONST;
     $e_dep_by = ManiphestTaskDependedOnByTaskEdgeType::EDGECONST;
@@ -55,43 +59,37 @@ final class ManiphestTaskDetailController extends ManiphestController {
     $phids = array_keys($phids);
     $handles = $viewer->loadHandles($phids);
 
-    $engine = id(new PhabricatorMarkupEngine())
-      ->setViewer($viewer)
-      ->setContextObject($task)
-      ->addObject($task, ManiphestTask::MARKUP_FIELD_DESCRIPTION);
-
     $timeline = $this->buildTransactionTimeline(
       $task,
-      new ManiphestTransactionQuery(),
-      $engine);
-
-    $actions = $this->buildActionView($task);
+      new ManiphestTransactionQuery());
 
     $monogram = $task->getMonogram();
     $crumbs = $this->buildApplicationCrumbs()
-      ->addTextCrumb($monogram, '/'.$monogram);
+      ->addTextCrumb($monogram)
+      ->setBorder(true);
 
     $header = $this->buildHeaderView($task);
-    $properties = $this->buildPropertyView(
-      $task, $field_list, $edges, $actions, $handles);
-    $description = $this->buildDescriptionView($task, $engine);
-
-    $object_box = id(new PHUIObjectBoxView())
-      ->setHeader($header)
-      ->addPropertyList($properties);
-
-    if ($description) {
-      $object_box->addPropertyList($description);
-    }
+    $details = $this->buildPropertyView($task, $field_list, $edges, $handles);
+    $description = $this->buildDescriptionView($task);
+    $curtain = $this->buildCurtain($task, $edit_engine);
 
     $title = pht('%s %s', $monogram, $task->getTitle());
 
-    $comment_view = id(new ManiphestEditEngine())
-      ->setViewer($viewer)
+    $comment_view = $edit_engine
       ->buildEditEngineCommentView($task);
 
     $timeline->setQuoteRef($monogram);
     $comment_view->setTransactionTimeline($timeline);
+
+    $view = id(new PHUITwoColumnView())
+      ->setHeader($header)
+      ->setCurtain($curtain)
+      ->setMainColumn(array(
+        $timeline,
+        $comment_view,
+      ))
+      ->addPropertySection(pht('Description'), $description)
+      ->addPropertySection(pht('Details'), $details);
 
     return $this->newPage()
       ->setTitle($title)
@@ -102,10 +100,9 @@ final class ManiphestTaskDetailController extends ManiphestController {
         ))
       ->appendChild(
         array(
-          $object_box,
-          $timeline,
-          $comment_view,
-        ));
+          $view,
+      ));
+
   }
 
   private function buildHeaderView(ManiphestTask $task) {
@@ -114,17 +111,42 @@ final class ManiphestTaskDetailController extends ManiphestController {
       ->setUser($this->getRequest()->getUser())
       ->setPolicyObject($task);
 
-    $status = $task->getStatus();
-    $status_name = ManiphestTaskStatus::renderFullDescription($status);
+    $priority_name = ManiphestTaskPriority::getTaskPriorityName(
+      $task->getPriority());
+    $priority_color = ManiphestTaskPriority::getTaskPriorityColor(
+      $task->getPriority());
 
+    $status = $task->getStatus();
+    $status_name = ManiphestTaskStatus::renderFullDescription(
+      $status, $priority_name, $priority_color);
     $view->addProperty(PHUIHeaderView::PROPERTY_STATUS, $status_name);
+
+    $view->setHeaderIcon(ManiphestTaskStatus::getStatusIcon(
+      $task->getStatus()).' '.$priority_color);
+
+    if (ManiphestTaskPoints::getIsEnabled()) {
+      $points = $task->getPoints();
+      if ($points !== null) {
+        $points_name = pht('%s %s',
+          $task->getPoints(),
+          ManiphestTaskPoints::getPointsLabel());
+        $tag = id(new PHUITagView())
+          ->setName($points_name)
+          ->setShade('blue')
+          ->setType(PHUITagView::TYPE_SHADE);
+
+        $view->addTag($tag);
+      }
+    }
 
     return $view;
   }
 
 
-  private function buildActionView(ManiphestTask $task) {
-    $viewer = $this->getRequest()->getUser();
+  private function buildCurtain(
+    ManiphestTask $task,
+    PhabricatorEditEngine $edit_engine) {
+    $viewer = $this->getViewer();
 
     $id = $task->getID();
     $phid = $task->getPHID();
@@ -134,11 +156,9 @@ final class ManiphestTaskDetailController extends ManiphestController {
       $task,
       PhabricatorPolicyCapability::CAN_EDIT);
 
-    $view = id(new PhabricatorActionListView())
-      ->setUser($viewer)
-      ->setObject($task);
+    $curtain = $this->newCurtainView($task);
 
-    $view->addAction(
+    $curtain->addAction(
       id(new PhabricatorActionView())
         ->setName(pht('Edit Task'))
         ->setIcon('fa-pencil')
@@ -146,7 +166,7 @@ final class ManiphestTaskDetailController extends ManiphestController {
         ->setDisabled(!$can_edit)
         ->setWorkflow(!$can_edit));
 
-    $view->addAction(
+    $curtain->addAction(
       id(new PhabricatorActionView())
         ->setName(pht('Merge Duplicates In'))
         ->setHref("/search/attach/{$phid}/TASK/merge/")
@@ -155,11 +175,12 @@ final class ManiphestTaskDetailController extends ManiphestController {
         ->setDisabled(!$can_edit)
         ->setWorkflow(true));
 
-    $edit_config = id(new ManiphestEditEngine())
-      ->setViewer($viewer)
-      ->loadDefaultEditConfiguration();
-
+    $edit_config = $edit_engine->loadDefaultEditConfiguration();
     $can_create = (bool)$edit_config;
+
+    $can_reassign = $edit_engine->hasEditAccessToTransaction(
+      ManiphestTransaction::TYPE_OWNER);
+
     if ($can_create) {
       $form_key = $edit_config->getIdentifier();
       $edit_uri = id(new PhutilURI("/task/edit/form/{$form_key}/"))
@@ -174,7 +195,7 @@ final class ManiphestTaskDetailController extends ManiphestController {
       $edit_uri = $this->getApplicationURI($edit_uri);
     }
 
-    $view->addAction(
+    $curtain->addAction(
       id(new PhabricatorActionView())
         ->setName(pht('Create Subtask'))
         ->setHref($edit_uri)
@@ -182,7 +203,7 @@ final class ManiphestTaskDetailController extends ManiphestController {
         ->setDisabled(!$can_create)
         ->setWorkflow(!$can_create));
 
-    $view->addAction(
+    $curtain->addAction(
       id(new PhabricatorActionView())
         ->setName(pht('Edit Blocking Tasks'))
         ->setHref("/search/attach/{$phid}/TASK/blocks/")
@@ -191,52 +212,55 @@ final class ManiphestTaskDetailController extends ManiphestController {
         ->setDisabled(!$can_edit)
         ->setWorkflow(true));
 
-    return $view;
+
+    $owner_phid = $task->getOwnerPHID();
+    $author_phid = $task->getAuthorPHID();
+    $handles = $viewer->loadHandles(array($owner_phid, $author_phid));
+
+    if ($owner_phid) {
+      $image_uri = $handles[$owner_phid]->getImageURI();
+      $image_href = $handles[$owner_phid]->getURI();
+      $owner = $viewer->renderHandle($owner_phid)->render();
+      $content = phutil_tag('strong', array(), $owner);
+      $assigned_to = id(new PHUIHeadThingView())
+        ->setImage($image_uri)
+        ->setImageHref($image_href)
+        ->setContent($content);
+    } else {
+      $assigned_to = phutil_tag('em', array(), pht('None'));
+    }
+
+    $curtain->newPanel()
+      ->setHeaderText(pht('Assigned To'))
+      ->appendChild($assigned_to);
+
+    $author_uri = $handles[$author_phid]->getImageURI();
+    $author_href = $handles[$author_phid]->getURI();
+    $author = $viewer->renderHandle($author_phid)->render();
+    $content = phutil_tag('strong', array(), $author);
+    $date = phabricator_date($task->getDateCreated(), $viewer);
+    $content = pht('%s, %s', $content, $date);
+    $authored_by = id(new PHUIHeadThingView())
+      ->setImage($author_uri)
+      ->setImageHref($author_href)
+      ->setContent($content);
+
+    $curtain->newPanel()
+      ->setHeaderText(pht('Authored By'))
+      ->appendChild($authored_by);
+
+    return $curtain;
   }
 
   private function buildPropertyView(
     ManiphestTask $task,
     PhabricatorCustomFieldList $field_list,
     array $edges,
-    PhabricatorActionListView $actions,
     $handles) {
 
     $viewer = $this->getRequest()->getUser();
-
     $view = id(new PHUIPropertyListView())
-      ->setUser($viewer)
-      ->setObject($task)
-      ->setActionList($actions);
-
-    $owner_phid = $task->getOwnerPHID();
-    if ($owner_phid) {
-      $assigned_to = $handles
-        ->renderHandle($owner_phid)
-        ->setShowHovercard(true);
-    } else {
-      $assigned_to = phutil_tag('em', array(), pht('None'));
-    }
-
-    $view->addProperty(pht('Assigned To'), $assigned_to);
-
-    $view->addProperty(
-      pht('Priority'),
-      ManiphestTaskPriority::getTaskPriorityName($task->getPriority()));
-
-    $author = $handles
-      ->renderHandle($task->getAuthorPHID())
-      ->setShowHovercard(true);
-
-    $view->addProperty(pht('Author'), $author);
-
-    if (ManiphestTaskPoints::getIsEnabled()) {
-      $points = $task->getPoints();
-      if ($points !== null) {
-        $view->addProperty(
-          ManiphestTaskPoints::getPointsLabel(),
-          $task->getPoints());
-      }
-    }
+      ->setUser($viewer);
 
     $source = $task->getOriginalEmailSource();
     if ($source) {
@@ -312,33 +336,34 @@ final class ManiphestTaskDetailController extends ManiphestController {
         phutil_implode_html(phutil_tag('br'), $revisions_commits));
     }
 
-    $view->invokeWillRenderEvent();
-
     $field_list->appendFieldsToPropertyList(
       $task,
       $viewer,
       $view);
 
-    return $view;
+    if ($view->hasAnyProperties()) {
+      return $view;
+    }
+
+    return null;
   }
 
-  private function buildDescriptionView(
-    ManiphestTask $task,
-    PhabricatorMarkupEngine $engine) {
+  private function buildDescriptionView(ManiphestTask $task) {
+    $viewer = $this->getViewer();
 
     $section = null;
-    if (strlen($task->getDescription())) {
+
+    $description = $task->getDescription();
+    if (strlen($description)) {
       $section = new PHUIPropertyListView();
-      $section->addSectionHeader(
-        pht('Description'),
-        PHUIPropertyListView::ICON_SUMMARY);
       $section->addTextContent(
         phutil_tag(
           'div',
           array(
             'class' => 'phabricator-remarkup',
           ),
-          $engine->getOutput($task, ManiphestTask::MARKUP_FIELD_DESCRIPTION)));
+          id(new PHUIRemarkupView($viewer, $description))
+            ->setContextObject($task)));
     }
 
     return $section;

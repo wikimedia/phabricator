@@ -21,28 +21,21 @@ final class PhabricatorBadgesRemoveRecipientsController
       return new Aphront404Response();
     }
 
-    $recipient_phids = $badge->getRecipientPHIDs();
+    $awards = $badge->getAwards();
+    $recipient_phids = mpull($awards, 'getRecipientPHID');
     $remove_phid = $request->getStr('phid');
 
     if (!in_array($remove_phid, $recipient_phids)) {
       return new Aphront404Response();
     }
 
-    $recipients_uri =
-      $this->getApplicationURI('recipients/'.$badge->getID().'/');
+    $view_uri = $this->getApplicationURI('view/'.$badge->getID().'/');
 
     if ($request->isFormPost()) {
-      $recipient_spec = array();
-      $recipient_spec['-'] = array($remove_phid => $remove_phid);
-
-      $type_recipient = PhabricatorBadgeHasRecipientEdgeType::EDGECONST;
-
       $xactions = array();
-
       $xactions[] = id(new PhabricatorBadgesTransaction())
-        ->setTransactionType(PhabricatorTransactions::TYPE_EDGE)
-        ->setMetadataValue('edge:type', $type_recipient)
-        ->setNewValue($recipient_spec);
+        ->setTransactionType(PhabricatorBadgesTransaction::TYPE_REVOKE)
+        ->setNewValue(array($remove_phid));
 
       $editor = id(new PhabricatorBadgesEditor($badge))
         ->setActor($viewer)
@@ -52,7 +45,7 @@ final class PhabricatorBadgesRemoveRecipientsController
         ->applyTransactions($badge, $xactions);
 
       return id(new AphrontRedirectResponse())
-        ->setURI($recipients_uri);
+        ->setURI($view_uri);
     }
 
     $handle = id(new PhabricatorHandleQuery())
@@ -68,7 +61,7 @@ final class PhabricatorBadgesRemoveRecipientsController
           'Really revoke the badge "%s" from %s?',
           phutil_tag('strong', array(), $badge->getName()),
           phutil_tag('strong', array(), $handle->getName())))
-      ->addCancelButton($recipients_uri)
+      ->addCancelButton($view_uri)
       ->addSubmitButton(pht('Revoke Badge'));
 
     return $dialog;

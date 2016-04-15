@@ -21,15 +21,15 @@ final class PhabricatorCountdownViewController
 
     $countdown_view = id(new PhabricatorCountdownView())
       ->setUser($viewer)
-      ->setCountdown($countdown)
-      ->setHeadless(true);
+      ->setCountdown($countdown);
 
     $id = $countdown->getID();
     $title = $countdown->getTitle();
 
     $crumbs = $this
       ->buildApplicationCrumbs()
-      ->addTextCrumb("C{$id}");
+      ->addTextCrumb("C{$id}")
+      ->setBorder(true);
 
     $epoch = $countdown->getEpoch();
     if ($epoch >= PhabricatorTime::getNow()) {
@@ -46,22 +46,31 @@ final class PhabricatorCountdownViewController
       ->setHeader($title)
       ->setUser($viewer)
       ->setPolicyObject($countdown)
-      ->setStatus($icon, $color, $status);
+      ->setStatus($icon, $color, $status)
+      ->setHeaderIcon('fa-rocket');
 
-    $actions = $this->buildActionListView($countdown);
-    $properties = $this->buildPropertyListView($countdown, $actions);
-
-    $object_box = id(new PHUIObjectBoxView())
-      ->setHeader($header)
-      ->addPropertyList($properties);
+    $curtain = $this->buildCurtain($countdown);
+    $subheader = $this->buildSubheaderView($countdown);
 
     $timeline = $this->buildTransactionTimeline(
       $countdown,
       new PhabricatorCountdownTransactionQuery());
 
-    $add_comment = $this->buildCommentForm($countdown);
+    $comment_view = id(new PhabricatorCountdownEditEngine())
+      ->setViewer($viewer)
+      ->buildEditEngineCommentView($countdown);
 
+    $content = array(
+      $countdown_view,
+      $timeline,
+      $comment_view,
+    );
 
+    $view = id(new PHUITwoColumnView())
+      ->setHeader($header)
+      ->setSubheader($subheader)
+      ->setCurtain($curtain)
+      ->setMainColumn($content);
 
     return $this->newPage()
       ->setTitle($title)
@@ -70,31 +79,22 @@ final class PhabricatorCountdownViewController
         array(
           $countdown->getPHID(),
         ))
-      ->appendChild(
-        array(
-          $object_box,
-          $countdown_view,
-          $timeline,
-          $add_comment,
-        ));
+      ->appendChild($view);
   }
 
-  private function buildActionListView(PhabricatorCountdown $countdown) {
-    $request = $this->getRequest();
-    $viewer = $request->getUser();
+  private function buildCurtain(PhabricatorCountdown $countdown) {
+    $viewer = $this->getViewer();
 
     $id = $countdown->getID();
-
-    $view = id(new PhabricatorActionListView())
-      ->setObject($countdown)
-      ->setUser($viewer);
 
     $can_edit = PhabricatorPolicyFilter::hasCapability(
       $viewer,
       $countdown,
       PhabricatorPolicyCapability::CAN_EDIT);
 
-    $view->addAction(
+    $curtain = $this->newCurtainView($countdown);
+
+    $curtain->addAction(
       id(new PhabricatorActionView())
         ->setIcon('fa-pencil')
         ->setName(pht('Edit Countdown'))
@@ -102,7 +102,7 @@ final class PhabricatorCountdownViewController
         ->setDisabled(!$can_edit)
         ->setWorkflow(!$can_edit));
 
-    $view->addAction(
+    $curtain->addAction(
       id(new PhabricatorActionView())
         ->setIcon('fa-times')
         ->setName(pht('Delete Countdown'))
@@ -110,57 +110,32 @@ final class PhabricatorCountdownViewController
         ->setDisabled(!$can_edit)
         ->setWorkflow(true));
 
-    return $view;
+    return $curtain;
   }
 
-  private function buildPropertyListView(
-    PhabricatorCountdown $countdown,
-    PhabricatorActionListView $actions) {
-
+  private function buildSubheaderView(
+    PhabricatorCountdown $countdown) {
     $viewer = $this->getViewer();
 
-    $view = id(new PHUIPropertyListView())
-      ->setUser($viewer)
-      ->setObject($countdown)
-      ->setActionList($actions);
+    $author = $viewer->renderHandle($countdown->getAuthorPHID())->render();
+    $date = phabricator_datetime($countdown->getDateCreated(), $viewer);
+    $author = phutil_tag('strong', array(), $author);
 
-    $view->addProperty(
-      pht('Author'),
-      $viewer->renderHandle($countdown->getAuthorPHID()));
+    $person = id(new PhabricatorPeopleQuery())
+      ->setViewer($viewer)
+      ->withPHIDs(array($countdown->getAuthorPHID()))
+      ->needProfileImage(true)
+      ->executeOne();
 
-        $view->invokeWillRenderEvent();
+    $image_uri = $person->getProfileImageURI();
+    $image_href = '/p/'.$person->getUsername();
 
-    $description = $countdown->getDescription();
-    if (strlen($description)) {
-      $description = new PHUIRemarkupView($viewer, $description);
-      $view->addSectionHeader(
-        pht('Description'),
-        PHUIPropertyListView::ICON_SUMMARY);
-      $view->addTextContent($description);
-    }
+    $content = pht('Authored by %s on %s.', $author, $date);
 
-    return $view;
-  }
-
-  private function buildCommentForm(PhabricatorCountdown $countdown) {
-    $viewer = $this->getViewer();
-
-    $is_serious = PhabricatorEnv::getEnvConfig('phabricator.serious-business');
-
-    $add_comment_header = $is_serious
-      ? pht('Add Comment')
-      : pht('Last Words');
-
-    $draft = PhabricatorDraft::newFromUserAndKey(
-      $viewer, $countdown->getPHID());
-
-    return id(new PhabricatorApplicationTransactionCommentView())
-      ->setUser($viewer)
-      ->setObjectPHID($countdown->getPHID())
-      ->setDraft($draft)
-      ->setHeaderText($add_comment_header)
-      ->setAction($this->getApplicationURI('/comment/'.$countdown->getID().'/'))
-      ->setSubmitButtonName(pht('Add Comment'));
+    return id(new PHUIHeadThingView())
+      ->setImage($image_uri)
+      ->setImageHref($image_href)
+      ->setContent($content);
   }
 
 }

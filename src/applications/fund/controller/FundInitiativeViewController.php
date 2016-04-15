@@ -7,7 +7,6 @@ final class FundInitiativeViewController
     return true;
   }
 
-
   public function handleRequest(AphrontRequest $request) {
     $viewer = $request->getViewer();
     $id = $request->getURIData('id');
@@ -22,6 +21,7 @@ final class FundInitiativeViewController
 
     $crumbs = $this->buildApplicationCrumbs();
     $crumbs->addTextCrumb($initiative->getMonogram());
+    $crumbs->setBorder(true);
 
     $title = pht(
       '%s %s',
@@ -43,41 +43,39 @@ final class FundInitiativeViewController
       ->setHeader($initiative->getName())
       ->setUser($viewer)
       ->setPolicyObject($initiative)
-      ->setStatus($status_icon, $status_color, $status_name);
+      ->setStatus($status_icon, $status_color, $status_name)
+      ->setHeaderIcon('fa-heart');
 
-    $properties = $this->buildPropertyListView($initiative);
-    $actions = $this->buildActionListView($initiative);
-    $properties->setActionList($actions);
-
-    $box = id(new PHUIObjectBoxView())
-      ->setHeader($header)
-      ->addPropertyList($properties);
-
+    $curtain = $this->buildCurtain($initiative);
+    $details = $this->buildPropertySectionView($initiative);
 
     $timeline = $this->buildTransactionTimeline(
       $initiative,
       new FundInitiativeTransactionQuery());
-    $timeline
-      ->setShouldTerminate(true);
 
-    return $this->buildApplicationPage(
-      array(
-        $crumbs,
-        $box,
+    $add_comment = $this->buildCommentForm($initiative);
+
+    $view = id(new PHUITwoColumnView())
+      ->setHeader($header)
+      ->setCurtain($curtain)
+      ->setMainColumn(array(
         $timeline,
-      ),
-      array(
-        'title' => $title,
-        'pageObjects' => array($initiative->getPHID()),
-      ));
+        $add_comment,
+      ))
+      ->addPropertySection(pht('Details'), $details);
+
+    return $this->newPage()
+      ->setTitle($title)
+      ->setCrumbs($crumbs)
+      ->setPageObjectPHIDs(array($initiative->getPHID()))
+      ->appendChild($view);
   }
 
-  private function buildPropertyListView(FundInitiative $initiative) {
+  private function buildPropertySectionView(FundInitiative $initiative) {
     $viewer = $this->getRequest()->getUser();
 
     $view = id(new PHUIPropertyListView())
-      ->setUser($viewer)
-      ->setObject($initiative);
+      ->setUser($viewer);
 
     $owner_phid = $initiative->getOwnerPHID();
     $merchant_phid = $initiative->getMerchantPHID();
@@ -93,8 +91,6 @@ final class FundInitiativeViewController
     $view->addProperty(
       pht('Total Funding'),
       $initiative->getTotalAsCurrency()->formatForDisplay());
-
-    $view->invokeWillRenderEvent();
 
     $description = $initiative->getDescription();
     if (strlen($description)) {
@@ -115,8 +111,9 @@ final class FundInitiativeViewController
     return $view;
   }
 
-  private function buildActionListView(FundInitiative $initiative) {
-    $viewer = $this->getRequest()->getUser();
+  private function buildCurtain(FundInitiative $initiative) {
+    $viewer = $this->getViewer();
+
     $id = $initiative->getID();
 
     $can_edit = PhabricatorPolicyFilter::hasCapability(
@@ -124,11 +121,9 @@ final class FundInitiativeViewController
       $initiative,
       PhabricatorPolicyCapability::CAN_EDIT);
 
-    $view = id(new PhabricatorActionListView())
-      ->setUser($viewer)
-      ->setObject($initiative);
+    $curtain = $this->newCurtainView($initiative);
 
-    $view->addAction(
+    $curtain->addAction(
       id(new PhabricatorActionView())
         ->setName(pht('Edit Initiative'))
         ->setIcon('fa-pencil')
@@ -144,7 +139,7 @@ final class FundInitiativeViewController
       $close_icon = 'fa-times';
     }
 
-    $view->addAction(
+    $curtain->addAction(
       id(new PhabricatorActionView())
         ->setName($close_name)
         ->setIcon($close_icon)
@@ -152,7 +147,7 @@ final class FundInitiativeViewController
         ->setWorkflow(true)
         ->setHref($this->getApplicationURI("/close/{$id}/")));
 
-    $view->addAction(
+    $curtain->addAction(
       id(new PhabricatorActionView())
         ->setName(pht('Back Initiative'))
         ->setIcon('fa-money')
@@ -160,13 +155,36 @@ final class FundInitiativeViewController
         ->setWorkflow(true)
         ->setHref($this->getApplicationURI("/back/{$id}/")));
 
-    $view->addAction(
+    $curtain->addAction(
       id(new PhabricatorActionView())
         ->setName(pht('View Backers'))
         ->setIcon('fa-bank')
         ->setHref($this->getApplicationURI("/backers/{$id}/")));
 
-    return $view;
+    return $curtain;
   }
+
+  private function buildCommentForm(FundInitiative $initiative) {
+    $viewer = $this->getViewer();
+
+    $is_serious = PhabricatorEnv::getEnvConfig('phabricator.serious-business');
+
+    $add_comment_header = $is_serious
+      ? pht('Add Comment')
+      : pht('Add Liquidity');
+
+    $draft = PhabricatorDraft::newFromUserAndKey(
+      $viewer, $initiative->getPHID());
+
+    return id(new PhabricatorApplicationTransactionCommentView())
+      ->setUser($viewer)
+      ->setObjectPHID($initiative->getPHID())
+      ->setDraft($draft)
+      ->setHeaderText($add_comment_header)
+      ->setAction(
+        $this->getApplicationURI('/comment/'.$initiative->getID().'/'))
+      ->setSubmitButtonName(pht('Add Comment'));
+  }
+
 
 }

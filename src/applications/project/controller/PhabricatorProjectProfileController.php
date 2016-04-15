@@ -82,12 +82,15 @@ final class PhabricatorProjectProfileController
       ->execute();
 
     $feed = $this->renderStories($stories);
-    $feed = phutil_tag_div('project-view-feed', $feed);
+    $feed = id(new PHUIObjectBoxView())
+      ->setHeaderText(pht('Recent Activity'))
+      ->addClass('project-view-feed')
+      ->appendChild($feed);
+
     require_celerity_resource('project-view-css');
 
     $home = id(new PHUITwoColumnView())
       ->setHeader($header)
-      ->setFluid(true)
       ->addClass('project-view-home')
       ->setMainColumn(
         array(
@@ -134,8 +137,7 @@ final class PhabricatorProjectProfileController
       return null;
     }
 
-    $view = id(new PHUIBoxView())
-      ->setBorder(true)
+    $view = id(new PHUIObjectBoxView())
       ->appendChild($view)
       ->addClass('project-view-properties');
 

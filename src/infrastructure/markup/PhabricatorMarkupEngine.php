@@ -494,6 +494,7 @@ final class PhabricatorMarkupEngine extends Phobject {
 
     $rules[] = new PhabricatorIconRemarkupRule();
     $rules[] = new PhabricatorEmojiRemarkupRule();
+    $rules[] = new PhabricatorHandleRemarkupRule();
 
     $applications = PhabricatorApplication::getAllInstalledApplications();
     foreach ($applications as $application) {
@@ -516,7 +517,7 @@ final class PhabricatorMarkupEngine extends Phobject {
     $rules[] = new PhutilRemarkupHighlightRule();
 
     foreach (self::loadCustomInlineRules() as $rule) {
-      $rules[] = $rule;
+      $rules[] = clone $rule;
     }
 
     $blocks = array();

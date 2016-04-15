@@ -51,11 +51,10 @@ final class PhabricatorHomeMainController extends PhabricatorHomeController {
       $content = $nav;
     }
 
-    return $this->buildApplicationPage(
-      $content,
-      array(
-        'title' => 'Phabricator',
-      ));
+    return $this->newPage()
+      ->setTitle('Phabricator')
+      ->appendChild($content);
+
   }
 
   private function buildMainResponse(array $projects) {
@@ -322,7 +321,7 @@ final class PhabricatorHomeMainController extends PhabricatorHomeController {
       ->setHref($href);
     $header = id(new PHUIHeaderView())
       ->setHeader($title)
-      ->addActionIcon($icon);
+      ->addActionItem($icon);
     return $header;
   }
 

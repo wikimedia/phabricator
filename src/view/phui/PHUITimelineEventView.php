@@ -232,11 +232,12 @@ final class PHUITimelineEventView extends AphrontView {
       $fill_classes = array();
       $fill_classes[] = 'phui-timeline-icon-fill';
       if ($this->color) {
+        $fill_classes[] = 'fill-has-color';
         $fill_classes[] = 'phui-timeline-icon-fill-'.$this->color;
       }
 
       $icon = id(new PHUIIconView())
-        ->setIcon($this->icon.' white')
+        ->setIcon($this->icon)
         ->addClass('phui-timeline-icon');
 
       $icon = phutil_tag(
@@ -341,6 +342,8 @@ final class PHUITimelineEventView extends AphrontView {
     // Render "extra" information (timestamp, etc).
     $extra = $this->renderExtra($events);
 
+    $show_badges = false;
+
     $group_titles = array();
     $group_items = array();
     $group_children = array();
@@ -357,6 +360,7 @@ final class PHUITimelineEventView extends AphrontView {
 
       if ($event->hasChildren()) {
         $group_children[] = $event->renderChildren();
+        $show_badges = true;
       }
     }
 
@@ -381,7 +385,7 @@ final class PHUITimelineEventView extends AphrontView {
           'href' => $this->userHandle->getURI(),
         ),
         '');
-      if ($this->badges) {
+      if ($this->badges && $show_badges) {
         $flex = new PHUIBadgeBoxView();
         $flex->addItems($this->badges);
         $flex->setCollapsed(true);
@@ -504,11 +508,12 @@ final class PHUITimelineEventView extends AphrontView {
       }
 
       $source = $this->getContentSource();
+      $content_source = null;
       if ($source) {
-        $extra[] = id(new PhabricatorContentSourceView())
+        $content_source = id(new PhabricatorContentSourceView())
           ->setContentSource($source)
-          ->setUser($this->getUser())
-          ->render();
+          ->setUser($this->getUser());
+        $content_source = pht('Via %s', $content_source->getSourceName());
       }
 
       $date_created = null;
@@ -528,6 +533,7 @@ final class PHUITimelineEventView extends AphrontView {
           $this->getUser());
         if ($this->anchor) {
           Javelin::initBehavior('phabricator-watch-anchor');
+          Javelin::initBehavior('phabricator-tooltips');
 
           $anchor = id(new PhabricatorAnchorView())
             ->setAnchorName($this->anchor)
@@ -535,10 +541,14 @@ final class PHUITimelineEventView extends AphrontView {
 
           $date = array(
             $anchor,
-            phutil_tag(
+            javelin_tag(
               'a',
               array(
                 'href' => '#'.$this->anchor,
+                'sigil' => 'has-tooltip',
+                'meta' => array(
+                  'tip' => $content_source,
+          ),
               ),
               $date),
           );
@@ -615,9 +625,9 @@ final class PHUITimelineEventView extends AphrontView {
           ));
 
       $content_source = $this->getContentSource();
-      $source_email = PhabricatorContentSource::SOURCE_EMAIL;
+      $source_email = PhabricatorEmailContentSource::SOURCECONST;
       if ($content_source->getSource() == $source_email) {
-        $source_id = $content_source->getParam('id');
+        $source_id = $content_source->getContentSourceParameter('id');
         if ($source_id) {
           $items[] = id(new PhabricatorActionView())
             ->setIcon('fa-envelope-o')

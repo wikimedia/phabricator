@@ -102,7 +102,7 @@ final class PhabricatorWorkerBulkJob
 
   public function newContentSource() {
     return PhabricatorContentSource::newForSource(
-      PhabricatorContentSource::SOURCE_BULK,
+      PhabricatorBulkContentSource::SOURCECONST,
       array(
         'jobID' => $this->getID(),
       ));
@@ -216,10 +216,6 @@ final class PhabricatorWorkerBulkJob
 
   public function isAutomaticallySubscribed($phid) {
     return false;
-  }
-
-  public function shouldShowSubscribersProperty() {
-    return true;
   }
 
 

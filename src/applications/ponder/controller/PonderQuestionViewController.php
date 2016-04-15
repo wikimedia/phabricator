@@ -31,7 +31,7 @@ final class PonderQuestionViewController extends PonderController {
     $header->setHeader($question->getTitle());
     $header->setUser($viewer);
     $header->setPolicyObject($question);
-    $header->setProfileHeader(true);
+    $header->setHeaderIcon('fa-university');
 
     if ($question->getStatus() == PonderQuestionStatus::STATUS_OPEN) {
       $header->setStatus('fa-square-o', 'bluegrey', pht('Open'));
@@ -43,33 +43,13 @@ final class PonderQuestionViewController extends PonderController {
       $header->setStatus($icon, 'dark', $text);
     }
 
-    $actions = $this->buildActionListView($question);
-    $properties = $this->buildPropertyListView($question);
-    $details = $this->buildDetailsPropertyView($question);
+    $curtain = $this->buildCurtain($question);
+    $details = $this->buildPropertySectionView($question);
 
     $can_edit = PhabricatorPolicyFilter::hasCapability(
       $viewer,
       $question,
       PhabricatorPolicyCapability::CAN_EDIT);
-
-    $edit_uri = '/question/edit/'.$question->getID().'/';
-    $edit_button = id(new PHUIButtonView())
-      ->setTag('a')
-      ->setText(pht('Edit'))
-      ->setHref($this->getApplicationURI($edit_uri))
-      ->setIcon('fa-pencil')
-      ->setDisabled(!$can_edit)
-      ->setWorkflow(!$can_edit);
-
-    $action_button = id(new PHUIButtonView())
-      ->setTag('a')
-      ->setText(pht('Actions'))
-      ->setHref('#')
-      ->setIcon('fa-bars')
-      ->setDropdownMenu($actions);
-
-    $header->addActionLink($action_button);
-    $header->addActionLink($edit_button);
 
     $content_id = celerity_generate_unique_node_id();
     $timeline = $this->buildTransactionTimeline(
@@ -81,7 +61,6 @@ final class PonderQuestionViewController extends PonderController {
     $add_comment = id(new PhabricatorApplicationTransactionCommentView())
       ->setUser($viewer)
       ->setObjectPHID($question->getPHID())
-      ->setFullWidth(true)
       ->setShowPreview(false)
       ->setAction($this->getApplicationURI("/question/comment/{$id}/"))
       ->setSubmitButtonName(pht('Comment'));
@@ -108,19 +87,14 @@ final class PonderQuestionViewController extends PonderController {
     $crumbs->addTextCrumb('Q'.$id, '/Q'.$id);
     $crumbs->setBorder(true);
 
+    $subheader = $this->buildSubheaderView($question);
+
     $answer_wiki = null;
     if ($question->getAnswerWiki()) {
       $wiki = new PHUIRemarkupView($viewer, $question->getAnswerWiki());
-      $wiki_header = phutil_tag(
-        'div',
-        array(
-          'class' => 'ponder-answer-wiki-header',
-        ),
-        pht('Answer Summary'));
-
       $answer_wiki = id(new PHUIObjectBoxView())
-        ->setBackground(PHUIObjectBoxView::BLUE)
-        ->appendChild($wiki_header)
+        ->setBackground(PHUIObjectBoxView::BLUE_PROPERTY)
+        ->setHeaderText(pht('ANSWER SUMMARY'))
         ->appendChild($wiki)
         ->addClass('ponder-answer-wiki');
     }
@@ -133,37 +107,34 @@ final class PonderQuestionViewController extends PonderController {
         'class'  => 'ponder-question-content',
       ),
       array(
-        $details,
+        $answer_wiki,
         $footer,
         $comment_view,
-        $answer_wiki,
         $answers,
         $answer_add_panel,
       ));
 
     $ponder_view = id(new PHUITwoColumnView())
       ->setHeader($header)
+      ->setSubheader($subheader)
+      ->setCurtain($curtain)
       ->setMainColumn($ponder_content)
-      ->setSideColumn($properties)
+      ->addPropertySection(pht('Details'), $details)
       ->addClass('ponder-question-view');
 
     $page_objects = array_merge(
-          array($question->getPHID()),
-          mpull($question->getAnswers(), 'getPHID'));
+      array($question->getPHID()),
+      mpull($question->getAnswers(), 'getPHID'));
 
     return $this->newPage()
       ->setTitle('Q'.$question->getID().' '.$question->getTitle())
       ->setCrumbs($crumbs)
       ->setPageObjectPHIDs($page_objects)
-      ->appendChild(
-        array(
-          $ponder_view,
-        ));
+      ->appendChild($ponder_view);
   }
 
-  private function buildActionListView(PonderQuestion $question) {
+  private function buildCurtain(PonderQuestion $question) {
     $viewer = $this->getViewer();
-    $request = $this->getRequest();
     $id = $question->getID();
 
     $can_edit = PhabricatorPolicyFilter::hasCapability(
@@ -171,9 +142,7 @@ final class PonderQuestionViewController extends PonderController {
       $question,
       PhabricatorPolicyCapability::CAN_EDIT);
 
-    $view = id(new PhabricatorActionListView())
-      ->setUser($viewer)
-      ->setObject($question);
+    $curtain = $this->newCurtainView($question);
 
     if ($question->getStatus() == PonderQuestionStatus::STATUS_OPEN) {
       $name = pht('Close Question');
@@ -183,7 +152,15 @@ final class PonderQuestionViewController extends PonderController {
       $icon = 'fa-square-o';
     }
 
-    $view->addAction(
+    $curtain->addAction(
+      id(new PhabricatorActionView())
+      ->setIcon('fa-pencil')
+      ->setName(pht('Edit Question'))
+      ->setHref($this->getApplicationURI("/question/edit/{$id}/"))
+      ->setDisabled(!$can_edit)
+      ->setWorkflow(!$can_edit));
+
+    $curtain->addAction(
       id(new PhabricatorActionView())
         ->setName($name)
         ->setIcon($icon)
@@ -191,39 +168,41 @@ final class PonderQuestionViewController extends PonderController {
         ->setDisabled(!$can_edit)
         ->setHref($this->getApplicationURI("/question/status/{$id}/")));
 
-    $view->addAction(
+    $curtain->addAction(
       id(new PhabricatorActionView())
         ->setIcon('fa-list')
         ->setName(pht('View History'))
         ->setHref($this->getApplicationURI("/question/history/{$id}/")));
 
-    return $view;
+    return $curtain;
   }
 
-  private function buildPropertyListView(
+  private function buildSubheaderView(
     PonderQuestion $question) {
-
     $viewer = $this->getViewer();
-    $view = id(new PHUIPropertyListView())
-      ->setUser($viewer)
-      ->setObject($question)
-      ->setStacked(true);
 
-    $view->invokeWillRenderEvent();
+    $asker = $viewer->renderHandle($question->getAuthorPHID())->render();
+    $date = phabricator_datetime($question->getDateCreated(), $viewer);
+    $asker = phutil_tag('strong', array(), $asker);
 
-    if (!$view->hasAnyProperties()) {
-      return null;
-    }
+    $author = id(new PhabricatorPeopleQuery())
+      ->setViewer($viewer)
+      ->withPHIDs(array($question->getAuthorPHID()))
+      ->needProfileImage(true)
+      ->executeOne();
 
-    $view = id(new PHUIObjectBoxView())
-      ->appendChild($view)
-      ->setBackground(PHUIObjectBoxView::GREY)
-      ->addClass('ponder-view-properties');
+    $image_uri = $author->getProfileImageURI();
+    $image_href = '/p/'.$author->getUsername();
 
-    return $view;
+    $content = pht('Asked by %s on %s.', $asker, $date);
+
+    return id(new PHUIHeadThingView())
+      ->setImage($image_uri)
+      ->setImageHref($image_href)
+      ->setContent($content);
   }
 
-  private function buildDetailsPropertyView(
+  private function buildPropertySectionView(
     PonderQuestion $question) {
     $viewer = $this->getViewer();
 
@@ -239,49 +218,10 @@ final class PonderQuestionViewController extends PonderController {
         pht('No further details for this question.'));
     }
 
-    $asker = $viewer->renderHandle($question->getAuthorPHID())->render();
-    $date = phabricator_datetime($question->getDateCreated(), $viewer);
-    $asker = phutil_tag('strong', array(), $asker);
+    $question_details = phutil_tag_div(
+      'phabricator-remarkup ml', $question_details);
 
-    $author = id(new PhabricatorPeopleQuery())
-      ->setViewer($viewer)
-      ->withPHIDs(array($question->getAuthorPHID()))
-      ->needProfileImage(true)
-      ->executeOne();
-
-    $image_uri = $author->getProfileImageURI();
-    $image_href = '/p/'.$author->getUsername();
-
-    $image = phutil_tag(
-      'a',
-      array(
-        'class' => 'ponder-details-author-image',
-        'style' => 'background-image: url('.$image_uri.');',
-        'href' => $image_href,
-      ));
-
-    $details_header = phutil_tag(
-      'div',
-      array(
-        'class' => 'ponder-details-subtitle',
-      ),
-      array(
-        $image,
-        pht('Asked by %s on %s.', $asker, $date),
-      ));
-
-    $details = phutil_tag(
-      'div',
-      array(
-        'class' => 'ponder-detail-view',
-      ),
-       array(
-        $details_header,
-        phutil_tag_div('phabricator-remarkup', $question_details),
-      ));
-
-
-    return $details;
+    return $question_details;
   }
 
   /**
@@ -309,7 +249,6 @@ final class PonderQuestionViewController extends PonderController {
           id(new PonderAnswerTransactionQuery())
           ->withTransactionTypes(array(PhabricatorTransactions::TYPE_COMMENT)));
         $xactions = $timeline->getTransactions();
-
 
         $view[] = id(new PonderAnswerView())
           ->setUser($viewer)

@@ -191,6 +191,12 @@ abstract class PhabricatorEditEngine
   /**
    * @task text
    */
+  abstract protected function getObjectName();
+
+
+  /**
+   * @task text
+   */
   abstract protected function getObjectEditShortText($object);
 
 
@@ -821,7 +827,7 @@ abstract class PhabricatorEditEngine
   }
 
   private function buildCrumbs($object, $final = false) {
-    $controller = $this->getcontroller();
+    $controller = $this->getController();
 
     $crumbs = $controller->buildApplicationCrumbsForEditEngine();
     if ($this->getIsCreate()) {
@@ -988,8 +994,10 @@ abstract class PhabricatorEditEngine
 
     if ($this->getIsCreate()) {
       $header_text = $this->getFormHeaderText($object);
+      $header_icon = 'fa-plus-square';
     } else {
       $header_text = $this->getObjectEditTitleText($object);
+      $header_icon = 'fa-pencil';
     }
 
     $show_preview = !$request->isAjax();
@@ -1036,25 +1044,34 @@ abstract class PhabricatorEditEngine
     }
 
     $header = id(new PHUIHeaderView())
-      ->setHeader($header_text);
+      ->setHeader($header_text)
+      ->setHeaderIcon($header_icon);
 
     if ($action_button) {
       $header->addActionLink($action_button);
     }
 
     $crumbs = $this->buildCrumbs($object, $final = true);
+    $crumbs->setBorder(true);
 
     $box = id(new PHUIObjectBoxView())
       ->setUser($viewer)
-      ->setHeader($header)
+      ->setHeaderText($this->getObjectName())
       ->setValidationException($validation_exception)
+      ->setBackground(PHUIObjectBoxView::BLUE_PROPERTY)
       ->appendChild($form);
+
+    $view = id(new PHUITwoColumnView())
+      ->setHeader($header)
+      ->setFooter(array(
+        $box,
+        $previews,
+      ));
 
     return $controller->newPage()
       ->setTitle($header_text)
       ->setCrumbs($crumbs)
-      ->appendChild($box)
-      ->appendChild($previews);
+      ->appendChild($view);
   }
 
   protected function newEditResponse(
@@ -1178,6 +1195,60 @@ abstract class PhabricatorEditEngine
 
     return $actions;
   }
+
+
+  /**
+   * Test if the viewer could apply a certain type of change by using the
+   * normal "Edit" form.
+   *
+   * This method returns `true` if the user has access to an edit form and
+   * that edit form has a field which applied the specified transaction type,
+   * and that field is visible and editable for the user.
+   *
+   * For example, you can use it to test if a user is able to reassign tasks
+   * or not, prior to rendering dedicated UI for task reassingment.
+   *
+   * Note that this method does NOT test if the user can actually edit the
+   * current object, just if they have access to the related field.
+   *
+   * @param const Transaction type to test for.
+   * @return bool True if the user could "Edit" to apply the transaction type.
+   */
+  final public function hasEditAccessToTransaction($xaction_type) {
+    $viewer = $this->getViewer();
+
+    $config = $this->loadDefaultEditConfiguration();
+    if (!$config) {
+      return false;
+    }
+
+    $object = $this->getTargetObject();
+    if (!$object) {
+      $object = $this->newEditableObject();
+    }
+
+    $fields = $this->buildEditFields($object);
+
+    $field = null;
+    foreach ($fields as $form_field) {
+      $field_xaction_type = $form_field->getTransactionType();
+      if ($field_xaction_type === $xaction_type) {
+        $field = $form_field;
+        break;
+      }
+    }
+
+    if (!$field) {
+      return false;
+    }
+
+    if (!$field->shouldReadValueFromSubmit()) {
+      return false;
+    }
+
+    return true;
+  }
+
 
   final public function addActionToCrumbs(PHUICrumbsView $crumbs) {
     $viewer = $this->getViewer();
@@ -1310,6 +1381,8 @@ abstract class PhabricatorEditEngine
 
       $comment_actions[$key] = $comment_action;
     }
+
+    $comment_actions = msortv($comment_actions, 'getSortVector');
 
     $view->setCommentActions($comment_actions);
 
@@ -1630,7 +1703,7 @@ abstract class PhabricatorEditEngine
 
     $editor = $object->getApplicationTransactionEditor()
       ->setActor($viewer)
-      ->setContentSourceFromConduitRequest($request)
+      ->setContentSource($request->newContentSource())
       ->setContinueOnNoEffect(true);
 
     if (!$this->getIsCreate()) {

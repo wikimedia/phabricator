@@ -15,72 +15,112 @@ final class NuanceItemViewController extends NuanceController {
     }
 
     $title = pht('Item %d', $item->getID());
+    $name = $item->getDisplayName();
 
     $crumbs = $this->buildApplicationCrumbs();
+    $crumbs->addTextCrumb(
+      pht('Items'),
+      $this->getApplicationURI('item/'));
     $crumbs->addTextCrumb($title);
+    $crumbs->setBorder(true);
 
-    $properties = $this->buildPropertyView($item);
-    $actions = $this->buildActionView($item);
-    $properties->setActionList($actions);
+    $curtain = $this->buildCurtain($item);
+    $content = $this->buildContent($item);
+    $commands = $this->buildCommands($item);
 
-    $box = id(new PHUIObjectBoxView())
-      ->setHeaderText($title)
-      ->addPropertyList($properties);
-
-    return $this->buildApplicationPage(
-      array(
-        $crumbs,
-        $box,
-      ),
-      array(
-        'title' => $title,
-      ));
-  }
-
-  private function buildPropertyView(NuanceItem $item) {
-    $viewer = $this->getViewer();
-
-    $properties = id(new PHUIPropertyListView())
-      ->setUser($viewer)
-      ->setObject($item);
-
-    $properties->addProperty(
-      pht('Date Created'),
-      phabricator_datetime($item->getDateCreated(), $viewer));
-
-    $source = $item->getSource();
-    $definition = $source->requireDefinition();
-
-    $definition->renderItemViewProperties(
-      $viewer,
+    $timeline = $this->buildTransactionTimeline(
       $item,
-      $properties);
+      new NuanceItemTransactionQuery());
 
-    return $properties;
+    $main = array(
+      $commands,
+      $content,
+      $timeline,
+    );
+
+    $header = id(new PHUIHeaderView())
+      ->setHeader($name);
+
+    $view = id(new PHUITwoColumnView())
+      ->setHeader($header)
+      ->setCurtain($curtain)
+      ->setMainColumn($main);
+
+    return $this->newPage()
+      ->setTitle($title)
+      ->setCrumbs($crumbs)
+      ->appendChild($view);
   }
 
-  private function buildActionView(NuanceItem $item) {
+  private function buildCurtain(NuanceItem $item) {
     $viewer = $this->getViewer();
     $id = $item->getID();
-
-    $actions = id(new PhabricatorActionListView())
-      ->setUser($viewer);
 
     $can_edit = PhabricatorPolicyFilter::hasCapability(
       $viewer,
       $item,
       PhabricatorPolicyCapability::CAN_EDIT);
 
-    $actions->addAction(
-      id(new PhabricatorActionView())
-        ->setName(pht('Edit Item'))
-        ->setIcon('fa-pencil')
-        ->setHref($this->getApplicationURI("item/edit/{$id}/"))
-        ->setDisabled(!$can_edit)
-        ->setWorkflow(!$can_edit));
+    $curtain = $this->newCurtainView($item);
 
-    return $actions;
+    $curtain->addAction(
+      id(new PhabricatorActionView())
+        ->setName(pht('Manage Item'))
+        ->setIcon('fa-cogs')
+        ->setHref($this->getApplicationURI("item/manage/{$id}/")));
+
+    $impl = $item->getImplementation();
+    $impl->setViewer($viewer);
+
+    foreach ($impl->getItemActions($item) as $action) {
+      $curtain->addAction($action);
+    }
+
+    foreach ($impl->getItemCurtainPanels($item) as $panel) {
+      $curtain->addPanel($panel);
+    }
+
+    return $curtain;
   }
 
+  private function buildContent(NuanceItem $item) {
+    $viewer = $this->getViewer();
+    $impl = $item->getImplementation();
+
+    $impl->setViewer($viewer);
+    return $impl->buildItemView($item);
+  }
+
+  private function buildCommands(NuanceItem $item) {
+    $viewer = $this->getViewer();
+
+    $commands = id(new NuanceItemCommandQuery())
+      ->setViewer($viewer)
+      ->withItemPHIDs(array($item->getPHID()))
+      ->execute();
+    $commands = msort($commands, 'getID');
+
+    if (!$commands) {
+      return null;
+    }
+
+    $rows = array();
+    foreach ($commands as $command) {
+      $rows[] = array(
+        $command->getCommand(),
+      );
+    }
+
+    $table = id(new AphrontTableView($rows))
+      ->setHeaders(
+        array(
+          pht('Command'),
+        ));
+
+    return id(new PHUIObjectBoxView())
+      ->setHeaderText(pht('Pending Commands'))
+      ->setBackground(PHUIObjectBoxView::BLUE_PROPERTY)
+      ->setTable($table);
+  }
 
 }

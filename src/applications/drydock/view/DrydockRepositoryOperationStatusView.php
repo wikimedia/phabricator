@@ -48,6 +48,7 @@ final class DrydockRepositoryOperationStatusView
     $box_view = $this->getBoxView();
     if (!$box_view) {
       $box_view = id(new PHUIObjectBoxView())
+        ->setBackground(PHUIObjectBoxView::BLUE_PROPERTY)
         ->setHeaderText(pht('Operation Status'));
     }
     $box_view->setObjectList($list);
@@ -81,6 +82,20 @@ final class DrydockRepositoryOperationStatusView
             $message = pht(
               'This change did not merge cleanly. This usually indicates '.
               'that the change is out of date and needs to be updated.');
+            break;
+          case DrydockWorkingCopyBlueprintImplementation::PHASE_REMOTEFETCH:
+            $message = pht(
+              'This change could not be fetched from the remote.');
+            break;
+          case DrydockWorkingCopyBlueprintImplementation::PHASE_MERGEFETCH:
+            $message = pht(
+              'This change could not be fetched from the remote staging '.
+              'area. It may not have been pushed, or may have been removed.');
+            break;
+          case DrydockLandRepositoryOperation::PHASE_COMMIT:
+            $message = pht(
+              'Committing this change failed. It may already have been '.
+              'merged.');
             break;
           case DrydockLandRepositoryOperation::PHASE_PUSH:
             $message = pht(
@@ -123,10 +138,23 @@ final class DrydockRepositoryOperationStatusView
 
   private function renderVCSErrorTable(array $vcs_error) {
     $rows = array();
-    $rows[] = array(pht('Command'), $vcs_error['command']);
+
+    $rows[] = array(
+      pht('Command'),
+      phutil_censor_credentials($vcs_error['command']),
+    );
+
     $rows[] = array(pht('Error'), $vcs_error['err']);
-    $rows[] = array(pht('Stdout'), $vcs_error['stdout']);
-    $rows[] = array(pht('Stderr'), $vcs_error['stderr']);
+
+    $rows[] = array(
+      pht('Stdout'),
+      phutil_censor_credentials($vcs_error['stdout']),
+    );
+
+    $rows[] = array(
+      pht('Stderr'),
+      phutil_censor_credentials($vcs_error['stderr']),
+    );
 
     $table = id(new AphrontTableView($rows))
       ->setColumnClasses(

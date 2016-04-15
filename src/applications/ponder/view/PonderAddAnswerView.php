@@ -18,17 +18,18 @@ final class PonderAddAnswerView extends AphrontView {
 
   public function render() {
     $question = $this->question;
-    $viewer = $this->user;
+    $viewer = $this->getViewer();
 
     $authors = mpull($question->getAnswers(), null, 'getAuthorPHID');
     if (isset($authors[$viewer->getPHID()])) {
-      return id(new PHUIInfoView())
+      $view = id(new PHUIInfoView())
         ->setSeverity(PHUIInfoView::SEVERITY_NOTICE)
         ->setTitle(pht('Already Answered'))
         ->appendChild(
           pht(
             'You have already answered this question. You can not answer '.
             'twice, but you can edit your existing answer.'));
+      return phutil_tag_div('ponder-add-answer-view', $view);
     }
 
     $info_panel = null;
@@ -48,10 +49,9 @@ final class PonderAddAnswerView extends AphrontView {
 
     $form = new AphrontFormView();
     $form
-      ->setUser($this->user)
+      ->setViewer($viewer)
       ->setAction($this->actionURI)
       ->setWorkflow(true)
-      ->setFullWidth(true)
       ->addHiddenInput('question_id', $question->getID())
       ->appendChild(
         id(new PhabricatorRemarkupControl())
@@ -59,7 +59,7 @@ final class PonderAddAnswerView extends AphrontView {
           ->setLabel(pht('Answer'))
           ->setError(true)
           ->setID('answer-content')
-          ->setUser($this->user))
+          ->setViewer($viewer))
       ->appendChild(
         id(new AphrontFormSubmitControl())
           ->setValue(pht('Add Answer')));
@@ -78,7 +78,7 @@ final class PonderAddAnswerView extends AphrontView {
 
     $box = id(new PHUIObjectBoxView())
       ->appendChild($form)
-      ->setBackground(PHUIObjectBoxView::GREY)
+      ->setHeaderText('Answer')
       ->addClass('ponder-add-answer-view');
 
     if ($info_panel) {

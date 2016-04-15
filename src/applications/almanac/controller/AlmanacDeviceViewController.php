@@ -23,22 +23,17 @@ final class AlmanacDeviceViewController
 
     $title = pht('Device %s', $device->getName());
 
-    $property_list = $this->buildPropertyList($device);
-    $action_list = $this->buildActionList($device);
-    $property_list->setActionList($action_list);
+    $curtain = $this->buildCurtain($device);
 
     $header = id(new PHUIHeaderView())
       ->setUser($viewer)
       ->setHeader($device->getName())
-      ->setPolicyObject($device);
+      ->setPolicyObject($device)
+      ->setHeaderIcon('fa-server');
 
-    $box = id(new PHUIObjectBoxView())
-      ->setHeader($header)
-      ->addPropertyList($property_list);
-
+    $issue = null;
     if ($device->isClusterDevice()) {
-      $this->addClusterMessage(
-        $box,
+      $issue = $this->addClusterMessage(
         pht('This device is bound to a cluster service.'),
         pht(
           'This device is bound to a cluster service. You do not have '.
@@ -50,57 +45,56 @@ final class AlmanacDeviceViewController
 
     $crumbs = $this->buildApplicationCrumbs();
     $crumbs->addTextCrumb($device->getName());
+    $crumbs->setBorder(true);
 
     $timeline = $this->buildTransactionTimeline(
       $device,
       new AlmanacDeviceTransactionQuery());
     $timeline->setShouldTerminate(true);
 
-    return $this->newPage()
-      ->setTitle($title)
-      ->setCrumbs($crumbs)
-      ->appendChild(
-        array(
-          $box,
+    $view = id(new PHUITwoColumnView())
+      ->setHeader($header)
+      ->setCurtain($curtain)
+      ->setMainColumn(array(
+          $issue,
           $interfaces,
           $this->buildAlmanacPropertiesTable($device),
           $this->buildSSHKeysTable($device),
           $this->buildServicesTable($device),
           $timeline,
-      ));
+        ));
+
+    return $this->newPage()
+      ->setTitle($title)
+      ->setCrumbs($crumbs)
+      ->appendChild(
+        array(
+          $view,
+        ));
   }
 
-  private function buildPropertyList(AlmanacDevice $device) {
+  private function buildCurtain(AlmanacDevice $device) {
     $viewer = $this->getViewer();
-
-    $properties = id(new PHUIPropertyListView())
-      ->setUser($viewer)
-      ->setObject($device);
-
-    return $properties;
-  }
-
-  private function buildActionList(AlmanacDevice $device) {
-    $viewer = $this->getViewer();
-    $id = $device->getID();
 
     $can_edit = PhabricatorPolicyFilter::hasCapability(
       $viewer,
       $device,
       PhabricatorPolicyCapability::CAN_EDIT);
 
-    $actions = id(new PhabricatorActionListView())
-      ->setUser($viewer);
+    $id = $device->getID();
+    $edit_uri = $this->getApplicationURI("device/edit/{$id}/");
 
-    $actions->addAction(
+    $curtain = $this->newCurtainView($device);
+
+    $curtain->addAction(
       id(new PhabricatorActionView())
         ->setIcon('fa-pencil')
         ->setName(pht('Edit Device'))
-        ->setHref($this->getApplicationURI("device/edit/{$id}/"))
+        ->setHref($edit_uri)
         ->setWorkflow(!$can_edit)
         ->setDisabled(!$can_edit));
 
-    return $actions;
+    return $curtain;
   }
 
   private function buildInterfaceList(AlmanacDevice $device) {
@@ -123,7 +117,7 @@ final class AlmanacDeviceViewController
       ->setCanEdit($can_edit);
 
     $header = id(new PHUIHeaderView())
-      ->setHeader(pht('Device Interfaces'))
+      ->setHeader(pht('DEVICE INTERFACES'))
       ->addActionLink(
         id(new PHUIButtonView())
           ->setTag('a')
@@ -135,6 +129,7 @@ final class AlmanacDeviceViewController
 
     return id(new PHUIObjectBoxView())
       ->setHeader($header)
+      ->setBackground(PHUIObjectBoxView::BLUE_PROPERTY)
       ->setTable($table);
   }
 
@@ -172,7 +167,7 @@ final class AlmanacDeviceViewController
     $upload_uri = '/auth/sshkey/upload/?objectPHID='.$device_phid;
 
     $header = id(new PHUIHeaderView())
-      ->setHeader(pht('SSH Public Keys'))
+      ->setHeader(pht('SSH PUBLIC KEYS'))
       ->addActionLink(
         id(new PHUIButtonView())
           ->setTag('a')
@@ -196,9 +191,8 @@ final class AlmanacDeviceViewController
 
     return id(new PHUIObjectBoxView())
       ->setHeader($header)
+      ->setBackground(PHUIObjectBoxView::BLUE_PROPERTY)
       ->setTable($table);
-
-
   }
 
   private function buildServicesTable(AlmanacDevice $device) {
@@ -244,7 +238,8 @@ final class AlmanacDeviceViewController
         ));
 
     return id(new PHUIObjectBoxView())
-      ->setHeaderText(pht('Bound Services'))
+      ->setHeaderText(pht('BOUND SERVICES'))
+      ->setBackground(PHUIObjectBoxView::BLUE_PROPERTY)
       ->setTable($table);
   }
 

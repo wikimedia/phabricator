@@ -26,7 +26,6 @@ final class PhabricatorFile extends PhabricatorFileDAO
     PhabricatorPolicyInterface,
     PhabricatorDestructibleInterface {
 
-  const ONETIME_TEMPORARY_TOKEN_TYPE = 'file:onetime';
   const STORAGE_FORMAT_RAW  = 'raw';
 
   const METADATA_IMAGE_WIDTH  = 'width';
@@ -57,6 +56,7 @@ final class PhabricatorFile extends PhabricatorFileDAO
   private $objects = self::ATTACHABLE;
   private $objectPHIDs = self::ATTACHABLE;
   private $originalFile = self::ATTACHABLE;
+  private $transforms = self::ATTACHABLE;
 
   public static function initializeNewFile() {
     $app = id(new PhabricatorApplicationQuery())
@@ -138,6 +138,10 @@ final class PhabricatorFile extends PhabricatorFileDAO
 
   public function getMonogram() {
     return 'F'.$this->getID();
+  }
+
+  public function scrambleSecret() {
+    return $this->setSecretKey($this->generateSecretKey());
   }
 
   public static function readUploadedFileData($spec) {
@@ -694,10 +698,10 @@ final class PhabricatorFile extends PhabricatorFileDAO
         pht('You must save a file before you can generate a view URI.'));
     }
 
-    return $this->getCDNURI(null);
+    return $this->getCDNURI();
   }
 
-  private function getCDNURI($token) {
+  public function getCDNURI() {
     $name = self::normalizeFileName($this->getName());
     $name = phutil_escape_uri($name);
 
@@ -717,9 +721,6 @@ final class PhabricatorFile extends PhabricatorFileDAO
 
     $parts[] = $this->getSecretKey();
     $parts[] = $this->getPHID();
-    if ($token) {
-      $parts[] = $token;
-    }
     $parts[] = $name;
 
     $path = '/'.implode('/', $parts);
@@ -732,19 +733,6 @@ final class PhabricatorFile extends PhabricatorFileDAO
     } else {
       return PhabricatorEnv::getCDNURI($path);
     }
-  }
-
-  /**
-   * Get the CDN URI for this file, including a one-time-use security token.
-   *
-   */
-  public function getCDNURIWithToken() {
-    if (!$this->getPHID()) {
-      throw new Exception(
-        pht('You must save a file before you can generate a CDN URI.'));
-    }
-
-    return $this->getCDNURI($this->generateOneTimeToken());
   }
 
 
@@ -1117,35 +1105,6 @@ final class PhabricatorFile extends PhabricatorFileDAO
     return $this;
   }
 
-  protected function generateOneTimeToken() {
-    $key = Filesystem::readRandomCharacters(16);
-
-    // Save the new secret.
-    $unguarded = AphrontWriteGuard::beginScopedUnguardedWrites();
-      $token = id(new PhabricatorAuthTemporaryToken())
-        ->setObjectPHID($this->getPHID())
-        ->setTokenType(self::ONETIME_TEMPORARY_TOKEN_TYPE)
-        ->setTokenExpires(time() + phutil_units('1 hour in seconds'))
-        ->setTokenCode(PhabricatorHash::digest($key))
-        ->save();
-    unset($unguarded);
-
-    return $key;
-  }
-
-  public function validateOneTimeToken($token_code) {
-    $token = id(new PhabricatorAuthTemporaryTokenQuery())
-      ->setViewer(PhabricatorUser::getOmnipotentUser())
-      ->withObjectPHIDs(array($this->getPHID()))
-      ->withTokenTypes(array(self::ONETIME_TEMPORARY_TOKEN_TYPE))
-      ->withExpired(false)
-      ->withTokenCodes(array(PhabricatorHash::digest($token_code)))
-      ->executeOne();
-
-    return $token;
-  }
-
-
   /**
    * Write the policy edge between this file and some object.
    *
@@ -1250,6 +1209,15 @@ final class PhabricatorFile extends PhabricatorFileDAO
       ->setURI($uri);
   }
 
+  public function attachTransforms(array $map) {
+    $this->transforms = $map;
+    return $this;
+  }
+
+  public function getTransform($key) {
+    return $this->assertAttachedKey($this->transforms, $key);
+  }
+
 
 /* -(  PhabricatorApplicationTransactionInterface  )------------------------- */
 
@@ -1346,10 +1314,6 @@ final class PhabricatorFile extends PhabricatorFileDAO
 
   public function isAutomaticallySubscribed($phid) {
     return ($this->authorPHID == $phid);
-  }
-
-  public function shouldShowSubscribersProperty() {
-    return true;
   }
 
 

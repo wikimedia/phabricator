@@ -50,6 +50,7 @@ final class DifferentialAddCommentView extends AphrontView {
   }
 
   public function render() {
+    $viewer = $this->getViewer();
 
     $this->requireResource('differential-revision-add-comment-css');
     $revision = $this->revision;
@@ -73,7 +74,7 @@ final class DifferentialAddCommentView extends AphrontView {
     $form = new AphrontFormView();
     $form
       ->setWorkflow(true)
-      ->setUser($this->user)
+      ->setViewer($viewer)
       ->setAction($this->actionURI)
       ->addHiddenInput('revision_id', $revision->getID())
       ->appendChild(
@@ -108,7 +109,7 @@ final class DifferentialAddCommentView extends AphrontView {
           ->setID('comment-content')
           ->setLabel(pht('Comment'))
           ->setValue($this->draft ? $this->draft->getDraft() : null)
-          ->setUser($this->user))
+          ->setViewer($viewer))
       ->appendChild(
         id(new AphrontFormSubmitControl())
           ->setValue(pht('Submit')));
@@ -162,7 +163,7 @@ final class DifferentialAddCommentView extends AphrontView {
     $is_serious = PhabricatorEnv::getEnvConfig('phabricator.serious-business');
     $header_text = $is_serious
       ? pht('Add Comment')
-      : pht('Leap Into Action');
+      : pht('Leap Into Action!');
 
     $header = id(new PHUIHeaderView())
       ->setHeader($header_text);

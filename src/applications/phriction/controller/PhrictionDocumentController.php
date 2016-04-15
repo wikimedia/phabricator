@@ -151,7 +151,7 @@ final class PhrictionDocumentController
               array(),
               pht(
                 'This document has been moved. You can edit it to put new '.
-                'contne here, or use history to revert to an earlier '.
+                'content here, or use history to revert to an earlier '.
                 'version.')));
         }
 
@@ -230,16 +230,14 @@ final class PhrictionDocumentController
           $core_content,
         ));
 
-    return $this->buildApplicationPage(
-      array(
-        $crumbs->render(),
+    return $this->newPage()
+      ->setTitle($page_title)
+      ->setCrumbs($crumbs)
+      ->setPageObjectPHIDs(array($document->getPHID()))
+      ->appendChild(array(
         $page_content,
         $prop_list,
         $children,
-      ),
-      array(
-        'pageObjects' => array($document->getPHID()),
-        'title' => $page_title,
       ));
 
   }

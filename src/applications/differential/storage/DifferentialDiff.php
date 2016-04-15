@@ -5,6 +5,7 @@ final class DifferentialDiff
   implements
     PhabricatorPolicyInterface,
     HarbormasterBuildableInterface,
+    HarbormasterCircleCIBuildableInterface,
     PhabricatorApplicationTransactionInterface,
     PhabricatorDestructibleInterface {
 
@@ -39,6 +40,8 @@ final class DifferentialDiff
   private $revision = self::ATTACHABLE;
   private $properties = array();
   private $buildable = self::ATTACHABLE;
+
+  private $unitMessages = self::ATTACHABLE;
 
   protected function getConfiguration() {
     return array(
@@ -334,6 +337,20 @@ final class DifferentialDiff
     return $this->assertAttachedKey($this->properties, $key);
   }
 
+  public function hasDiffProperty($key) {
+    $properties = $this->getDiffProperties();
+    return array_key_exists($key, $properties);
+  }
+
+  public function attachDiffProperties(array $properties) {
+    $this->properties = $properties;
+    return $this;
+  }
+
+  public function getDiffProperties() {
+    return $this->assertAttached($this->properties);
+  }
+
   public function attachBuildable(HarbormasterBuildable $buildable = null) {
     $this->buildable = $buildable;
     return $this;
@@ -391,6 +408,17 @@ final class DifferentialDiff
   }
 
 
+  public function attachUnitMessages(array $unit_messages) {
+    $this->unitMessages = $unit_messages;
+    return $this;
+  }
+
+
+  public function getUnitMessages() {
+    return $this->assertAttached($this->unitMessages);
+  }
+
+
 /* -(  PhabricatorPolicyInterface  )----------------------------------------- */
 
 
@@ -428,6 +456,15 @@ final class DifferentialDiff
 
 /* -(  HarbormasterBuildableInterface  )------------------------------------- */
 
+
+  public function getHarbormasterBuildableDisplayPHID() {
+    $container_phid = $this->getHarbormasterContainerPHID();
+    if ($container_phid) {
+      return $container_phid;
+    }
+
+    return $this->getHarbormasterBuildablePHID();
+  }
 
   public function getHarbormasterBuildablePHID() {
     return $this->getPHID();
@@ -486,6 +523,72 @@ final class DifferentialDiff
       'repository.staging.ref' =>
         pht('The ref name for this change in the staging repository.'),
     );
+  }
+
+
+/* -(  HarbormasterCircleCIBuildableInterface  )----------------------------- */
+
+
+  public function getCircleCIGitHubRepositoryURI() {
+    $diff_phid = $this->getPHID();
+    $repository_phid = $this->getRepositoryPHID();
+    if (!$repository_phid) {
+      throw new Exception(
+        pht(
+          'This diff ("%s") is not associated with a repository. A diff '.
+          'must belong to a tracked repository to be built by CircleCI.',
+          $diff_phid));
+    }
+
+    $repository = id(new PhabricatorRepositoryQuery())
+      ->setViewer(PhabricatorUser::getOmnipotentUser())
+      ->withPHIDs(array($repository_phid))
+      ->executeOne();
+    if (!$repository) {
+      throw new Exception(
+        pht(
+          'This diff ("%s") is associated with a repository ("%s") which '.
+          'could not be loaded.',
+          $diff_phid,
+          $repository_phid));
+    }
+
+    $staging_uri = $repository->getStagingURI();
+    if (!$staging_uri) {
+      throw new Exception(
+        pht(
+          'This diff ("%s") is associated with a repository ("%s") that '.
+          'does not have a Staging Area configured. You must configure a '.
+          'Staging Area to use CircleCI integration.',
+          $diff_phid,
+          $repository_phid));
+    }
+
+    $path = HarbormasterCircleCIBuildStepImplementation::getGitHubPath(
+      $staging_uri);
+    if (!$path) {
+      throw new Exception(
+        pht(
+          'This diff ("%s") is associated with a repository ("%s") that '.
+          'does not have a Staging Area ("%s") that is hosted on GitHub. '.
+          'CircleCI can only build from GitHub, so the Staging Area for '.
+          'the repository must be hosted there.',
+          $diff_phid,
+          $repository_phid,
+          $staging_uri));
+    }
+
+    return $staging_uri;
+  }
+
+  public function getCircleCIBuildIdentifierType() {
+    return 'tag';
+  }
+
+  public function getCircleCIBuildIdentifier() {
+    $ref = $this->getStagingRef();
+    $ref = preg_replace('(^refs/tags/)', '', $ref);
+    return $ref;
   }
 
   public function getStagingRef() {
