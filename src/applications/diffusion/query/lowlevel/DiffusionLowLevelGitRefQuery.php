@@ -8,9 +8,19 @@ final class DiffusionLowLevelGitRefQuery extends DiffusionLowLevelQuery {
 
   private $isTag;
   private $isOriginBranch;
+  private $prefixes = array();
 
   public function withIsTag($is_tag) {
     $this->isTag = $is_tag;
+    return $this;
+  }
+
+  public function withPrefixes($prefixes) {
+    if (!is_array($prefixes)) {
+      $prefixes = func_get_args();
+    }
+    $prefixes = $this->prefixes + $prefixes;
+    $this->prefixes = array_values(array_unique($prefixes));
     return $this;
   }
 
@@ -22,9 +32,9 @@ final class DiffusionLowLevelGitRefQuery extends DiffusionLowLevelQuery {
   protected function executeQuery() {
     $repository = $this->getRepository();
 
-    $prefixes = array();
+    $prefixes = $this->prefixes;
 
-    $any = ($this->isTag || $this->isOriginBranch);
+    $any = ($this->isTag || $this->isOriginBranch || count($prefixes));
     if (!$any) {
       throw new Exception(pht('Specify types of refs to query.'));
     }
