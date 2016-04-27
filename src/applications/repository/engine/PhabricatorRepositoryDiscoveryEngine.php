@@ -87,6 +87,7 @@ final class PhabricatorRepositoryDiscoveryEngine
     $branches = id(new DiffusionLowLevelGitRefQuery())
       ->setRepository($repository)
       ->withIsOriginBranch(true)
+      ->withPrefixes('refs/changes/')
       ->execute();
 
     if (!$branches) {
