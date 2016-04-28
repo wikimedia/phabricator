@@ -1180,6 +1180,9 @@ final class PhabricatorRepository extends PhabricatorRepositoryDAO
    * @task autoclose
    */
   public function shouldAutocloseBranch($branch) {
+    if (substr($branch, 0, 8) == 'changes/') {
+      return false;
+    }
     return ($this->shouldSkipAutocloseBranch($branch) === null);
   }
 
