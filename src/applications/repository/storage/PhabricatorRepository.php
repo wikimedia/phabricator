@@ -1062,9 +1062,6 @@ final class PhabricatorRepository extends PhabricatorRepositoryDAO
   }
 
   public function shouldTrackBranch($branch) {
-    if (substr($branch, 0, 8) == 'changes/') {
-      return false;
-    }
     return $this->isBranchInFilter($branch, 'branch-filter');
   }
 
