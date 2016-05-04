@@ -101,6 +101,8 @@ final class AphrontFileResponse extends AphrontResponse {
 
       $filename = $this->getDownload();
       $filename = addcslashes($filename, '"\\');
+      $filename = preg_replace('/[\r\n\0]/', '', $filename);
+
       $headers[] = array(
         'Content-Disposition',
         'attachment; filename="'.$filename.'"',
