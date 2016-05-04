@@ -248,25 +248,7 @@ final class PhabricatorRepositoryEditor
         $object->setCallsign($xaction->getNewValue());
         return;
       case PhabricatorRepositoryTransaction::TYPE_ENCODING:
-        // Make sure the encoding is valid by converting to UTF-8. This tests
-        // that the user has mbstring installed, and also that they didn't type
-        // a garbage encoding name. Note that we're converting from UTF-8 to
-        // the target encoding, because mbstring is fine with converting from
-        // a nonsense encoding.
-        $encoding = $xaction->getNewValue();
-        if (strlen($encoding)) {
-          try {
-            phutil_utf8_convert('.', $encoding, 'UTF-8');
-          } catch (Exception $ex) {
-            throw new PhutilProxyException(
-              pht(
-                "Error setting repository encoding '%s': %s'",
-                $encoding,
-                $ex->getMessage()),
-              $ex);
-          }
-        }
-        $object->setDetail('encoding', $encoding);
+        $object->setDetail('encoding', $xaction->getNewValue());
         break;
     }
   }
@@ -360,7 +342,7 @@ final class PhabricatorRepositoryEditor
     $errors = parent::validateTransaction($object, $type, $xactions);
 
     switch ($type) {
-      case PhabricatorRepositoryTransaction::TYPE_AUTOCLOSE:
+      case PhabricatorRepositoryTransaction::TYPE_AUTOCLOSE_ONLY:
       case PhabricatorRepositoryTransaction::TYPE_TRACK_ONLY:
         foreach ($xactions as $xaction) {
           foreach ($xaction->getNewValue() as $pattern) {
@@ -461,6 +443,117 @@ final class PhabricatorRepositoryEditor
         }
         break;
 
+      case PhabricatorRepositoryTransaction::TYPE_VCS:
+        $vcs_map = PhabricatorRepositoryType::getAllRepositoryTypes();
+        $current_vcs = $object->getVersionControlSystem();
+
+        if (!$this->getIsNewObject()) {
+          foreach ($xactions as $xaction) {
+            if ($xaction->getNewValue() == $current_vcs) {
+              continue;
+            }
+
+            $errors[] = new PhabricatorApplicationTransactionValidationError(
+              $type,
+              pht('Immutable'),
+              pht(
+                'You can not change the version control system an existing '.
+                'repository uses. It can only be set when a repository is '.
+                'first created.'),
+              $xaction);
+          }
+        } else {
+          $value = $object->getVersionControlSystem();
+          foreach ($xactions as $xaction) {
+            $value = $xaction->getNewValue();
+
+            if (empty($vcs_map[$value])) {
+              $errors[] = new PhabricatorApplicationTransactionValidationError(
+                $type,
+                pht('Invalid'),
+                pht(
+                  'Specified version control system must be a VCS '.
+                  'recognized by Phabricator: %s.',
+                  implode(', ', array_keys($vcs_map))),
+                $xaction);
+            }
+          }
+
+          if (!strlen($value)) {
+            $error = new PhabricatorApplicationTransactionValidationError(
+              $type,
+              pht('Required'),
+              pht(
+                'When creating a repository, you must specify a valid '.
+                'underlying version control system: %s.',
+                implode(', ', array_keys($vcs_map))),
+              nonempty(last($xactions), null));
+            $error->setIsMissingFieldError(true);
+            $errors[] = $error;
+          }
+        }
+        break;
+
+      case PhabricatorRepositoryTransaction::TYPE_NAME:
+        $missing = $this->validateIsEmptyTextField(
+          $object->getName(),
+          $xactions);
+
+        if ($missing) {
+          $error = new PhabricatorApplicationTransactionValidationError(
+            $type,
+            pht('Required'),
+            pht('Repository name is required.'),
+            nonempty(last($xactions), null));
+
+          $error->setIsMissingFieldError(true);
+          $errors[] = $error;
+        }
+        break;
+
+      case PhabricatorRepositoryTransaction::TYPE_ACTIVATE:
+        $status_map = PhabricatorRepository::getStatusMap();
+        foreach ($xactions as $xaction) {
+          $status = $xaction->getNewValue();
+          if (empty($status_map[$status])) {
+            $errors[] = new PhabricatorApplicationTransactionValidationError(
+              $type,
+              pht('Invalid'),
+              pht(
+                'Repository status "%s" is not valid.',
+                $status),
+              $xaction);
+          }
+        }
+        break;
+
+      case PhabricatorRepositoryTransaction::TYPE_ENCODING:
+        foreach ($xactions as $xaction) {
+          // Make sure the encoding is valid by converting to UTF-8. This tests
+          // that the user has mbstring installed, and also that they didn't
+          // type a garbage encoding name. Note that we're converting from
+          // UTF-8 to the target encoding, because mbstring is fine with
+          // converting from a nonsense encoding.
+          $encoding = $xaction->getNewValue();
+          if (!strlen($encoding)) {
+            continue;
+          }
+
+          try {
+            phutil_utf8_convert('.', $encoding, 'UTF-8');
+          } catch (Exception $ex) {
+            $errors[] = new PhabricatorApplicationTransactionValidationError(
+              $type,
+              pht('Invalid'),
+              pht(
+                'Repository encoding "%s" is not valid: %s',
+                $encoding,
+                $ex->getMessage()),
+              $xaction);
+          }
+        }
+        break;
+
       case PhabricatorRepositoryTransaction::TYPE_SLUG:
         foreach ($xactions as $xaction) {
           $old = $xaction->getOldValue();
@@ -543,6 +636,43 @@ final class PhabricatorRepositoryEditor
           }
         }
         break;
+
+      case PhabricatorRepositoryTransaction::TYPE_SYMBOLS_SOURCES:
+        foreach ($xactions as $xaction) {
+          $old = $object->getSymbolSources();
+          $new = $xaction->getNewValue();
+
+          // If the viewer is adding new repositories, make sure they are
+          // valid and visible.
+          $add = array_diff($new, $old);
+          if (!$add) {
+            continue;
+          }
+
+          $repositories = id(new PhabricatorRepositoryQuery())
+            ->setViewer($this->getActor())
+            ->withPHIDs($add)
+            ->execute();
+          $repositories = mpull($repositories, null, 'getPHID');
+
+          foreach ($add as $phid) {
+            if (isset($repositories[$phid])) {
+              continue;
+            }
+
+            $errors[] = new PhabricatorApplicationTransactionValidationError(
+              $type,
+              pht('Invalid'),
+              pht(
+                'Repository ("%s") does not exist, or you do not have '.
+                'permission to see it.',
+                $phid),
+              $xaction);
+            break;
+          }
+        }
+        break;
+
     }
 
     return $errors;
@@ -588,6 +718,13 @@ final class PhabricatorRepositoryEditor
 
       $object->setDetail('local-path', $local_path);
       $object->save();
+    }
+
+    if ($this->getIsNewObject()) {
+      id(new DiffusionRepositoryClusterEngine())
+        ->setViewer($this->getActor())
+        ->setRepository($object)
+        ->synchronizeWorkingCopyAfterCreation();
     }
 
     return $xactions;

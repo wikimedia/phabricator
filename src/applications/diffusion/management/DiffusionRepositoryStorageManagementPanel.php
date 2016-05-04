@@ -1,19 +1,58 @@
 <?php
 
-final class DiffusionRepositoryClusterManagementPanel
+final class DiffusionRepositoryStorageManagementPanel
   extends DiffusionRepositoryManagementPanel {
 
-  const PANELKEY = 'cluster';
+  const PANELKEY = 'storage';
 
   public function getManagementPanelLabel() {
-    return pht('Cluster Configuration');
+    return pht('Storage');
   }
 
   public function getManagementPanelOrder() {
-    return 12345;
+    return 600;
   }
 
   public function buildManagementPanelContent() {
+    return array(
+      $this->buildStorageStatusPanel(),
+      $this->buildClusterStatusPanel(),
+    );
+  }
+
+  private function buildStorageStatusPanel() {
+    $repository = $this->getRepository();
+    $viewer = $this->getViewer();
+
+    $view = id(new PHUIPropertyListView())
+      ->setViewer($viewer);
+
+    if ($repository->usesLocalWorkingCopy()) {
+      $storage_path = $repository->getHumanReadableDetail('local-path');
+    } else {
+      $storage_path = phutil_tag('em', array(), pht('No Local Working Copy'));
+    }
+
+    $service_phid = $repository->getAlmanacServicePHID();
+    if ($service_phid) {
+      $storage_service = $viewer->renderHandle($service_phid);
+    } else {
+      $storage_service = phutil_tag('em', array(), pht('Local'));
+    }
+
+    $view->addProperty(pht('Storage Path'), $storage_path);
+    $view->addProperty(pht('Storage Cluster'), $storage_service);
+
+    $header = id(new PHUIHeaderView())
+      ->setHeader(pht('Storage'));
+
+    return id(new PHUIObjectBoxView())
+      ->setHeader($header)
+      ->setBackground(PHUIObjectBoxView::BLUE_PROPERTY)
+      ->addPropertyList($view);
+  }
+
+  private function buildClusterStatusPanel() {
     $repository = $this->getRepository();
     $viewer = $this->getViewer();
 
@@ -104,6 +143,29 @@ final class DiffusionRepositoryClusterManagementPanel
             ->setIcon('fa-pencil grey');
         }
 
+        $write_properties = null;
+        if ($version) {
+          $write_properties = $version->getWriteProperties();
+          if ($write_properties) {
+            try {
+              $write_properties = phutil_json_decode($write_properties);
+            } catch (Exception $ex) {
+              $write_properties = null;
+            }
+          }
+        }
+
+        if ($write_properties) {
+          $writer_phid = idx($write_properties, 'userPHID');
+          $last_writer = $viewer->renderHandle($writer_phid);
+
+          $writer_epoch = idx($write_properties, 'epoch');
+          $writer_epoch = phabricator_datetime($writer_epoch, $viewer);
+        } else {
+          $last_writer = null;
+          $writer_epoch = null;
+        }
+
         $rows[] = array(
           $binding_icon,
           phutil_tag(
@@ -114,6 +176,8 @@ final class DiffusionRepositoryClusterManagementPanel
             $device->getName()),
           $version_number,
           $is_writing,
+          $last_writer,
+          $writer_epoch,
         );
       }
     }
@@ -126,6 +190,8 @@ final class DiffusionRepositoryClusterManagementPanel
           pht('Device'),
           pht('Version'),
           pht('Writing'),
+          pht('Last Writer'),
+          pht('Last Write At'),
         ))
       ->setColumnClasses(
         array(
@@ -133,6 +199,8 @@ final class DiffusionRepositoryClusterManagementPanel
           null,
           null,
           'right wide',
+          null,
+          'date',
         ));
 
     $doc_href = PhabricatorEnv::getDoclink('Cluster: Repositories');
@@ -146,20 +214,9 @@ final class DiffusionRepositoryClusterManagementPanel
           ->setTag('a')
           ->setText(pht('Documentation')));
 
-    if ($service) {
-      $header->setSubheader(
-        pht(
-          'This repository is hosted on %s.',
-          phutil_tag(
-            'a',
-            array(
-              'href' => $service->getURI(),
-            ),
-            $service->getName())));
-    }
-
     return id(new PHUIObjectBoxView())
       ->setHeader($header)
+      ->setBackground(PHUIObjectBoxView::BLUE_PROPERTY)
       ->setTable($table);
   }
 

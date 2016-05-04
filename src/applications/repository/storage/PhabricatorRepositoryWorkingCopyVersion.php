@@ -7,6 +7,8 @@ final class PhabricatorRepositoryWorkingCopyVersion
   protected $devicePHID;
   protected $repositoryVersion;
   protected $isWriting;
+  protected $lockOwner;
+  protected $writeProperties;
 
   protected function getConfiguration() {
     return array(
@@ -14,6 +16,8 @@ final class PhabricatorRepositoryWorkingCopyVersion
       self::CONFIG_COLUMN_SCHEMA => array(
         'repositoryVersion' => 'uint32',
         'isWriting' => 'bool',
+        'writeProperties' => 'text?',
+        'lockOwner' => 'text255?',
       ),
       self::CONFIG_KEY_SCHEMA => array(
         'key_workingcopy' => array(
@@ -66,24 +70,34 @@ final class PhabricatorRepositoryWorkingCopyVersion
    * lock is released by default. This is a durable lock which stays locked
    * by default.
    */
-  public static function willWrite($repository_phid, $device_phid) {
+  public static function willWrite(
+    AphrontDatabaseConnection $locked_connection,
+    $repository_phid,
+    $device_phid,
+    array $write_properties,
+    $lock_owner) {
+
     $version = new self();
-    $conn_w = $version->establishConnection('w');
     $table = $version->getTableName();
 
     queryfx(
-      $conn_w,
+      $locked_connection,
       'INSERT INTO %T
-        (repositoryPHID, devicePHID, repositoryVersion, isWriting)
+        (repositoryPHID, devicePHID, repositoryVersion, isWriting,
+          writeProperties, lockOwner)
         VALUES
-        (%s, %s, %d, %d)
+        (%s, %s, %d, %d, %s, %s)
         ON DUPLICATE KEY UPDATE
-          isWriting = VALUES(isWriting)',
+          isWriting = VALUES(isWriting),
+          writeProperties = VALUES(writeProperties),
+          lockOwner = VALUES(lockOwner)',
       $table,
       $repository_phid,
       $device_phid,
+      0,
       1,
-      1);
+      phutil_json_encode($write_properties),
+      $lock_owner);
   }
 
 
@@ -94,24 +108,31 @@ final class PhabricatorRepositoryWorkingCopyVersion
     $repository_phid,
     $device_phid,
     $old_version,
-    $new_version) {
+    $new_version,
+    $lock_owner) {
+
     $version = new self();
     $conn_w = $version->establishConnection('w');
     $table = $version->getTableName();
 
     queryfx(
       $conn_w,
-      'UPDATE %T SET repositoryVersion = %d, isWriting = 0
+      'UPDATE %T SET
+          repositoryVersion = %d,
+          isWriting = 0,
+          lockOwner = NULL
         WHERE
           repositoryPHID = %s AND
           devicePHID = %s AND
           repositoryVersion = %d AND
-          isWriting = 1',
+          isWriting = 1 AND
+          lockOwner = %s',
       $table,
       $new_version,
       $repository_phid,
       $device_phid,
-      $old_version);
+      $old_version,
+      $lock_owner);
   }
 
 
@@ -122,6 +143,7 @@ final class PhabricatorRepositoryWorkingCopyVersion
     $repository_phid,
     $device_phid,
     $new_version) {
+
     $version = new self();
     $conn_w = $version->establishConnection('w');
     $table = $version->getTableName();
@@ -141,5 +163,24 @@ final class PhabricatorRepositoryWorkingCopyVersion
       0);
   }
 
+
+  /**
+   * Explicitly demote a device.
+   */
+  public static function demoteDevice(
+    $repository_phid,
+    $device_phid) {
+
+    $version = new self();
+    $conn_w = $version->establishConnection('w');
+    $table = $version->getTableName();
+
+    queryfx(
+      $conn_w,
+      'DELETE FROM %T WHERE repositoryPHID = %s AND devicePHID = %s',
+      $table,
+      $repository_phid,
+      $device_phid);
+  }
 
 }

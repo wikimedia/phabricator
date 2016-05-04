@@ -538,10 +538,39 @@ final class DiffusionServeController extends DiffusionController {
     $command = csprintf('%s', $bin);
     $command = PhabricatorDaemon::sudoCommandAsDaemonUser($command);
 
-    list($err, $stdout, $stderr) = id(new ExecFuture('%C', $command))
-      ->setEnv($env, true)
-      ->write($input)
-      ->resolve();
+    $unguarded = AphrontWriteGuard::beginScopedUnguardedWrites();
+
+    $cluster_engine = id(new DiffusionRepositoryClusterEngine())
+      ->setViewer($viewer)
+      ->setRepository($repository);
+
+    $did_write_lock = false;
+    if ($this->isReadOnlyRequest($repository)) {
+      $cluster_engine->synchronizeWorkingCopyBeforeRead();
+    } else {
+      $did_write_lock = true;
+      $cluster_engine->synchronizeWorkingCopyBeforeWrite();
+    }
+
+    $caught = null;
+    try {
+      list($err, $stdout, $stderr) = id(new ExecFuture('%C', $command))
+        ->setEnv($env, true)
+        ->write($input)
+        ->resolve();
+    } catch (Exception $ex) {
+      $caught = $ex;
+    }
+
+    if ($did_write_lock) {
+      $cluster_engine->synchronizeWorkingCopyAfterWrite();
+    }
+
+    unset($unguarded);
+
+    if ($caught) {
+      throw $caught;
+    }
 
     if ($err) {
       if ($this->isValidGitShallowCloneResponse($stdout, $stderr)) {
