@@ -12,3 +12,7 @@
 .diffusion-readme-view .phui-document-container {
   border: none;
 }
+
+.diffusion-readme-view {
+	font: 13px/18px "Menlo", "Consolas", "Monaco", monospace;
+}
