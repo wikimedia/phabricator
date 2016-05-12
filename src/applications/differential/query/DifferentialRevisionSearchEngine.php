@@ -219,10 +219,14 @@ final class DifferentialRevisionSearchEngine
 
     if ($this->requireViewer()->isLoggedIn()) {
       $names['active'] = pht('Active Revisions');
+      $names['review'] = pht('Needs Review');
       $names['authored'] = pht('Authored');
     }
 
     $names['all'] = pht('All Revisions');
+    $names['open'] = pht('Open Revisions');
+    $names['merged'] = pht('Merged Revisions');
+    $names['abandoned'] = pht('Abandoned Revisions');
 
     return $names;
   }
@@ -234,6 +238,9 @@ final class DifferentialRevisionSearchEngine
     $viewer = $this->requireViewer();
 
     switch ($query_key) {
+      case 'review':
+        return $query
+          ->setParameter('status', DifferentialRevisionQuery::STATUS_NEEDS_REVIEW);
       case 'active':
         return $query
           ->setParameter('responsiblePHIDs', array($viewer->getPHID()))
@@ -243,6 +250,15 @@ final class DifferentialRevisionSearchEngine
           ->setParameter('authorPHIDs', array($viewer->getPHID()));
       case 'all':
         return $query;
+      case 'open':
+        return $query
+          ->setParameter('status', DifferentialRevisionQuery::STATUS_OPEN);
+      case 'merged':
+        return $query
+          ->setParameter('status', DifferentialRevisionQuery::STATUS_CLOSED);
+      case 'abandoned':
+        return $query
+          ->setParameter('status', DifferentialRevisionQuery::STATUS_ABANDONED);
     }
 
     return parent::buildSavedQueryFromBuiltin($query_key);
