@@ -1,4 +1,5 @@
 {
   "phabricator.uri": "https://phabricator.wikimedia.org/",
-  "load": ["src/"]
+  "load": ["src/"],
+  "base": "arc:amended, git:HEAD^"
 }
