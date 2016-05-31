@@ -89,7 +89,7 @@ final class PhabricatorFileDataController extends PhabricatorFileController {
           $mime_type = 'text/plain; charset=utf-8';
       }
       $response->setMimeType($mime_type);
-      Header("Content-Disposition: inline; ".$file->getName());
+      header('Content-Disposition: inline; '.$file->getName());
     } else {
       if (!$request->isHTTPPost() && !$is_alternate_domain && !$is_lfs) {
         // NOTE: Require POST to download files from the primary domain. We'd
