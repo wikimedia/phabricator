@@ -36,6 +36,12 @@ final class PhabricatorProjectProfilePanelEngine
       ->setBuiltinKey(PhabricatorProject::PANEL_SUBPROJECTS)
       ->setPanelKey(PhabricatorProjectSubprojectsProfilePanel::PANELKEY);
 
+    if (class_exists('PhabricatorMilestoneNavProfilePanel')) {
+      $panels[] = $this->newPanel()
+        ->setBuiltinKey(PhabricatorMilestoneNavProfilePanel::PANELKEY)
+        ->setPanelKey(PhabricatorMilestoneNavProfilePanel::PANELKEY);
+    }
+
     $panels[] = $this->newPanel()
       ->setBuiltinKey(PhabricatorProject::PANEL_MANAGE)
       ->setPanelKey(PhabricatorProjectManageProfilePanel::PANELKEY);
