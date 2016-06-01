@@ -494,9 +494,16 @@ final class DifferentialDiff
         $results['repository.phid'] = $repo->getPHID();
         $results['repository.vcs'] = $repo->getVersionControlSystem();
         $results['repository.uri'] = $repo->getPublicCloneURI();
-
+        $results['repository.defaultbranch'] = $repo->getDefaultBranch();
         $results['repository.staging.uri'] = $repo->getStagingURI();
         $results['repository.staging.ref'] = $this->getStagingRef();
+        $cloneuri = strlen($results['repository.staging.uri'])
+                    ? $results['repository.staging.uri']
+                    : $results['repository.uri'];
+        $results['repository.clone.ref'] = $results['repository.staging.ref'];
+        $results['repository.clone.uri'] = $cloneuri;
+        $results['repository.clone.name'] = $repo->getCloneName();
+        $results['repository.clone.baseuri'] = dirname($cloneuri);
       }
     }
 
@@ -521,6 +528,13 @@ final class DifferentialDiff
         pht('The URI of the staging repository.'),
       'repository.staging.ref' =>
         pht('The ref name for this change in the staging repository.'),
+      'repository.clone.baseuri' =>
+        pht('The repository base URI, excluding the "Short Name"'),
+      'repository.clone.uri' =>
+        pht('Best clone uri, equal to one of repository.staging.uri or '.
+            'repository.uri, whichever is available.'),
+      'repository.clone.ref' =>
+        pht('A commit identifier or a reference to a commit to check out.'),
     );
   }
 

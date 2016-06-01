@@ -393,7 +393,11 @@ final class PhabricatorRepositoryCommit
     $results['repository.phid'] = $repo->getPHID();
     $results['repository.vcs'] = $repo->getVersionControlSystem();
     $results['repository.uri'] = $repo->getPublicCloneURI();
-
+    $results['repository.clone.uri'] = $results['repository.uri'];
+    $results['repository.clone.name'] = $repo->getCloneName();
+    $results['repository.clone.baseuri'] = dirname($results['repository.uri']);
+    $results['repository.clone.branch'] = $repo->getDefaultBranch();
+    $results['repository.clone.ref'] = $this->getCommitIdentifier();
     return $results;
   }
 
@@ -408,6 +412,15 @@ final class PhabricatorRepositoryCommit
         pht('The version control system, either "svn", "hg" or "git".'),
       'repository.uri' =>
         pht('The URI to clone or checkout the repository from.'),
+      'repository.clone.name' =>
+        pht('The Short Name of the repository in phabricator.'),
+      'repository.clone.baseuri' =>
+        pht('The repository base URI, excluding the "Short Name"'),
+      'repository.clone.uri' =>
+        pht('Best clone uri, equal to one of repository.staging.uri or '.
+            'repository.uri, whichever is available.'),
+      'repository.clone.ref' =>
+        pht('A commit identifier or a reference to a commit to check out.'),
     );
   }
 

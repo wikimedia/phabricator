@@ -206,7 +206,8 @@ abstract class HarbormasterBuildStepImplementation extends Phobject {
     $argv = array();
     foreach ($matches['name'] as $name) {
       if (!array_key_exists($name, $variables)) {
-        throw new Exception(pht("No such variable '%s'!", $name));
+        $argv[] = '';
+        continue;
       }
       $argv[] = $variables[$name];
     }
