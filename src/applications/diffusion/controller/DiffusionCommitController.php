@@ -966,7 +966,7 @@ final class DiffusionCommitController extends DiffusionController {
 
     if (class_exists('CustomGithubDownloadLinks')) {
       CustomGithubDownloadLinks::AddActionLinksToCurtain(
-        $repository, $id, $curtain);
+        $repository, $identifier, $curtain);
     }
 
     require_celerity_resource('phabricator-object-selector-css');
