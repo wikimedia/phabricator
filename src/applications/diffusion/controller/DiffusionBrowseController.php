@@ -1676,6 +1676,11 @@ final class DiffusionBrowseController extends DiffusionController {
         'action' => 'history',
       ));
 
+    if (class_exists('CustomGithubDownloadLinks')) {
+      CustomGithubDownloadLinks::addActionsToCurtainFromRequest(
+        $drequest, $curtain);
+    }
+
     $curtain->addAction(
       id(new PhabricatorActionView())
         ->setName(pht('View History'))

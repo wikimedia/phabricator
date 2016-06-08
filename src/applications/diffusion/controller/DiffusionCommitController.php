@@ -963,6 +963,11 @@ final class DiffusionCommitController extends DiffusionController {
       ->setWorkflow(!$can_edit);
     $curtain->addAction($action);
 
+    if (class_exists('CustomGithubDownloadLinks')) {
+      CustomGithubDownloadLinks::AddActionLinksToCurtain(
+        $repository, $id, $curtain);
+    }
+
     require_celerity_resource('phabricator-object-selector-css');
     require_celerity_resource('javelin-behavior-phabricator-object-selector');
 

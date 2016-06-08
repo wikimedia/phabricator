@@ -257,6 +257,11 @@ final class DiffusionRepositoryController extends DiffusionController {
         ->setIcon('fa-cogs')
         ->setHref($edit_uri));
 
+    if (class_exists('CustomGithubDownloadLinks')) {
+      CustomGithubDownloadLinks::AddActionLinksToCurtain(
+        $repository, $repository->getDefaultBranch(), $curtain);
+    }
+
     if ($repository->isHosted()) {
       $push_uri = $this->getApplicationURI(
         'pushlog/?repositories='.$repository->getMonogram());
