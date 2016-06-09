@@ -139,6 +139,7 @@ final class PhabricatorRepositoryDiscoveryEngine
         array(
           PhabricatorRepositoryRefCursor::TYPE_BRANCH,
         ))
+      ->withPrefixes('refs/changes/')
       ->execute();
 
     if (!$branches) {
