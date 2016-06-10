@@ -940,6 +940,9 @@ final class DiffusionCommitController extends DiffusionController {
     return $panel;
   }
 
+ /**
+  * @phutil-external-symbol class CustomGithubDownloadLinks
+  */
   private function buildCurtain(
     PhabricatorRepositoryCommit $commit,
     PhabricatorRepository $repository) {

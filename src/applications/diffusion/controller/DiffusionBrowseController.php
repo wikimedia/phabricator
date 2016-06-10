@@ -1666,6 +1666,10 @@ final class DiffusionBrowseController extends DiffusionController {
     return $header;
   }
 
+ /**
+  * @phutil-external-symbol class CustomGithubDownloadLinks
+  */
+
   protected function buildCurtain(DiffusionRequest $drequest) {
     $viewer = $this->getViewer();
 

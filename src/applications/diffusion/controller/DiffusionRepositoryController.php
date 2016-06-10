@@ -245,6 +245,9 @@ final class DiffusionRepositoryController extends DiffusionController {
     return $header;
   }
 
+ /**
+  * @phutil-external-symbol class CustomGithubDownloadLinks
+  */
   private function buildCurtain(PhabricatorRepository $repository) {
     $viewer = $this->getViewer();
 

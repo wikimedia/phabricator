@@ -13,6 +13,9 @@ final class PhabricatorProjectProfilePanelEngine
     return "/project/{$id}/panel/{$path}";
   }
 
+ /**
+  * @phutil-external-symbol class PhabricatorMilestoneNavProfilePanel
+  */
   protected function getBuiltinProfilePanels($object) {
     $panels = array();
 
