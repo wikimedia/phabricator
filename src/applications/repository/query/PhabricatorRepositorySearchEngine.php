@@ -163,30 +163,26 @@ final class PhabricatorRepositorySearchEngine
       $item = id(new PHUIObjectItemView())
         ->setUser($viewer)
         ->setObject($repository)
-        ->setHeader($repository->getName())
         ->setObjectName($repository->getMonogram())
-        ->setHref($repository->getURI());
+        ->setHeader($repository->getName())
+        ->setHref($repository->getURI())
+        ->setTitleText($repository->getRepositorySlug());
 
       $commit = $repository->getMostRecentCommit();
       if ($commit) {
-        $commit_link = phutil_tag(
-          'a',
+        $item->setSubhead(
           array(
-            'href' => $commit->getURI(),
-          ),
-          pht(
-            '%s: %s',
-            $commit->getLocalName(),
-            $commit->getSummary()));
+            phutil_tag('span', array('class' => 'sha1'),
+            $commit->getLocalName()),
+            phutil_tag('span', array(), ': '),
+            phutil_tag('a', array('href' => $commit->getURI()),
+            $commit->getSummary()),
+          ));
 
-        $item->setSubhead($commit_link);
-        $item->setEpoch($commit->getEpoch());
+
+        $item->setEpoch($commit->getEpoch(), PHUIObjectItemView::AGE_STALE);
       }
 
-      $item->addIcon(
-        'none',
-        PhabricatorRepositoryType::getNameForRepositoryType(
-          $repository->getVersionControlSystem()));
 
       $size = $repository->getCommitCount();
       if ($size) {
@@ -195,7 +191,7 @@ final class PhabricatorRepositorySearchEngine
             'action' => 'history',
           ));
 
-        $item->addAttribute(
+        $item->addByline(
           phutil_tag(
             'a',
             array(
@@ -203,7 +199,7 @@ final class PhabricatorRepositorySearchEngine
             ),
             pht('%s Commit(s)', new PhutilNumber($size))));
       } else {
-        $item->addAttribute(pht('No Commits'));
+        $item->addByline(pht('No Commits'));
       }
 
       $project_handles = array_select_keys(
