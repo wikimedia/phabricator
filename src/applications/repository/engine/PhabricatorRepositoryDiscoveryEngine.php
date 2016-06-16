@@ -140,6 +140,7 @@ final class PhabricatorRepositoryDiscoveryEngine
           PhabricatorRepositoryRefCursor::TYPE_BRANCH,
         ))
       ->withPrefixes('refs/changes/')
+      ->withPrefixes('refs/meta/')
       ->execute();
 
     if (!$branches) {
