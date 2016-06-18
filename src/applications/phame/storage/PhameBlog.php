@@ -9,7 +9,8 @@ final class PhameBlog extends PhameDAO
     PhabricatorProjectInterface,
     PhabricatorDestructibleInterface,
     PhabricatorApplicationTransactionInterface,
-    PhabricatorConduitResultInterface {
+    PhabricatorConduitResultInterface,
+    PhabricatorFulltextInterface {
 
   const MARKUP_FIELD_DESCRIPTION = 'markup:description';
 
@@ -23,8 +24,10 @@ final class PhameBlog extends PhameDAO
   protected $status;
   protected $mailKey;
   protected $profileImagePHID;
+  protected $headerImagePHID;
 
   private $profileImageFile = self::ATTACHABLE;
+  private $headerImageFile = self::ATTACHABLE;
 
   const STATUS_ACTIVE = 'active';
   const STATUS_ARCHIVED = 'archived';
@@ -42,6 +45,7 @@ final class PhameBlog extends PhameDAO
         'status' => 'text32',
         'mailKey' => 'bytes20',
         'profileImagePHID' => 'phid?',
+        'headerImagePHID' => 'phid?',
 
         // T6203/NULLABILITY
         // These policies should always be non-null.
@@ -211,6 +215,19 @@ final class PhameBlog extends PhameDAO
     return $this->assertAttached($this->profileImageFile);
   }
 
+  public function getHeaderImageURI() {
+    return $this->getHeaderImageFile()->getBestURI();
+  }
+
+  public function attachHeaderImageFile(PhabricatorFile $file) {
+    $this->headerImageFile = $file;
+    return $this;
+  }
+
+  public function getHeaderImageFile() {
+    return $this->assertAttached($this->headerImageFile);
+  }
+
 
 /* -(  PhabricatorPolicyInterface Implementation  )-------------------------- */
 
@@ -369,5 +386,11 @@ final class PhameBlog extends PhameDAO
     return array();
   }
 
+
+/* -(  PhabricatorFulltextInterface  )--------------------------------------- */
+
+  public function newFulltextEngine() {
+    return new PhameBlogFulltextEngine();
+  }
 
 }
