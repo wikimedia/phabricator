@@ -1626,11 +1626,10 @@ final class PhabricatorRepository extends PhabricatorRepositoryDAO
       return false;
     }
 
-    if ($this->isGit() || $this->isHg()) {
-      return true;
-    }
+    // In Git and Mercurial, ref deletions and rewrites are dangerous.
+    // In Subversion, editing revprops is dangerous.
 
-    return false;
+    return true;
   }
 
   public function shouldAllowDangerousChanges() {
