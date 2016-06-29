@@ -6,17 +6,6 @@
  */
 final class DiffusionLowLevelGitRefQuery extends DiffusionLowLevelQuery {
 
-  private $prefixes = array();
-
-  public function withPrefixes($prefixes) {
-    if (!is_array($prefixes)) {
-      $prefixes = func_get_args();
-    }
-    $prefixes = $this->prefixes + $prefixes;
-    $this->prefixes = array_values(array_unique($prefixes));
-    return $this;
-  }
-
   private $refTypes;
 
   public function withRefTypes(array $ref_types) {
@@ -42,12 +31,7 @@ final class DiffusionLowLevelGitRefQuery extends DiffusionLowLevelQuery {
 
     $repository = $this->getRepository();
 
-    $prefixes = $this->prefixes;
-
-    $any = ($with_tags || $with_branches || count($prefixes));
-    if (!$any) {
-      throw new Exception(pht('Specify types of refs to query.'));
-    }
+    $prefixes = array();
 
     if ($repository->isWorkingCopyBare()) {
       $branch_prefix = 'refs/heads/';
@@ -89,6 +73,12 @@ final class DiffusionLowLevelGitRefQuery extends DiffusionLowLevelQuery {
     $remote_prefix = 'refs/remotes/';
     $remote_len = strlen($remote_prefix);
 
+    $ignore_refs = array(
+        'refs/cache-automerge/' => true,
+        'refs/notes/' => true,
+        'refs/drafts/' => true,
+    );
+
     // NOTE: Although git supports --count, we can't apply any offset or
     // limit logic until the very end because we may encounter a HEAD which
     // we want to discard.
@@ -97,7 +87,6 @@ final class DiffusionLowLevelGitRefQuery extends DiffusionLowLevelQuery {
     $results = array();
     foreach ($lines as $line) {
       $fields = $this->extractFields($line);
-
       $refname = $fields['refname'];
       if (!strncmp($refname, $branch_prefix, $branch_len)) {
         $short = substr($refname, $branch_len);
@@ -112,6 +101,15 @@ final class DiffusionLowLevelGitRefQuery extends DiffusionLowLevelQuery {
         // state and they may be out of date, so ignore them.
         continue;
       } else {
+        $ref_parts = explode('/', $refname, 3);
+        $ref_prefix = count($ref_parts > 2)
+                    ? "$ref_parts[0]/$ref_parts[1]/"
+                    : false;
+
+        if ($ref_prefix && isset($ignore_refs[$ref_prefix])) {
+          continue;
+        }
+
         $short = $refname;
         $type = $type_ref;
       }
