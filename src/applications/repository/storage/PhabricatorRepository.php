@@ -1291,7 +1291,12 @@ final class PhabricatorRepository extends PhabricatorRepositoryDAO
     if (!$clone_uris) {
       return null;
     }
-
+    foreach($clone_uris as $uri) {
+      $uri_str = (string)$uri->getEffectiveURI();
+      if (substr($uri_str,0,4) == "http") {
+        return $uri;
+      }
+    }
     return head($clone_uris)->getEffectiveURI();
   }
 
