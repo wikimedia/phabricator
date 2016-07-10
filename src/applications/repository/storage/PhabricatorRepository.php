@@ -2409,6 +2409,12 @@ final class PhabricatorRepository extends PhabricatorRepositoryDAO
         ->setKey('status')
         ->setType('string')
         ->setDescription(pht('Active or inactive status.')),
+      id(new PhabricatorConduitSearchFieldSpecification())
+        ->setKey('isImporting')
+        ->setType('bool')
+        ->setDescription(
+          pht(
+            'True if the repository is importing initial commits.')),
     );
   }
 
@@ -2419,6 +2425,7 @@ final class PhabricatorRepository extends PhabricatorRepositoryDAO
       'callsign' => $this->getCallsign(),
       'shortName' => $this->getRepositorySlug(),
       'status' => $this->getStatus(),
+      'isImporting' => (bool)$this->isImporting(),
     );
   }
 

@@ -998,6 +998,15 @@ final class DiffusionCommitController extends DiffusionController {
       ->setIcon('fa-download');
     $curtain->addAction($action);
 
+    $relationship_list = PhabricatorObjectRelationshipList::newForObject(
+      $viewer,
+      $commit);
+
+    $relationship_submenu = $relationship_list->newActionMenu();
+    if ($relationship_submenu) {
+      $curtain->addAction($relationship_submenu);
+    }
+
     return $curtain;
   }
 
@@ -1101,6 +1110,7 @@ final class DiffusionCommitController extends DiffusionController {
     array $changesets,
     $header,
     $info_view) {
+
     $drequest = $this->getDiffusionRequest();
     $viewer = $this->getViewer();
 
