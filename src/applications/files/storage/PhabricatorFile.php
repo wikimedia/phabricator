@@ -9,7 +9,7 @@
  *
  *   | name | Human readable filename.
  *   | authorPHID | User PHID of uploader.
- *   | ttl | Temporary file lifetime, in seconds.
+ *   | ttl | Temporary file expiry time, seconds after epoch (UNIX timestamp).
  *   | viewPolicy | File visibility policy.
  *   | isExplicitUpload | Used to show users files they explicitly uploaded.
  *   | canCDN | Allows the file to be cached and delivered over a CDN.
@@ -203,6 +203,10 @@ final class PhabricatorFile extends PhabricatorFileDAO
    * To solve these problems, we use file storage as a cache and reuse the
    * same file again if we've previously written it.
    *
+   * When a temporary file exists, its lifetime is extended to match the passed
+   * ttl parameter if necessary (including making the file permanent if no ttl
+   * is passed) so the file isn't unexpectedly deleted by the garbage collector.
+   *
    * NOTE: This method unguards writes.
    *
    * @param string  Raw file data.
@@ -221,6 +225,26 @@ final class PhabricatorFile extends PhabricatorFileDAO
       $unguarded = AphrontWriteGuard::beginScopedUnguardedWrites();
       $file = self::newFromFileData($data, $params);
       unset($unguarded);
+
+      return $file;
+    }
+
+    $desired_ttl = idx($params, 'ttl');
+    $current_ttl = $file->getTtl();
+    if ($current_ttl !== null) {
+      if ($desired_ttl === null) {
+        $file->setTtl(null);
+
+        $unguarded = AphrontWriteGuard::beginScopedUnguardedWrites();
+        $file->save();
+        unset($unguarded);
+      } else if ($desired_ttl > $current_ttl) {
+        $file->setTtl($desired_ttl);
+
+        $unguarded = AphrontWriteGuard::beginScopedUnguardedWrites();
+        $file->save();
+        unset($unguarded);
+      }
     }
 
     return $file;
@@ -965,7 +989,7 @@ final class PhabricatorFile extends PhabricatorFileDAO
     $builtins = mpull($builtins, null, 'getBuiltinFileKey');
 
     $specs = array();
-    foreach ($builtins as $key => $buitin) {
+    foreach ($builtins as $key => $builtin) {
       $specs[] = array(
         'originalPHID' => PhabricatorPHIDConstants::PHID_VOID,
         'transform'    => $key,

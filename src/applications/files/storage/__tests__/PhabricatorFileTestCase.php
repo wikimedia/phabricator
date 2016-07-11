@@ -384,6 +384,67 @@ final class PhabricatorFileTestCase extends PhabricatorTestCase {
     $this->assertEqual($ttl, $file->getTTL());
   }
 
+  public function testExtendFileTtl() {
+    $engine = new PhabricatorTestStorageEngine();
+
+    $data = Filesystem::readRandomCharacters(64);
+
+    $ttl = (time() + 60 * 60 * 24);
+
+    $params = array(
+      'name' => 'test.dat',
+      'ttl'  => ($ttl),
+      'storageEngines' => array(
+        $engine,
+      ),
+    );
+
+    $file = PhabricatorFile::newFromFileData($data, $params);
+
+    // Newly-generated IDs are ints, but come back from the DB as strings
+    $id = (string)$file->getID();
+
+    // Ensure the file has its life extended if necessary
+
+    $ttl = (time() + 60 * 60 * 24 * 2);
+    $params['ttl'] = $ttl;
+
+    $file = PhabricatorFile::buildFromFileDataOrHash($data, $params);
+
+    $this->assertEqual($id, $file->getID());
+    $this->assertEqual($ttl, $file->getTTL());
+
+    // Ensure the file's life is not shortened
+
+    $params['ttl'] = (time() + 60 * 60 * 24);
+
+    $file = PhabricatorFile::buildFromFileDataOrHash($data, $params);
+
+    // Newly-set expiry times are ints, but come back from the DB as strings
+    $ttl = (string)$ttl;
+    $this->assertEqual($id, $file->getID());
+    $this->assertEqual($ttl, $file->getTTL());
+
+    // Ensure the file is made permanent if necessary
+
+    $ttl = null;
+    $params['ttl'] = $ttl;
+
+    $file = PhabricatorFile::buildFromFileDataOrHash($data, $params);
+
+    $this->assertEqual($id, $file->getID());
+    $this->assertEqual($ttl, $file->getTTL());
+
+    // Ensure the file is not made temporary
+
+    $params['ttl'] = (time() + 60 * 60 * 24);
+
+    $file = PhabricatorFile::buildFromFileDataOrHash($data, $params);
+
+    $this->assertEqual($id, $file->getID());
+    $this->assertEqual($ttl, $file->getTTL());
+  }
+
   public function testFileTransformDelete() {
     // We want to test that a file deletes all its inbound transformation
     // records and outbound transformed derivatives when it is deleted.
