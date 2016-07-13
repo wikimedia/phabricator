@@ -124,7 +124,8 @@ final class PhabricatorPeopleProfileViewController
     $projects = id(new PhabricatorProjectQuery())
       ->setViewer($viewer)
       ->withMemberPHIDs(array($user->getPHID()))
-      ->withIcons(array('project','group'))
+      ->withIcons(
+        array('project','group','goal','account','language','server','tag'))
       ->needImages(true)
       ->withStatuses(
         array(
@@ -154,7 +155,7 @@ final class PhabricatorPeopleProfileViewController
               ->setTag('a')
               ->setIcon('fa-list-ul')
               ->setText(pht('View All'))
-              ->setHref('/project/?member='.$user->getPHID()));
+              ->setHref('/project/?member='.$user->getPHID().'&status=active'));
 
       }
 
