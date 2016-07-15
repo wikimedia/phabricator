@@ -30,30 +30,7 @@ final class ManiphestTaskDetailController extends ManiphestController {
       ->setViewer($viewer)
       ->setTargetObject($task);
 
-    $e_commit = ManiphestTaskHasCommitEdgeType::EDGECONST;
-    $e_rev    = ManiphestTaskHasRevisionEdgeType::EDGECONST;
-    $e_mock   = ManiphestTaskHasMockEdgeType::EDGECONST;
 
-    $phid = $task->getPHID();
-
-    $query = id(new PhabricatorEdgeQuery())
-      ->withSourcePHIDs(array($phid))
-      ->withEdgeTypes(
-        array(
-          $e_commit,
-          $e_rev,
-          $e_mock,
-        ));
-    $edges = idx($query->execute(), $phid);
-    $phids = array_fill_keys($query->getDestinationPHIDs(), true);
-
-    if ($task->getOwnerPHID()) {
-      $phids[$task->getOwnerPHID()] = true;
-    }
-    $phids[$task->getAuthorPHID()] = true;
-
-    $phids = array_keys($phids);
-    $handles = $viewer->loadHandles($phids);
 
     $timeline = $this->buildTransactionTimeline(
       $task,
@@ -65,7 +42,6 @@ final class ManiphestTaskDetailController extends ManiphestController {
       ->setBorder(true);
 
     $header = $this->buildHeaderView($task);
-    $details = $this->buildPropertyView($task, $field_list, $edges, $handles);
     $description = $this->buildDescriptionView($task);
     $curtain = $this->buildCurtain($task, $edit_engine);
 
@@ -84,10 +60,20 @@ final class ManiphestTaskDetailController extends ManiphestController {
         $timeline,
         $comment_view,
       ))
-      ->addPropertySection(pht('Description'), $description)
-      ->addPropertySection(pht('Details'), $details);
+      ->addPropertySection(pht('Description'), $description);
 
-    $graph_limit = 100;
+    $edge_types = array(
+      ManiphestTaskHasRevisionEdgeType::EDGECONST
+        => pht('Differential Revisions'),
+      ManiphestTaskHasCommitEdgeType::EDGECONST
+        => pht('Commits'),
+      ManiphestTaskHasMockEdgeType::EDGECONST
+        => pht('Pholio Mocks'),
+
+    );
+
+
+    $graph_limit = 50;
     $task_graph = id(new ManiphestTaskGraph())
       ->setViewer($viewer)
       ->setSeedPHID($task->getPHID())
@@ -95,19 +81,36 @@ final class ManiphestTaskDetailController extends ManiphestController {
       ->loadGraph();
     if (!$task_graph->isEmpty()) {
       if ($task_graph->isOverLimit()) {
-        $message = pht(
-          'Task graph too large to display (this task is connected to '.
-          'more than %s other tasks).',
-          $graph_limit);
-        $message = phutil_tag('em', array(), $message);
-        $graph_table = id(new PHUIPropertyListView())
-          ->addTextContent($message);
+        $edge_types += array(
+          ManiphestTaskDependedOnByTaskEdgeType::EDGECONST
+            => pht('Parent Tasks'),
+          ManiphestTaskDependsOnTaskEdgeType::EDGECONST
+            => pht('Subtasks'),
+        );
       } else {
         $graph_table = $task_graph->newGraphTable();
+        $view->addPropertySection(pht('Task Graph'), $graph_table);
       }
-
-      $view->addPropertySection(pht('Task Graph'), $graph_table);
     }
+
+    $phid = $task->getPHID();
+
+    $query = id(new PhabricatorEdgeQuery())
+      ->withSourcePHIDs(array($phid))
+      ->withEdgeTypes(array_keys($edge_types));
+    $edges = idx($query->execute(), $phid);
+    $phids = array_fill_keys($query->getDestinationPHIDs(), true);
+
+    if ($task->getOwnerPHID()) {
+      $phids[$task->getOwnerPHID()] = true;
+    }
+    $phids[$task->getAuthorPHID()] = true;
+
+    $phids = array_keys($phids);
+    $handles = $viewer->loadHandles($phids);
+    $details = $this->buildPropertyView(
+      $task, $field_list, $edge_types, $edges, $handles);
+    $view->addPropertySection(pht('Details'), $details);
 
     return $this->newPage()
       ->setTitle($title)
@@ -276,6 +279,7 @@ final class ManiphestTaskDetailController extends ManiphestController {
   private function buildPropertyView(
     ManiphestTask $task,
     PhabricatorCustomFieldList $field_list,
+    array $edge_types,
     array $edges,
     $handles) {
 
@@ -303,13 +307,6 @@ final class ManiphestTaskDetailController extends ManiphestController {
             $source));
       }
     }
-
-    $edge_types = array(
-      ManiphestTaskHasRevisionEdgeType::EDGECONST
-        => pht('Differential Revisions'),
-      ManiphestTaskHasMockEdgeType::EDGECONST
-        => pht('Pholio Mocks'),
-    );
 
     $revisions_commits = array();
 
