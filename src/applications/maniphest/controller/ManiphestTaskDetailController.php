@@ -65,13 +65,11 @@ final class ManiphestTaskDetailController extends ManiphestController {
     $edge_types = array(
       ManiphestTaskHasRevisionEdgeType::EDGECONST
         => pht('Differential Revisions'),
-      ManiphestTaskHasCommitEdgeType::EDGECONST
-        => pht('Commits'),
+      ManiphestTaskHasCommitEdgeType::EDGECONST=>true,
       ManiphestTaskHasMockEdgeType::EDGECONST
         => pht('Pholio Mocks'),
 
     );
-
 
     $graph_limit = 50;
     $task_graph = id(new ManiphestTaskGraph())
@@ -100,7 +98,7 @@ final class ManiphestTaskDetailController extends ManiphestController {
       ->withEdgeTypes(array_keys($edge_types));
     $edges = idx($query->execute(), $phid);
     $phids = array_fill_keys($query->getDestinationPHIDs(), true);
-
+    unset($edge_types[ManiphestTaskHasCommitEdgeType::EDGECONST]);
     if ($task->getOwnerPHID()) {
       $phids[$task->getOwnerPHID()] = true;
     }
