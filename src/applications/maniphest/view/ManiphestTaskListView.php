@@ -100,7 +100,7 @@ final class ManiphestTaskListView extends ManiphestView {
 
       $item->addAttribute(
         id(new PHUIHandleTagListView())
-          ->setLimit(4)
+          ->setLimit(12)
           ->setNoDataString(pht('No Projects'))
           ->setSlim(true)
           ->setHandles($project_handles));
