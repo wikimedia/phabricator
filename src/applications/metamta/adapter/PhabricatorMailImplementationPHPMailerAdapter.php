@@ -4,7 +4,10 @@ final class PhabricatorMailImplementationPHPMailerAdapter
   extends PhabricatorMailImplementationAdapter {
 
   private $mailer;
-
+  private $suppress_send = false;
+  private $can_suppress_send = false;
+  // suppress outgoing mail from these users:
+  private $suppress_mail_from = array('Phabricator_maintenance');
   /**
    * @phutil-external-symbol class PHPMailer
    */
@@ -14,7 +17,9 @@ final class PhabricatorMailImplementationPHPMailerAdapter
     require_once $root.'/externals/phpmailer/class.phpmailer.php';
     $this->mailer = new PHPMailer($use_exceptions = true);
     $this->mailer->CharSet = 'utf-8';
-
+    if (PhabricatorEnv::getEnvConfig('metamta.can-suppress-mail')) {
+      $this->can_suppress_send = true;
+    }
     $encoding = PhabricatorEnv::getEnvConfig('phpmailer.smtp-encoding', '8bit');
     $this->mailer->Encoding = $encoding;
 
@@ -54,6 +59,9 @@ final class PhabricatorMailImplementationPHPMailerAdapter
   }
 
   public function setFrom($email, $name = '') {
+    if (in_array($name, $this->suppress_mail_from, true)) {
+      $this->suppress_send = true;
+    }
     $this->mailer->SetFrom($email, $name, $crazy_side_effects = false);
     return $this;
   }
@@ -117,6 +125,10 @@ final class PhabricatorMailImplementationPHPMailerAdapter
   }
 
   public function send() {
+    if ($this->can_suppress_send && $this->suppress_send) {
+        phlog('Suppressing email from '.$this->mailer->FromName);
+      return true;
+    }
     return $this->mailer->Send();
   }
 
