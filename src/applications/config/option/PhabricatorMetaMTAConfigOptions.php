@@ -245,6 +245,18 @@ EODOC
           pht(
             'Controls whether Phabricator sends email "From" users.'))
         ->setDescription($send_as_user_desc),
+      $this->newOption('metamta.can-suppress-mail', 'bool', false)
+      ->setBoolOptions(
+        array(
+          pht('Allow suppressing email from certain users'),
+          pht('Never suppress email')
+        ))
+      ->setSummary(
+        pht(
+        'Controll whether Phabricator allows the suppression of email from '.
+        '"maintenance" users.'
+        ))
+      ->setDescription(pht('Suppress mail from maintenance users.')),
       $this->newOption(
         'metamta.reply-handler-domain',
         'string',
