@@ -23,9 +23,9 @@ final class PhabricatorCalendarEventViewController
     }
 
     if ($sequence) {
-      $result = $this->getEventAtIndexForGhostEvent(
+      $result = $this->getEventAtIndexForGhostPHID(
         $viewer,
-        $event,
+        $event->getPHID(),
         $sequence);
 
       if ($result) {
@@ -116,7 +116,7 @@ final class PhabricatorCalendarEventViewController
     $icon = $is_cancelled ? ('fa-ban') : ('fa-check');
     $color = $is_cancelled ? ('red') : ('bluegrey');
     $status = $is_cancelled ? pht('Cancelled') : pht('Active');
-    $is_recurring = $event->getIsRecurring();
+
     $invite_status = $event->getUserInviteStatus($viewer->getPHID());
     $status_invited = PhabricatorCalendarEventInvitee::STATUS_INVITED;
     $is_invite_pending = ($invite_status == $status_invited);
@@ -127,43 +127,6 @@ final class PhabricatorCalendarEventViewController
       ->setStatus($icon, $color, $status)
       ->setPolicyObject($event)
       ->setHeaderIcon('fa-calendar');
-
-      if ($is_recurring) {
-
-          $index = $event->getSequenceIndex();
-          $prev_index = $index - 1;
-          $next_index = $index + 1;
-          $prev_uri = "/E{$id}/{$prev_index}";
-          $next_uri = "/E{$id}/{$next_index}";
-          $button_bar = new PHUIButtonBarView();
-
-          $left_icon = id(new PHUIIconView())
-              ->setIcon('fa-chevron-left bluegrey');
-          $left = id(new PHUIButtonView())
-            ->setTag('a')
-            ->setColor(PHUIButtonView::GREY)
-            ->setHref($prev_uri)
-            ->setTitle(pht('Previous Recurrence'))
-            ->setIcon($left_icon);
-          if ($prev_index < 1) {
-              $left->setDisabled(true)
-              ->setHref('');
-
-          }
-
-          $right_icon = id(new PHUIIconView())
-              ->setIcon('fa-chevron-right bluegrey');
-          $right = id(new PHUIButtonView())
-            ->setTag('a')
-            ->setColor(PHUIButtonView::GREY)
-            ->setHref($next_uri)
-            ->setTitle(pht('Next Recurrence'))
-            ->setIcon($right_icon);
-
-          $button_bar->addButton($left);
-          $button_bar->addButton($right);
-          $header->setButtonBar($button_bar);
-      }
 
     if ($is_invite_pending) {
       $decline_button = id(new PHUIButtonView())

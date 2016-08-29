@@ -292,21 +292,8 @@ final class PhabricatorCalendarEvent extends PhabricatorCalendarDAO
     $frequency = $this->getFrequencyUnit();
     $modify_key = '+'.$sequence_index.' '.$frequency;
 
-    if ($this->instanceOfEventPHID) {
-        $event = id(new PhabricatorCalendarEventQuery())
-          ->setViewer($actor)
-          ->withPHIDs(array($this->instanceOfEventPHID))
-          ->requireCapabilities(
-            array(
-              PhabricatorPolicyCapability::CAN_VIEW,
-              PhabricatorPolicyCapability::CAN_EDIT,
-            ))
-        ->executeOne();
-        return $event->generateNthGhost($sequence_index, $actor);
-    }
-    $instance_of = ($this->instanceOfEventPHID) ?
-      $this->instanceOfEventPHID : $this->getPHID();
-
+    $instance_of = ($this->getPHID()) ?
+      $this->getPHID() : $this->instanceOfEventPHID;
 
     $date = $this->dateFrom;
     $date_time = PhabricatorTime::getDateTimeFromEpoch($date, $actor);
@@ -328,34 +315,6 @@ final class PhabricatorCalendarEvent extends PhabricatorCalendarDAO
       ->setEditPolicy($edit_policy);
 
     return $ghost_event;
-  }
-
-  protected function getEventAtIndexForGhostEvent($viewer, $event, $index) {
-      $phid = $event->getInstanceOfEventPHID();
-      if (!$phid) {
-          $phid = $event->getPHID();
-      }
-      return $this->getEventAtIndexForGhostPHID($viewer, $phid, $index);
-  }
-
-  protected function getEventAtIndexForGhostPHID($viewer, $phid, $index) {
-    $result = id(new PhabricatorCalendarEventQuery())
-      ->setViewer($viewer)
-      ->withInstanceSequencePairs(
-        array(
-          array(
-            $phid,
-            $index,
-          ),
-        ))
-      ->requireCapabilities(
-        array(
-          PhabricatorPolicyCapability::CAN_VIEW,
-          PhabricatorPolicyCapability::CAN_EDIT,
-        ))
-      ->executeOne();
-
-    return $result;
   }
 
   public function getFrequencyUnit() {

@@ -30,15 +30,6 @@ abstract class PhabricatorCalendarController extends PhabricatorController {
     return $crumbs;
   }
 
-  protected function getEventAtIndexForGhostEvent($viewer, $event, $index) {
-      $phid = $event->getInstanceOfEventPHID();
-
-      if (!$phid) {
-          $phid = $event->getPHID();
-      }
-      return $this->getEventAtIndexForGhostPHID($viewer, $phid, $index);
-  }
-
   protected function getEventAtIndexForGhostPHID($viewer, $phid, $index) {
     $result = id(new PhabricatorCalendarEventQuery())
       ->setViewer($viewer)
