@@ -11,27 +11,23 @@ final class PhabricatorConfigListController
 
     $groups = PhabricatorApplicationConfigOptions::loadAll();
     $core_list = $this->buildConfigOptionsList($groups, 'core');
-    $apps_list = $this->buildConfigOptionsList($groups, 'apps');
 
-    $title = pht('Phabricator Configuration');
+    $title = pht('Core Configuration');
 
     $core = id(new PHUIObjectBoxView())
       ->setHeaderText($title)
+      ->setBackground(PHUIObjectBoxView::BLUE_PROPERTY)
       ->setObjectList($core_list);
-
-    $apps = id(new PHUIObjectBoxView())
-      ->setHeaderText(pht('Applications Configuration'))
-      ->setObjectList($apps_list);
 
     $crumbs = $this
       ->buildApplicationCrumbs()
-      ->addTextCrumb(pht('Config'), $this->getApplicationURI());
+      ->addTextCrumb(pht('Configuration'), $this->getApplicationURI())
+      ->addTextCrumb($title);
 
     $view = id(new PHUITwoColumnView())
       ->setNavigation($nav)
       ->setMainColumn(array(
         $core,
-        $apps,
       ));
 
     return $this->newPage()
@@ -51,7 +47,7 @@ final class PhabricatorConfigListController
           ->setHeader($group->getName())
           ->setHref('/config/group/'.$group->getKey().'/')
           ->addAttribute($group->getDescription())
-          ->setIcon($group->getIcon());
+          ->setImageIcon($group->getIcon());
         $list->addItem($item);
       }
     }

@@ -9,11 +9,11 @@ final class PhabricatorConfigWelcomeController
     $nav = $this->buildSideNavView();
     $nav->selectFilter('welcome/');
 
-    $title = pht('Welcome');
+    $title = pht('Installation Guide');
 
     $crumbs = $this
       ->buildApplicationCrumbs()
-      ->addTextCrumb(pht('Welcome'));
+      ->addTextCrumb($title);
 
     $view = id(new PHUITwoColumnView())
       ->setNavigation($nav)
@@ -358,7 +358,7 @@ final class PhabricatorConfigWelcomeController
     $quick_header = new PHUIRemarkupView(
       $viewer, pht('=Quick Start Guide'));
 
-    return id(new PHUIDocumentView())
+    $document = id(new PHUIDocumentViewPro())
       ->setHeader($header)
       ->setFluid(true)
       ->appendChild($setup_header)
@@ -367,6 +367,11 @@ final class PhabricatorConfigWelcomeController
       ->appendChild($explore)
       ->appendChild($quick_header)
       ->appendChild($quick);
+
+    return id(new PHUIBoxView())
+      ->setBorder(true)
+      ->appendChild($document)
+      ->addClass('mlb');
   }
 
   private function newItem(AphrontRequest $request, $icon, $content) {

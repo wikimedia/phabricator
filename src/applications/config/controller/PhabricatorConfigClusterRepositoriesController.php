@@ -43,7 +43,6 @@ final class PhabricatorConfigClusterRepositoriesController
 
     $all_repositories = id(new PhabricatorRepositoryQuery())
       ->setViewer($viewer)
-      ->withHosted(PhabricatorRepositoryQuery::HOSTED_PHABRICATOR)
       ->withTypes(
         array(
           PhabricatorRepositoryType::REPOSITORY_TYPE_GIT,
@@ -254,6 +253,7 @@ final class PhabricatorConfigClusterRepositoriesController
 
     return id(new PHUIObjectBoxView())
       ->setHeader($header)
+      ->setBackground(PHUIObjectBoxView::BLUE_PROPERTY)
       ->setTable($table);
   }
 

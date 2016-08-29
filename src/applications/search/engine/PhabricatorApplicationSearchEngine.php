@@ -713,50 +713,6 @@ abstract class PhabricatorApplicationSearchEngine extends Phobject {
 
 
   /**
-   * Read a list of project PHIDs from a request in a flexible way.
-   *
-   * @param AphrontRequest  Request to read user PHIDs from.
-   * @param string          Key to read in the request.
-   * @return list<phid>     List of projet PHIDs and selector functions.
-   * @task read
-   */
-  protected function readProjectsFromRequest(AphrontRequest $request, $key) {
-    $list = $this->readListFromRequest($request, $key);
-
-    $phids = array();
-    $slugs = array();
-    $project_type = PhabricatorProjectProjectPHIDType::TYPECONST;
-    foreach ($list as $item) {
-      $type = phid_get_type($item);
-      if ($type == $project_type) {
-        $phids[] = $item;
-      } else {
-        if (PhabricatorTypeaheadDatasource::isFunctionToken($item)) {
-          // If this is a function, pass it through unchanged; we'll evaluate
-          // it later.
-          $phids[] = $item;
-        } else {
-          $slugs[] = $item;
-        }
-      }
-    }
-
-    if ($slugs) {
-      $projects = id(new PhabricatorProjectQuery())
-        ->setViewer($this->requireViewer())
-        ->withSlugs($slugs)
-        ->execute();
-      foreach ($projects as $project) {
-        $phids[] = $project->getPHID();
-      }
-      $phids = array_unique($phids);
-    }
-
-    return $phids;
-  }
-
-
-  /**
    * Read a list of subscribers from a request in a flexible way.
    *
    * @param AphrontRequest  Request to read PHIDs from.
@@ -847,19 +803,6 @@ abstract class PhabricatorApplicationSearchEngine extends Phobject {
     }
 
     return $list;
-  }
-
-  protected function readDateFromRequest(
-    AphrontRequest $request,
-    $key) {
-
-    $value = AphrontFormDateControlValue::newFromRequest($request, $key);
-
-    if ($value->isEmpty()) {
-      return null;
-    }
-
-    return $value->getDictionary();
   }
 
   protected function readBoolFromRequest(
@@ -1195,6 +1138,11 @@ abstract class PhabricatorApplicationSearchEngine extends Phobject {
     if ($objects) {
       $field_extensions = $this->getConduitFieldExtensions();
 
+      $extension_data = array();
+      foreach ($field_extensions as $key => $extension) {
+        $extension_data[$key] = $extension->loadExtensionConduitData($objects);
+      }
+
       $attachment_data = array();
       foreach ($attachments as $key => $attachment) {
         $attachment_data[$key] = $attachment->loadAttachmentData(
@@ -1205,7 +1153,8 @@ abstract class PhabricatorApplicationSearchEngine extends Phobject {
       foreach ($objects as $object) {
         $field_map = $this->getObjectWireFieldsForConduit(
           $object,
-          $field_extensions);
+          $field_extensions,
+          $extension_data);
 
         $attachment_map = array();
         foreach ($attachments as $key => $attachment) {
@@ -1369,11 +1318,13 @@ abstract class PhabricatorApplicationSearchEngine extends Phobject {
 
   protected function getObjectWireFieldsForConduit(
     $object,
-    array $field_extensions) {
+    array $field_extensions,
+    array $extension_data) {
 
     $fields = array();
-    foreach ($field_extensions as $extension) {
-      $fields += $extension->getFieldValuesForConduit($object);
+    foreach ($field_extensions as $key => $extension) {
+      $data = idx($extension_data, $key, array());
+      $fields += $extension->getFieldValuesForConduit($object, $data);
     }
 
     return $fields;
