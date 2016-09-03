@@ -333,7 +333,6 @@ final class ManiphestTaskDetailController extends ManiphestController {
   private function buildPropertyView(
     ManiphestTask $task,
     PhabricatorCustomFieldList $field_list,
-    array $edge_types,
     array $edges,
     $handles) {
 
