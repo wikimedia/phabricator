@@ -73,7 +73,9 @@ final class PhabricatorStandardCustomFieldText
   }
 
   public function shouldAppearInApplicationSearch() {
-    return false;
+    // T146116, keep this as true
+    // return false;
+    return true;
   }
 
   public function getConduitEditParameterType() {
