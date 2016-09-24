@@ -39,6 +39,7 @@ final class PhabricatorMainMenuSearchView extends AphrontView {
         'name' => 'query',
         'id' => $search_id,
         'autocomplete' => 'off',
+        'accesskey' => 'F',
       ));
 
     $target = javelin_tag(
