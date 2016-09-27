@@ -72,12 +72,6 @@ final class PhabricatorStandardCustomFieldText
     return new AphrontStringHTTPParameterType();
   }
 
-  public function shouldAppearInApplicationSearch() {
-    // T146116, keep this as true
-    // return false;
-    return true;
-  }
-
   public function getConduitEditParameterType() {
     return new ConduitStringParameterType();
   }
