@@ -10,6 +10,7 @@ final class PhabricatorElasticFulltextStorageEngine
   public function __construct() {
     $this->uri = PhabricatorEnv::getEnvConfig('search.elastic.host');
     $this->index = PhabricatorEnv::getEnvConfig('search.elastic.namespace');
+    $this->version = PhabricatorEnv::getEnvConfig('search.elastic.version');
   }
 
   public function getEngineIdentifier() {
@@ -284,7 +285,11 @@ final class PhabricatorElasticFulltextStorageEngine
 
   public function indexExists() {
     try {
-      return (bool)$this->executeRequest('/_status/', array());
+      if ( $this->version === '2' ) {
+        return (bool)$this->executeRequest('/', array(), 'GET')
+      } else {
+        return (bool)$this->executeRequest('/_status/', array());
+      }
     } catch (HTTPFutureHTTPResponseStatus $e) {
       if ($e->getStatusCode() == 404) {
         return false;
