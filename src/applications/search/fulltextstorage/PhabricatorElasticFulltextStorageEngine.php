@@ -6,7 +6,8 @@ final class PhabricatorElasticFulltextStorageEngine
   private $uri;
   private $index;
   private $timeout;
-
+  private $version;
+  
   public function __construct() {
     $this->uri = PhabricatorEnv::getEnvConfig('search.elastic.host');
     $this->index = PhabricatorEnv::getEnvConfig('search.elastic.namespace');
