@@ -285,8 +285,8 @@ final class PhabricatorElasticFulltextStorageEngine
 
   public function indexExists() {
     try {
-      if ( $this->version === '2' ) {
-        return (bool)$this->executeRequest('/', array(), 'GET')
+      if ((int)$this->version >= 2) {
+        return (bool)$this->executeRequest('/', array(), 'GET');
       } else {
         return (bool)$this->executeRequest('/_status/', array());
       }
