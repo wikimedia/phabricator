@@ -7,11 +7,16 @@ final class PhabricatorElasticFulltextStorageEngine
   private $index;
   private $timeout;
   private $version;
+  private $timestampFieldKey;
   
   public function __construct() {
     $this->uri = PhabricatorEnv::getEnvConfig('search.elastic.host');
     $this->index = PhabricatorEnv::getEnvConfig('search.elastic.namespace');
-    $this->version = PhabricatorEnv::getEnvConfig('search.elastic.version');
+    $this->version = (int)PhabricatorEnv::getEnvConfig(
+                               'search.elastic.version');
+    $this->timestampFieldKey = $this->version < 2
+                               ? '_timestamp'
+                               : 'lastModified';
   }
 
   public function getEngineIdentifier() {
@@ -63,12 +68,14 @@ final class PhabricatorElasticFulltextStorageEngine
       ->withPHIDs(array($phid))
       ->executeOne();
 
+    $timestamp_key = $this->timestampFieldKey;
+
     // URL is not used internally but it can be useful externally.
     $spec = array(
       'title'         => $doc->getDocumentTitle(),
       'url'           => PhabricatorEnv::getProductionURI($handle->getURI()),
       'dateCreated'   => $doc->getDocumentCreated(),
-      '_timestamp'    => $doc->getDocumentModified(),
+      $timestamp_key  => $doc->getDocumentModified(),
       'field'         => array(),
       'relationship'  => array(),
     );
@@ -105,7 +112,7 @@ final class PhabricatorElasticFulltextStorageEngine
     $doc->setDocumentType($response['_type']);
     $doc->setDocumentTitle($hit['title']);
     $doc->setDocumentCreated($hit['dateCreated']);
-    $doc->setDocumentModified($hit['_timestamp']);
+    $doc->setDocumentModified($hit[$this->timestampFieldKey]);
 
     foreach ($hit['field'] as $fdef) {
       $doc->addField($fdef['type'], $fdef['corpus'], $fdef['aux']);
@@ -336,6 +343,11 @@ final class PhabricatorElasticFulltextStorageEngine
 
       // Ensure we have dateCreated since the default query requires it
       $data['mappings'][$type]['properties']['dateCreated']['type'] = 'string';
+
+      // Replaces deprecated _timestamp for elasticsearch 2
+      if ((int)$this->version >= 2) {
+        $data['mappings'][$type]['properties']['lastModified']['type'] = 'date';
+      }
     }
 
     return $data;
