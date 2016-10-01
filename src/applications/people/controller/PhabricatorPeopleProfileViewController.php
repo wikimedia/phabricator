@@ -295,6 +295,7 @@ final class PhabricatorPeopleProfileViewController
             ->setHeader($badge->getName())
             ->setSubhead($badge->getFlavor())
             ->setQuality($badge->getQuality())
+            ->setHref($badge->getViewURI())
             ->addByLine($awarder_info);
 
           $flex->addItem($item);
