@@ -140,7 +140,7 @@ final class PhabricatorElasticFulltextStorageEngine
       $spec[] = array(
         'simple_query_string' => array(
           'query'  => $query->getParameter('query'),
-          'fields' => array('field.corpus'),
+          'fields' => array('field.corpus', 'field.corpus.text'),
         ),
       );
 
@@ -339,7 +339,8 @@ final class PhabricatorElasticFulltextStorageEngine
     foreach ($types as $type) {
       // Use the custom trigram analyzer for the corpus of text
       $data['mappings'][$type]['properties']['field']['properties']['corpus'] =
-        array('type' => 'string', 'analyzer' => 'custom_trigrams');
+        array('type' => 'string', 'analyzer' => 'custom_trigrams', 'fields' =>
+          array('text' => array('type' => 'string', 'analyzer' => 'standard')));
 
       // Ensure we have dateCreated since the default query requires it
       $data['mappings'][$type]['properties']['dateCreated']['type'] = 'string';
