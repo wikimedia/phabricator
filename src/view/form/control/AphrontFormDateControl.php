@@ -109,11 +109,12 @@ final class AphrontFormDateControl extends AphrontFormControl {
 
     $result = parent::setValue($epoch);
 
-    if ($epoch === null) {
+    if ($epoch === null || is_array($epoch) && empty($epoch)) {
       return $result;
     }
 
     $readable = $this->formatTime($epoch, 'Y!m!d!'.$this->getTimeFormat());
+
     $readable = explode('!', $readable, 4);
 
     $year  = $readable[0];
