@@ -168,7 +168,17 @@ final class PhabricatorMySQLFulltextStorageEngine
     $q = $query->getParameter('query');
 
     if (strlen($q)) {
-     $join[] = qsprintf(
+      // Prepend + to each word in the query (see T146673)
+      $words = array();
+      foreach (explode(' ', $q) as $word) {
+        if ($word[0] !== '-' && $word[0] !== '+') {
+          $word = '+'.$word;
+        }
+        $words[] = $word;
+      }
+      $q = implode(' ', $words);
+
+      $join[] = qsprintf(
         $conn_r,
         '%T field ON field.phid = document.phid',
         $t_field);
