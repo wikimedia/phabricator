@@ -168,15 +168,34 @@ final class PhabricatorMySQLFulltextStorageEngine
     $q = $query->getParameter('query');
 
     if (strlen($q)) {
-      // Prepend + to each word in the query (see T146673)
+      $root = phutil_get_library_root('phabricator');
+      $root = dirname($root);
+      require_once $root.'/externals/PorterStemmer/PorterStemmer.php';
+
+
+      $stems = array();
       $words = array();
       foreach (explode(' ', $q) as $word) {
-        if ($word[0] !== '-' && $word[0] !== '+') {
-          $word = '+'.$word;
+        // Prepend + to each word in the query (see T146673)
+        if (strlen($word) < 2) {
+          continue;
         }
-        $words[] = $word;
+        if ($word[0] !== '-' && $word[0] !== '+') {
+          $words[] = '+'.$word;
+          $stems[] = '+'.PorterStemmer::stem($word).'*';
+        } else {
+          $words[] = $word;
+          $stems[] = $word;
+        }
       }
-      $q = implode(' ', $words);
+      $words = implode(' ', $words);
+      $stems = implode(' ', $stems);
+      $orig = $q;
+      $q = "$words";
+      $stemmed_query = "$stems";
+      // remove double-operators like ++word +-word or --word because they
+      // confuse innodb
+      $q = preg_replace('/\+\+|\-\-|\+\-|\-\+/', '', $q);
 
       $join[] = qsprintf(
         $conn_r,
@@ -185,7 +204,7 @@ final class PhabricatorMySQLFulltextStorageEngine
       $where[] = qsprintf(
         $conn_r,
         'MATCH(corpus) AGAINST (%s IN BOOLEAN MODE)',
-        $q);
+        $stemmed_query);
 
       // When searching for a string, promote user listings above other
       // listings.
