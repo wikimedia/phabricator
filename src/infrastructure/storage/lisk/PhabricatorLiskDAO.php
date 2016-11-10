@@ -83,7 +83,7 @@ abstract class PhabricatorLiskDAO extends LiskDAO {
       // TODO: For now, disable this until after T11044: it's better at high
       // load, but causes us to use slightly more connections at low load and
       // is pushing users over limits like MySQL "max_connections".
-      $use_persistent = false;
+      $use_persistent = true;
 
       $connection
         ->setQueryTimeout(30)
