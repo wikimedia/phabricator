@@ -63,6 +63,19 @@ final class PhabricatorCalendarEventViewController
       ->setHeader(pht('Details'));
     $recurring_header = $this->buildRecurringHeader($event);
 
+    // NOTE: This is a bit hacky: for imported events, we're just hiding the
+    // comment form without actually preventing comments. Users could still
+    // submit a request to add comments to these events. This isn't really a
+    // major problem since they can't do anything truly bad and there isn't an
+    // easy way to selectively disable this or some other similar behaviors
+    // today, but it would probably be nice to fully disable these
+    // "pseudo-edits" (like commenting and probably subscribing and awarding
+    // tokens) at some point.
+    if ($event->isImportedEvent()) {
+      $comment_view = null;
+      $timeline->setShouldTerminate(true);
+    }
+
     $view = id(new PHUITwoColumnView())
       ->setHeader($header)
       ->setSubheader($subheader)
@@ -88,7 +101,7 @@ final class PhabricatorCalendarEventViewController
     $viewer = $this->getViewer();
     $id = $event->getID();
 
-    if ($event->isCancelledEvent()) {
+    if ($event->getIsCancelled()) {
       $icon = 'fa-ban';
       $color = 'red';
       $status = pht('Cancelled');
@@ -105,8 +118,55 @@ final class PhabricatorCalendarEventViewController
       ->setPolicyObject($event)
       ->setHeaderIcon($event->getIcon());
 
+    if ($event->isImportedEvent()) {
+      $header->addTag(
+        id(new PHUITagView())
+          ->setType(PHUITagView::TYPE_SHADE)
+          ->setName(pht('Imported'))
+          ->setIcon('fa-download')
+          ->setHref($event->getImportSource()->getURI())
+          ->setShade('orange'));
+    }
+
     foreach ($this->buildRSVPActions($event) as $action) {
       $header->addActionLink($action);
+    }
+
+    $options = PhabricatorCalendarEventInvitee::getAvailabilityMap();
+
+    $is_attending = $event->getIsUserAttending($viewer->getPHID());
+    if ($is_attending) {
+      $invitee = $event->getInviteeForPHID($viewer->getPHID());
+
+      $selected = $invitee->getDisplayAvailability($event);
+      if (!$selected) {
+        $selected = PhabricatorCalendarEventInvitee::AVAILABILITY_AVAILABLE;
+      }
+
+      $selected_option = idx($options, $selected);
+
+      $availability_select = id(new PHUIButtonView())
+        ->setTag('a')
+        ->setIcon('fa-circle '.$selected_option['color'])
+        ->setText(pht('Availability: %s', $selected_option['name']));
+
+      $dropdown = id(new PhabricatorActionListView())
+        ->setUser($viewer);
+
+      foreach ($options as $key => $option) {
+        $uri = "event/availability/{$id}/{$key}/";
+        $uri = $this->getApplicationURI($uri);
+
+        $dropdown->addAction(
+          id(new PhabricatorActionView())
+            ->setName($option['name'])
+            ->setIcon('fa-circle '.$option['color'])
+            ->setHref($uri)
+            ->setWorkflow(true));
+      }
+
+      $availability_select->setDropdownMenu($dropdown);
+      $header->addActionLink($availability_select);
     }
 
     return $header;
@@ -123,11 +183,9 @@ final class PhabricatorCalendarEventViewController
       PhabricatorPolicyCapability::CAN_EDIT);
 
     $edit_uri = "event/edit/{$id}/";
-    if ($event->isChildEvent()) {
-      $edit_label = pht('Edit This Instance');
-    } else {
-      $edit_label = pht('Edit Event');
-    }
+    $edit_uri = $this->getApplicationURI($edit_uri);
+    $is_recurring = $event->getIsRecurring();
+    $edit_label = pht('Edit Event');
 
     $curtain = $this->newCurtainView($event);
 
@@ -136,10 +194,29 @@ final class PhabricatorCalendarEventViewController
         id(new PhabricatorActionView())
           ->setName($edit_label)
           ->setIcon('fa-pencil')
-          ->setHref($this->getApplicationURI($edit_uri))
+          ->setHref($edit_uri)
           ->setDisabled(!$can_edit)
-          ->setWorkflow(!$can_edit));
+          ->setWorkflow(!$can_edit || $is_recurring));
     }
+
+    $recurring_uri = "{$edit_uri}page/recurring/";
+    $can_recurring = $can_edit && !$event->isChildEvent();
+
+    if ($event->getIsRecurring()) {
+      $recurring_label = pht('Edit Recurrence');
+    } else {
+      $recurring_label = pht('Make Recurring');
+    }
+
+    $curtain->addAction(
+      id(new PhabricatorActionView())
+        ->setName($recurring_label)
+        ->setIcon('fa-repeat')
+        ->setHref($recurring_uri)
+        ->setDisabled(!$can_recurring)
+        ->setWorkflow(true));
+
+    $can_attend = !$event->isImportedEvent();
 
     if ($is_attending) {
       $curtain->addAction(
@@ -147,6 +224,7 @@ final class PhabricatorCalendarEventViewController
           ->setName(pht('Decline Event'))
           ->setIcon('fa-user-times')
           ->setHref($this->getApplicationURI("event/join/{$id}/"))
+          ->setDisabled(!$can_attend)
           ->setWorkflow(true));
     } else {
       $curtain->addAction(
@@ -154,28 +232,17 @@ final class PhabricatorCalendarEventViewController
           ->setName(pht('Join Event'))
           ->setIcon('fa-user-plus')
           ->setHref($this->getApplicationURI("event/join/{$id}/"))
+          ->setDisabled(!$can_attend)
           ->setWorkflow(true));
     }
 
     $cancel_uri = $this->getApplicationURI("event/cancel/{$id}/");
     $cancel_disabled = !$can_edit;
 
-    if ($event->isChildEvent()) {
-      $cancel_label = pht('Cancel This Instance');
-      $reinstate_label = pht('Reinstate This Instance');
+    $cancel_label = pht('Cancel Event');
+    $reinstate_label = pht('Reinstate Event');
 
-      if ($event->getParentEvent()->getIsCancelled()) {
-        $cancel_disabled = true;
-      }
-    } else if ($event->isParentEvent()) {
-      $cancel_label = pht('Cancel All');
-      $reinstate_label = pht('Reinstate All');
-    } else {
-      $cancel_label = pht('Cancel Event');
-      $reinstate_label = pht('Reinstate Event');
-    }
-
-    if ($event->isCancelledEvent()) {
+    if ($event->getIsCancelled()) {
       $curtain->addAction(
         id(new PhabricatorActionView())
           ->setName($reinstate_label)
@@ -259,6 +326,15 @@ final class PhabricatorCalendarEventViewController
         'em',
         array(),
         pht('None'));
+    }
+
+    if ($event->isImportedEvent()) {
+      $properties->addProperty(
+        pht('Imported By'),
+        pht(
+          '%s from %s',
+          $viewer->renderHandle($event->getImportAuthorPHID()),
+          $viewer->renderHandle($event->getImportSourcePHID())));
     }
 
     $properties->addProperty(
