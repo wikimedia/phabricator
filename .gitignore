@@ -11,7 +11,7 @@
 
 # Configuration
 /conf/custom/*
-/conf/local/local.json
+/conf/local/*.json
 /conf/local/ENVIRONMENT
 /conf/local/VERSION
 /conf/keys/device.pub

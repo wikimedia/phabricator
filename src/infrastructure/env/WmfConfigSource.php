@@ -1,10 +1,8 @@
 <?php
-
 /**
  * Similar to PhabricatorConfigLocalSource with two differences:
  * 1. this source has a higher priority
- * 2. it reads from environment-specific file:
- * /conf/local/{PHABRICATOR_ENV}.json
+ * 2. it reads from environment-specific file: /conf/local/{PHABRICATOR_ENV}.json
  */
 final class WmfConfigSource extends PhabricatorConfigSiteSource {
 

@@ -183,14 +183,14 @@ final class PhabricatorEnv extends Phobject {
     $default_source = id(new PhabricatorConfigDefaultSource())
       ->setName(pht('Global Default'));
     $stack->pushSource($default_source);
-
+    /* wmf does not use ConfigFileSource - it throws exceptions if enabled
     $env = self::getSelectedEnvironmentName();
     if ($env) {
       $stack->pushSource(
         id(new PhabricatorConfigFileSource($env))
           ->setName(pht("File '%s'", $env)));
     }
-
+    */
     $stack->pushSource(
       id(new PhabricatorConfigLocalSource())
         ->setName(pht('Local Config')));

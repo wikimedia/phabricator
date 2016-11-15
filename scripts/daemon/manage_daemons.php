@@ -1,5 +1,6 @@
 #!/usr/bin/env php
 <?php
+putenv('PHABRICATOR_ENV=phd');
 
 $root = dirname(dirname(dirname(__FILE__)));
 require_once $root.'/scripts/__init_script__.php';
