@@ -168,12 +168,7 @@ final class PhabricatorMySQLFulltextStorageEngine
     $q = $query->getParameter('query');
 
     if (strlen($q)) {
-      $root = phutil_get_library_root('phabricator');
-      $root = dirname($root);
-      require_once $root.'/externals/PorterStemmer/PorterStemmer.php';
 
-
-      $stems = array();
       $words = array();
       foreach (explode(' ', $q) as $word) {
         // Prepend + to each word in the query (see T146673)
@@ -181,18 +176,19 @@ final class PhabricatorMySQLFulltextStorageEngine
           continue;
         }
         if ($word[0] !== '-' && $word[0] !== '+') {
-          $words[] = '+'.$word;
-          $stems[] = '+'.PorterStemmer::stem($word).'*';
-        } else {
-          $words[] = $word;
-          $stems[] = $word;
+          $word = '+'.$word;
         }
+        $words[] = $word;
       }
-      $words = implode(' ', $words);
-      $stems = implode(' ', $stems);
       $orig = $q;
-      $q = "$words";
-      $stemmed_query = "$stems";
+      $q = implode(' ', $words);
+      if (strpos($q, '"') === false && strpos($q, '+') === false) {
+        // if this isn't a quoted or boolean query, search for ("$q") or ($q)
+        // this will prefer exact phrase matches over word matches without
+        // requiring an exact phrase match.
+        $orig = preg_replace('/[+-]/', '', $orig);
+        $q = "(\"$orig\") ($q)";
+      }
       // remove double-operators like ++word +-word or --word because they
       // confuse innodb
       $q = preg_replace('/\+\+|\-\-|\+\-|\-\+/', '', $q);
@@ -204,7 +200,7 @@ final class PhabricatorMySQLFulltextStorageEngine
       $where[] = qsprintf(
         $conn_r,
         'MATCH(corpus) AGAINST (%s IN BOOLEAN MODE)',
-        $stemmed_query);
+        $q);
 
       // When searching for a string, promote user listings above other
       // listings.
