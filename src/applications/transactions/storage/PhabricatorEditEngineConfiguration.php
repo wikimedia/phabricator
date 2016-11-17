@@ -137,7 +137,6 @@ final class PhabricatorEditEngineConfiguration
         }
       }
     }
-
     $locks = $this->getFieldLocks();
     foreach ($fields as $field) {
       $key = $field->getKey();
@@ -161,7 +160,7 @@ final class PhabricatorEditEngineConfiguration
     }
 
     // If the field isn't lockable, remove any lock we applied.
-    if (!$field->getIsLockable()) {
+    if (isset($field) && !$field->getIsLockable()) {
       $field->setIsLocked(false);
     }
 
