@@ -85,7 +85,17 @@ final class PhabricatorProjectQuery
   }
 
   public function withNameTokens(array $tokens) {
-    $this->nameTokens = array_values($tokens);
+    $filtered = array();
+    foreach ($token in $tokens) {
+      if (strlen($token) > 3) {
+        $filtered[] = $token;
+      }
+      if (count($filtered) > 5) {
+        break;
+      }
+    }
+    $this->nameTokens = $filtered;
+
     return $this;
   }
 
