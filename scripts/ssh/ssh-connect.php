@@ -1,6 +1,7 @@
 #!/usr/bin/env php
 <?php
-
+putenv('PHABRICATOR_ENV=phd');
+$_ENV['PHABRICATOR_ENV'] = 'phd';
 // This is a wrapper script for Git, Mercurial, and Subversion. It primarily
 // serves to inject "-o StrictHostKeyChecking=no" into the SSH arguments.
 

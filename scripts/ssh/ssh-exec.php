@@ -1,6 +1,7 @@
 #!/usr/bin/env php
 <?php
-
+putenv('PHABRICATOR_ENV=phd');
+$_ENV['PHABRICATOR_ENV'] = 'phd';
 $ssh_start_time = microtime(true);
 
 $root = dirname(dirname(dirname(__FILE__)));
