@@ -1,7 +1,7 @@
 #!/usr/bin/env php
 <?php
 
-setenv('PHABRICATOR_ENV=phd');
+putenv('PHABRICATOR_ENV=phd');
 $_ENV['PHABRICATOR_ENV'] = 'phd';
 
 // NOTE: This script will sometimes emit a warning like this on startup:
