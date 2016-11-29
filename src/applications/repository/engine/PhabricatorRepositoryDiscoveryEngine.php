@@ -14,7 +14,7 @@ final class PhabricatorRepositoryDiscoveryEngine
   private $commitCache = array();
   private $workingSet = array();
 
-  const MAX_COMMIT_CACHE_SIZE = 2048;
+  const MAX_COMMIT_CACHE_SIZE = 110000;
 
 
 /* -(  Discovering Repositories  )------------------------------------------- */

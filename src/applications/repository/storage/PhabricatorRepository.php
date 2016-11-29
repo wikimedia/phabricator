@@ -1762,7 +1762,7 @@ final class PhabricatorRepository extends PhabricatorRepositoryDAO
    * @param   int   The minimum update interval to use, in seconds.
    * @return  int   Repository update interval, in seconds.
    */
-  public function loadUpdateInterval($minimum = 15) {
+  public function loadUpdateInterval($minimum = 30) {
     // First, check if we've hit errors recently. If we have, wait one period
     // for each consecutive error. Normally, this corresponds to a backoff of
     // 15s, 30s, 45s, etc.
@@ -1818,7 +1818,7 @@ final class PhabricatorRepository extends PhabricatorRepositoryDAO
       $time_since_commit = ($window_start - $this->getDateCreated());
     }
 
-    $last_few_days = phutil_units('3 days in seconds');
+    $last_few_days = phutil_units('4 days in seconds');
 
     if ($time_since_commit <= $last_few_days) {
       // For repositories with activity in the recent past, we wait one

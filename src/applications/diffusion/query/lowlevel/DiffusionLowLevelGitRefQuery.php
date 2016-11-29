@@ -31,8 +31,6 @@ final class DiffusionLowLevelGitRefQuery extends DiffusionLowLevelQuery {
 
     $repository = $this->getRepository();
 
-    $prefixes = array();
-
     if ($repository->isWorkingCopyBare()) {
       $branch_prefix = 'refs/heads/';
     } else {
@@ -74,7 +72,6 @@ final class DiffusionLowLevelGitRefQuery extends DiffusionLowLevelQuery {
     $remote_len = strlen($remote_prefix);
 
     $ignore_refs = array(
-        'refs/cache-automerge/' => true,
         'refs/notes/' => true,
         'refs/drafts/' => true,
     );
@@ -88,6 +85,9 @@ final class DiffusionLowLevelGitRefQuery extends DiffusionLowLevelQuery {
     foreach ($lines as $line) {
       $fields = $this->extractFields($line);
       $refname = $fields['refname'];
+      if ($fields['objecttype'] == 'tree') {
+        continue;
+      }
       if (!strncmp($refname, $branch_prefix, $branch_len)) {
         $short = substr($refname, $branch_len);
         $type = $type_branch;

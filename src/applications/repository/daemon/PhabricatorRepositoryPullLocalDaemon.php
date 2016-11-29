@@ -67,8 +67,8 @@ final class PhabricatorRepositoryPullLocalDaemon
     // serially.
     $retry_after = array();
 
-    $min_sleep = 15;
-    $max_futures = 4;
+    $min_sleep = 30;
+    $max_futures = 6;
     $futures = array();
     $queue = array();
 

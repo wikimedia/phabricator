@@ -11,6 +11,9 @@ abstract class DiffusionLowLevelQuery extends Phobject {
     return $this;
   }
 
+  /**
+   * @returns PhabricatorRepository
+   */
   public function getRepository() {
     return $this->repository;
   }
