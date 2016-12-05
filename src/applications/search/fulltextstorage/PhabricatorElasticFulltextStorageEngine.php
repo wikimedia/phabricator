@@ -8,7 +8,8 @@ final class PhabricatorElasticFulltextStorageEngine
   private $timeout;
   private $version;
   private $timestampFieldKey;
-  
+  private $enabled = false;
+
   public function __construct() {
     $this->uri = PhabricatorEnv::getEnvConfig('search.elastic.host');
     $this->index = PhabricatorEnv::getEnvConfig('search.elastic.namespace');
@@ -17,6 +18,12 @@ final class PhabricatorElasticFulltextStorageEngine
     $this->timestampFieldKey = $this->version < 2
                                ? '_timestamp'
                                : 'lastModified';
+
+    $this->enabled = PhabricatorEnv::getEnvConfigIfExists(
+                               'search.elastic.enabled', false);
+    if(isset($_REQUEST['elastic'])) {
+      $this->enabled = true;
+    }
   }
 
   public function getEngineIdentifier() {
@@ -28,7 +35,7 @@ final class PhabricatorElasticFulltextStorageEngine
   }
 
   public function isEnabled() {
-    return (bool)$this->uri;
+    return $this->enabled;
   }
 
   public function setURI($uri) {

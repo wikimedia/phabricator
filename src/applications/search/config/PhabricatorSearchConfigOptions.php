@@ -31,7 +31,11 @@ final class PhabricatorSearchConfigOptions
         ->addExample('phabricator2', pht('Valid Setting')),
       $this->newOption('search.elastic.version', 'string', null)
         ->setLocked(true)
-        ->setDescription(pht('Elastic Version, used for functions that work for a specific elastic version.'))
+        ->setDescription(pht('Elastic Version, used for functions that work for a specific elastic version.')),
+      $this->newOption('search.elastic.enabled', 'bool', false)
+        ->setDescription(pht('Enable the elasticsearch backend.'))
+        ->setBoolOptions(array(pht('Enable: Use elasticsearch'),
+                               pht('Disable: Use MySQL')))
     );
   }
 
