@@ -147,7 +147,8 @@ final class PhabricatorElasticFulltextStorageEngine
       $spec[] = array(
         'simple_query_string' => array(
           'query'  => $query->getParameter('query'),
-          'fields' => array('field.corpus', 'field.corpus.text'),
+          'fields' => array('title^2', 'field.corpus', 'field.corpus.text'),
+          'default_operator' => 'and',
         ),
       );
 
@@ -155,6 +156,7 @@ final class PhabricatorElasticFulltextStorageEngine
         'simple_query_string' => array(
           'query'  => $query->getParameter('query'),
           'fields' => array('title'),
+          'default_operator' => 'and',
         ),
       );
     }
@@ -441,7 +443,12 @@ final class PhabricatorElasticFulltextStorageEngine
     $uri->setPath($this->index);
     $uri->appendPath($path);
     $data = json_encode($data);
-
+    $profiler = PhutilServiceProfiler::getInstance();
+    $profilerCallID = $profiler->beginServiceCall(
+      array(
+        'type' => 'http',
+        'uri' => $data,
+      ));
     $future = new HTTPSFuture($uri, $data);
     if ($method != 'GET') {
       $future->setMethod($method);
@@ -454,7 +461,7 @@ final class PhabricatorElasticFulltextStorageEngine
     if ($method != 'GET') {
       return null;
     }
-
+    $profiler->endServiceCall($profilerCallID, array());
     try {
       return phutil_json_decode($body);
     } catch (PhutilJSONParserException $ex) {
