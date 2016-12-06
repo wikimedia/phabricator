@@ -268,26 +268,32 @@ final class PhabricatorStandardPageView extends PhabricatorBarePageView
         }
       }
 
-      $default_img_uri =
-        celerity_get_resource_uri(
-          'rsrc/image/icon/fatcow/document_black.png');
+      $icon = id(new PHUIIconView())
+        ->setIcon('fa-download');
+      $lightbox_id = celerity_generate_unique_node_id();
       $download_form = phabricator_form(
         $user,
         array(
           'action' => '#',
           'method' => 'POST',
           'class'  => 'lightbox-download-form',
-          'sigil'  => 'download',
+          'sigil'  => 'download lightbox-download-submit',
+          'id'     => 'lightbox-download-form',
         ),
         phutil_tag(
-          'button',
-          array(),
-          pht('Download')));
+          'a',
+          array(
+            'class' => 'lightbox-download phui-icon-circle hover-green',
+            'href' => '#',
+          ),
+          array(
+            $icon,
+          )));
 
       Javelin::initBehavior(
         'lightbox-attachments',
         array(
-          'defaultImageUri' => $default_img_uri,
+          'lightbox_id'     => $lightbox_id,
           'downloadForm'    => $download_form,
         ));
     }
@@ -506,6 +512,7 @@ final class PhabricatorStandardPageView extends PhabricatorBarePageView
       'div',
       array(
         'class' => implode(' ', $classes),
+        'id' => 'main-page-frame',
       ),
       array(
         $main_page,

@@ -90,6 +90,13 @@ abstract class DiffusionController extends PhabricatorController {
   protected function getRepositoryIdentifierFromRequest(
     AphrontRequest $request) {
 
+    $short_name = $request->getURIData('repositoryShortName');
+    if (strlen($short_name)) {
+      // If the short name ends in ".git", ignore it.
+      $short_name = preg_replace('/\\.git\z/', '', $short_name);
+      return $short_name;
+    }
+
     $identifier = $request->getURIData('repositoryCallsign');
     if (strlen($identifier)) {
       return $identifier;

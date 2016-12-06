@@ -238,7 +238,8 @@ abstract class HarbormasterBuildStepImplementation extends Phobject {
       return false;
     }
 
-    return (bool)$target->getDetail('builtin.wait-for-message');
+    $wait = $target->getDetail('builtin.wait-for-message');
+    return ($wait == 'wait');
   }
 
   protected function shouldAbort(

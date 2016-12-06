@@ -417,6 +417,7 @@ final class PhabricatorProjectBoardViewController
       ->addClass('project-board-wrapper');
 
     $nav = $this->getProfileMenu();
+
     $divider = id(new PHUIListItemView())
       ->setType(PHUIListItemView::TYPE_DIVIDER);
     $fullscreen = $this->buildFullscreenMenu();

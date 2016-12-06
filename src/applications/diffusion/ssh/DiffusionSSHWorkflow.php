@@ -43,6 +43,8 @@ abstract class DiffusionSSHWorkflow extends PhabricatorSSHWorkflow {
    */
   abstract protected function identifyRepository();
   abstract protected function executeRepositoryOperations();
+  abstract protected function raiseWrongVCSException(
+    PhabricatorRepository $repository);
 
   protected function getBaseRequestPath() {
     return $this->baseRequestPath;
@@ -161,18 +163,19 @@ abstract class DiffusionSSHWorkflow extends PhabricatorSSHWorkflow {
     }
   }
 
-  protected function loadRepositoryWithPath($path) {
+  protected function loadRepositoryWithPath($path, $vcs) {
     $viewer = $this->getUser();
 
-    $info = PhabricatorRepository::parseRepositoryServicePath($path);
+    $info = PhabricatorRepository::parseRepositoryServicePath($path, $vcs);
     if ($info === null) {
       throw new Exception(
         pht(
-          'Unrecognized repository path "%s". Expected a path like "%s" '.
-          'or "%s".',
+          'Unrecognized repository path "%s". Expected a path like "%s", '.
+          '"%s", or "%s".',
           $path,
           '/diffusion/X/',
-          '/diffusion/123/'));
+          '/diffusion/123/',
+          '/source/thaumaturgy.git'));
     }
 
     $identifier = $info['identifier'];
@@ -196,6 +199,10 @@ abstract class DiffusionSSHWorkflow extends PhabricatorSSHWorkflow {
         pht(
           'This repository ("%s") is not available over SSH.',
           $repository->getDisplayName()));
+    }
+
+    if ($repository->getVersionControlSystem() != $vcs) {
+      $this->raiseWrongVCSException($repository);
     }
 
     return $repository;

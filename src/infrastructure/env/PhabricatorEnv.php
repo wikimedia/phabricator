@@ -223,13 +223,24 @@ final class PhabricatorEnv extends Phobject {
       $stack->pushSource($site_source);
     }
 
-    $master = PhabricatorDatabaseRef::getMasterDatabaseRef();
-    if (!$master) {
+    $masters = PhabricatorDatabaseRef::getMasterDatabaseRefs();
+    if (!$masters) {
       self::setReadOnly(true, self::READONLY_MASTERLESS);
-    } else if ($master->isSevered()) {
-      $master->checkHealth();
-      if ($master->isSevered()) {
-        self::setReadOnly(true, self::READONLY_SEVERED);
+    } else {
+      // If any master is severed, we drop to readonly mode. In theory we
+      // could try to continue if we're only missing some applications, but
+      // this is very complex and we're unlikely to get it right.
+
+      foreach ($masters as $master) {
+        // Give severed masters one last chance to get healthy.
+        if ($master->isSevered()) {
+          $master->checkHealth();
+        }
+
+        if ($master->isSevered()) {
+          self::setReadOnly(true, self::READONLY_SEVERED);
+          break;
+        }
       }
     }
 
@@ -241,11 +252,9 @@ final class PhabricatorEnv extends Phobject {
       // If the database is not available, just skip this configuration
       // source. This happens during `bin/storage upgrade`, `bin/conf` before
       // schema setup, etc.
-    } catch (AphrontConnectionQueryException $ex) {
-      if (!$config_optional) {
-        throw $ex;
-      }
-    } catch (AphrontInvalidCredentialsQueryException $ex) {
+    } catch (PhabricatorClusterStrandedException $ex) {
+      // This means we can't connect to any database host. That's fine as
+      // long as we're running a setup script like `bin/storage`.
       if (!$config_optional) {
         throw $ex;
       }

@@ -442,6 +442,15 @@ final class PhabricatorRepository extends PhabricatorRepositoryDAO
           'short names may not contain only numbers.',
           $slug));
     }
+
+    if (preg_match('/\\.git/', $slug)) {
+      throw new Exception(
+        pht(
+          'The name "%s" is not a valid repository short name. Repository '.
+          'short names must not end in ".git". This suffix will be added '.
+          'automatically in appropriate contexts.',
+          $slug));
+    }
   }
 
   public static function assertValidCallsign($callsign) {
@@ -563,6 +572,11 @@ final class PhabricatorRepository extends PhabricatorRepositoryDAO
   }
 
   public function getURI() {
+    $short_name = $this->getRepositorySlug();
+    if (strlen($short_name)) {
+      return "/source/{$short_name}/";
+    }
+
     $callsign = $this->getCallsign();
     if (strlen($callsign)) {
       return "/diffusion/{$callsign}/";
@@ -573,7 +587,7 @@ final class PhabricatorRepository extends PhabricatorRepositoryDAO
   }
 
   public function getPathURI($path) {
-    return $this->getURI().$path;
+    return $this->getURI().ltrim($path, '/');
   }
 
   public function getCommitURI($identifier) {
@@ -586,14 +600,13 @@ final class PhabricatorRepository extends PhabricatorRepositoryDAO
     return "/R{$id}:{$identifier}";
   }
 
-  public static function parseRepositoryServicePath($request_path) {
-    // NOTE: In Mercurial over SSH, the path will begin without a leading "/",
-    // so we're matching it optionally.
+  public static function parseRepositoryServicePath($request_path, $vcs) {
+    $is_git = ($vcs == PhabricatorRepositoryType::REPOSITORY_TYPE_GIT);
 
     $patterns = array(
       '(^'.
-        '(?P<base>/?diffusion/(?P<identifier>[A-Z]+|[0-9]\d*))'.
-        '(?P<path>(?:/.*)?)'.
+        '(?P<base>/?(?:diffusion|source)/(?P<identifier>[^/]+))'.
+        '(?P<path>.*)'.
       '\z)',
     );
 
@@ -605,6 +618,10 @@ final class PhabricatorRepository extends PhabricatorRepositoryDAO
       }
 
       $identifier = $matches['identifier'];
+      if ($is_git) {
+        $identifier = preg_replace('/\\.git\z/', '', $identifier);
+      }
+
       $base = $matches['base'];
       $path = $matches['path'];
       break;
@@ -624,28 +641,15 @@ final class PhabricatorRepository extends PhabricatorRepositoryDAO
   public function getCanonicalPath($request_path) {
     $standard_pattern =
       '(^'.
-        '(?P<prefix>/diffusion/)'.
+        '(?P<prefix>/(?:diffusion|source)/)'.
         '(?P<identifier>[^/]+)'.
         '(?P<suffix>(?:/.*)?)'.
       '\z)';
 
     $matches = null;
     if (preg_match($standard_pattern, $request_path, $matches)) {
-      $prefix = $matches['prefix'];
-
-      $callsign = $this->getCallsign();
-      if ($callsign) {
-        $identifier = $callsign;
-      } else {
-        $identifier = $this->getID();
-      }
-
       $suffix = $matches['suffix'];
-      if (!strlen($suffix)) {
-        $suffix = '/';
-      }
-
-      return $prefix.$identifier.$suffix;
+      return $this->getPathURI($suffix);
     }
 
     $commit_pattern =
@@ -724,18 +728,6 @@ final class PhabricatorRepository extends PhabricatorRepositoryDAO
       return $this->getCommitURI($commit);
     }
 
-
-    $identifier = $this->getID();
-
-    $callsign = $this->getCallsign();
-    if ($callsign !== null) {
-      $identifier = $callsign;
-    }
-
-    if (strlen($identifier)) {
-      $identifier = phutil_escape_uri_path_component($identifier);
-    }
-
     if (strlen($path)) {
       $path = ltrim($path, '/');
       $path = str_replace(array(';', '$'), array(';;', '$$'), $path);
@@ -766,13 +758,13 @@ final class PhabricatorRepository extends PhabricatorRepositoryDAO
       case 'lint':
       case 'pathtree':
       case 'refs':
-        $uri = "/diffusion/{$identifier}/{$action}/{$path}{$commit}{$line}";
+        $uri = $this->getPathURI("/{$action}/{$path}{$commit}{$line}");
         break;
       case 'branch':
         if (strlen($path)) {
-          $uri = "/diffusion/{$identifier}/repository/{$path}";
+          $uri = $this->getPathURI("/repository/{$path}");
         } else {
-          $uri = "/diffusion/{$identifier}/";
+          $uri = $this->getPathURI('/');
         }
         break;
       case 'external':
@@ -2116,9 +2108,6 @@ final class PhabricatorRepository extends PhabricatorRepositoryDAO
   public function newBuiltinURIs() {
     $has_callsign = ($this->getCallsign() !== null);
     $has_shortname = ($this->getRepositorySlug() !== null);
-
-    // TODO: For now, never enable these because they don't work yet.
-    $has_shortname = false;
 
     $identifier_map = array(
       PhabricatorRepositoryURI::BUILTIN_IDENTIFIER_CALLSIGN => $has_callsign,
