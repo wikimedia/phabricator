@@ -403,14 +403,18 @@ final class PhabricatorMySQLFulltextStorageEngine
     $stemmer = new PhutilSearchStemmer();
 
     $compiler = PhabricatorSearchDocument::newQueryCompiler()
-      ->setQuery($raw_query)
-      ->setStemmer($stemmer);
+      ->setQuery($raw_query);
 
-    $queries = array();
-    $queries[] = $compiler->compileLiteralQuery();
-    $queries[] = $compiler->compileStemmedQuery();
+    return $compiler->compileQuery();
 
-    return implode(' ', array_filter($queries));
+//      ->setQuery($raw_query)
+//      ->setStemmer($stemmer);
+
+//    $queries = array();
+//    $queries[] = $compiler->compileLiteralQuery();
+//    $queries[] = $compiler->compileStemmedQuery();
+
+//    return implode(' ', array_filter($queries));
   }
 
   public function indexExists() {
