@@ -70,19 +70,12 @@ final class DiffusionRepositoryEditEngine
         }
       }
 
-      if (!$services) {
-        throw new Exception(
-          pht(
-            'This install is configured in cluster mode, but all available '.
-            'repository cluster services are closed to new allocations. '.
-            'At least one service must be open to allow new allocations to '.
-            'take place.'));
+      if (!empty($services)) {
+        shuffle($services);
+        $service = head($services);
+
+        $repository->setAlmanacServicePHID($service->getPHID());
       }
-
-      shuffle($services);
-      $service = head($services);
-
-      $repository->setAlmanacServicePHID($service->getPHID());
     }
 
     return $repository;
