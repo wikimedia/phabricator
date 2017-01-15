@@ -49,7 +49,14 @@ abstract class PhabricatorEditEngine
   }
 
   final public function getEngineKey() {
-    return $this->getPhobjectClassConstant('ENGINECONST', 64);
+    $key = $this->getPhobjectClassConstant('ENGINECONST', 64);
+    if (strpos($key, '/') !== false) {
+      throw new Exception(
+        pht(
+          'EditEngine ("%s") contains an invalid key character "/".',
+          get_class($this)));
+    }
+    return $key;
   }
 
   final public function getApplication() {
@@ -98,6 +105,10 @@ abstract class PhabricatorEditEngine
 
   public function getHideHeader() {
     return $this->hideHeader;
+  }
+
+  public function getProfileMenuItemDefault() {
+    return $this->getEngineKey().'/'.self::EDITENGINECONFIG_DEFAULT;
   }
 
 
@@ -1549,6 +1560,9 @@ abstract class PhabricatorEditEngine
 
     $view->setCommentActions($comment_actions);
 
+    $comment_groups = $this->newCommentActionGroups();
+    $view->setCommentActionGroups($comment_groups);
+
     return $view;
   }
 
@@ -1732,10 +1746,19 @@ abstract class PhabricatorEditEngine
           $viewer->getPHID(),
           $current_version);
 
+        $is_empty = (!strlen($comment_text) && !$actions);
+
         $draft
           ->setProperty('comment', $comment_text)
           ->setProperty('actions', $actions)
           ->save();
+
+        $draft_engine = $this->newDraftEngine($object);
+        if ($draft_engine) {
+          $draft_engine
+            ->setVersionedDraft($draft)
+            ->synchronize();
+        }
       }
     }
 
@@ -1780,6 +1803,11 @@ abstract class PhabricatorEditEngine
       }
     }
 
+    $auto_xactions = $this->newAutomaticCommentTransactions($object);
+    foreach ($auto_xactions as $xaction) {
+      $xactions[] = $xaction;
+    }
+
     if (strlen($comment_text) || !$xactions) {
       $xactions[] = id(clone $template)
         ->setTransactionType(PhabricatorTransactions::TYPE_COMMENT)
@@ -1797,6 +1825,10 @@ abstract class PhabricatorEditEngine
 
     try {
       $xactions = $editor->applyTransactions($object, $xactions);
+    } catch (PhabricatorApplicationTransactionValidationException $ex) {
+      return id(new PhabricatorApplicationTransactionValidationResponse())
+        ->setCancelURI($view_uri)
+        ->setException($ex);
     } catch (PhabricatorApplicationTransactionNoEffectException $ex) {
       return id(new PhabricatorApplicationTransactionNoEffectResponse())
         ->setCancelURI($view_uri)
@@ -1808,17 +1840,41 @@ abstract class PhabricatorEditEngine
         $object->getPHID(),
         $viewer->getPHID(),
         $this->loadDraftVersion($object));
+
+      $draft_engine = $this->newDraftEngine($object);
+      if ($draft_engine) {
+        $draft_engine
+          ->setVersionedDraft(null)
+          ->synchronize();
+      }
     }
 
     if ($request->isAjax() && $is_preview) {
+      $preview_content = $this->newCommentPreviewContent($object, $xactions);
+
       return id(new PhabricatorApplicationTransactionResponse())
         ->setViewer($viewer)
         ->setTransactions($xactions)
-        ->setIsPreview($is_preview);
+        ->setIsPreview($is_preview)
+        ->setPreviewContent($preview_content);
     } else {
       return id(new AphrontRedirectResponse())
         ->setURI($view_uri);
     }
+  }
+
+  protected function newDraftEngine($object) {
+    $viewer = $this->getViewer();
+
+    if ($object instanceof PhabricatorDraftInterface) {
+      $engine = $object->newDraftEngine();
+    } else {
+      $engine = new PhabricatorBuiltinDraftEngine();
+    }
+
+    return $engine
+      ->setObject($object)
+      ->setViewer($viewer);
   }
 
 
@@ -2155,6 +2211,18 @@ abstract class PhabricatorEditEngine
     $controller = $this->getController();
     $request = $controller->getRequest();
     return $request->getURIData('editAction');
+  }
+
+  protected function newCommentActionGroups() {
+    return array();
+  }
+
+  protected function newAutomaticCommentTransactions($object) {
+    return array();
+  }
+
+  protected function newCommentPreviewContent($object, array $xactions) {
+    return null;
   }
 
 
