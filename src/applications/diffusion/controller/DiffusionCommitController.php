@@ -879,6 +879,7 @@ final class DiffusionCommitController extends DiffusionController {
       PhabricatorPolicyCapability::CAN_EDIT);
 
     $id = $commit->getID();
+    $identifier = $commit->getCommitIdentifier();
     $edit_uri = $this->getApplicationURI("/commit/edit/{$id}/");
 
     $action = id(new PhabricatorActionView())
