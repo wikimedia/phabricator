@@ -895,20 +895,6 @@ final class DiffusionCommitController extends DiffusionController {
         $repository, $identifier, $curtain);
     }
 
-    require_celerity_resource('phabricator-object-selector-css');
-    require_celerity_resource('javelin-behavior-phabricator-object-selector');
-
-    $maniphest = 'PhabricatorManiphestApplication';
-    if (PhabricatorApplication::isClassInstalled($maniphest)) {
-      $action = id(new PhabricatorActionView())
-        ->setName(pht('Edit Maniphest Tasks'))
-        ->setIcon('fa-anchor')
-        ->setHref('/search/attach/'.$commit->getPHID().'/TASK/edge/')
-        ->setWorkflow(true)
-        ->setDisabled(!$can_edit);
-      $curtain->addAction($action);
-    }
-
     $action = id(new PhabricatorActionView())
       ->setName(pht('Download Raw Diff'))
       ->setHref($request->getRequestURI()->alter('diff', true))
