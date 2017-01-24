@@ -66,12 +66,6 @@ final class PhabricatorElasticFulltextStorageEngine
     return $this->timeout;
   }
 
-  static function boolterm($must=array(), $should=array(), $filter=array(),
-    $must_not=array()) {
-    $terms = func_get_args();
-    return array('bool' => $terms);
-  }
-
   protected function resolveTags($tags) {
     $lookup_phids = array();
     foreach($tags as $phid){
@@ -201,13 +195,14 @@ final class PhabricatorElasticFulltextStorageEngine
   }
 
   private function buildSpec(PhabricatorSavedQuery $query) {
+    $q = new PhabricatorElasticSearchQueryBuilder('bool');
     $spec = array();
     $must = array();
     $should = array();
     $filter = array();
 
     if (strlen($query->getParameter('query'))) {
-      $must[] = array(
+      $q->must(array(
         'simple_query_string' => array(
           'query'  => $query->getParameter('query'),
           'fields' => array(
@@ -217,18 +212,18 @@ final class PhabricatorElasticFulltextStorageEngine
           ),
           "default_operator" => "and",
         ),
-      );
+      ));
     }
 
     $exclude = $query->getParameter('exclude');
     if ($exclude) {
-      $filter[] = array(
+      $q->filter(array(
         'not' => array(
           'ids' => array(
             'values' => array($exclude),
           ),
         ),
-      );
+      ));
     }
 
     $relationship_map = array(
@@ -272,28 +267,32 @@ final class PhabricatorElasticFulltextStorageEngine
 
     foreach ($relationship_map as $field => $phids) {
       if (is_array($phids) && $phids) {
-        $filter[] = array(
+        $q->filter(array(
           'terms' => array(
             $field  => array_values($phids),
           ),
-        );
+        ));
       } else if ($phids === true) {
-        $filter[] = array(
+        $q->filter(array(
           'exists' => array(
             'field' => $field,
           ),
-        );
+        ));
       }
     }
 
-    if (!count($must)) {
-      $must[] = array( "match_all" => array() );
+    if (!count($q->getTerms())) {
+      $q->must(array( "match_all" => array() ));
     }
+
+    $q->must($must)
+      ->should($should)
+      ->filter($filter);
 
     $spec = array(
       '_source' => false,
-      'query'   => self::boolterm($must, $should, $filter)
-    );
+      'query' => $q->toArray());
+
 
     if (!$query->getParameter('query')) {
       $spec['sort'] = array(

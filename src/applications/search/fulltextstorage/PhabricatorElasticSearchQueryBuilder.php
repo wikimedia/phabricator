@@ -12,7 +12,11 @@ class PhabricatorElasticSearchQueryBuilder {
   }
 
   function toArray() {
-    return array($this->name => $this->terms);
+    return array($this->name => $this->getTerms());
+  }
+
+  function getTerms() {
+    return $this->terms;
   }
 
   function branch($term) {
@@ -38,6 +42,9 @@ class PhabricatorElasticSearchQueryBuilder {
     $this->current_context = $name;
 
     foreach($args as $arg) {
+      if (empty($arg)){
+        continue;
+      }
       $this->terms[$name][] = $arg;
     }
     return $this;
