@@ -15,7 +15,7 @@ final class PhabricatorFavoritesApplication extends PhabricatorApplication {
   }
 
   public function getIcon() {
-    return 'fa-star-o';
+    return 'fa-star';
   }
 
   public function getRoutes() {
@@ -30,10 +30,6 @@ final class PhabricatorFavoritesApplication extends PhabricatorApplication {
 
   public function isLaunchable() {
     return false;
-  }
-
-  public function getApplicationOrder() {
-    return 9;
   }
 
 }
