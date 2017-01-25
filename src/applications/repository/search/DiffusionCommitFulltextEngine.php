@@ -15,7 +15,8 @@ final class DiffusionCommitFulltextEngine
 
     $repository = $commit->getRepository();
     $commit_data = $commit->getCommitData();
-
+    phlog($commit_data);
+    print_r($commit_data);
     $date_created = $commit->getEpoch();
     $commit_message = $commit_data->getCommitMessage();
     $author_phid = $commit_data->getCommitDetail('authorPHID');

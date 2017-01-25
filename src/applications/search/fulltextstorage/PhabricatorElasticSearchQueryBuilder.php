@@ -15,8 +15,15 @@ class PhabricatorElasticSearchQueryBuilder {
     return array($this->name => $this->getTerms());
   }
 
-  function getTerms() {
-    return $this->terms;
+  function getTerms($termkey=null) {
+    $terms = $this->terms;
+    if ($termkey == null) {
+      return $terms;
+    }
+    if (isset($terms[$termkey])){
+      return $terms[$termkey];
+    }
+    return [];
   }
 
   function branch($term) {
@@ -32,6 +39,24 @@ class PhabricatorElasticSearchQueryBuilder {
 
   function match() {
     return $this->branch('match');
+  }
+
+  function exists($field) {
+    $this->filter([
+      'exists' => [
+        'field' => $field
+      ]
+    ]);
+    return $this;
+  }
+
+  function terms($field, $values) {
+    $this->filter([
+      'terms' => [
+        $field  => array_values($values),
+      ],
+    ]);
+    return $this;
   }
 
   function query_string($str, $fields=['title','body']) {

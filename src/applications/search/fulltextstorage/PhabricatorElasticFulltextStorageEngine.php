@@ -22,9 +22,6 @@ final class PhabricatorElasticFulltextStorageEngine
 
     $this->enabled = PhabricatorEnv::getEnvConfigIfExists(
                                'search.elastic.enabled', false);
-    if(isset($_REQUEST['elastic'])) {
-      $this->enabled = true;
-    }
   }
 
   public function getEngineIdentifier() {
@@ -37,6 +34,18 @@ final class PhabricatorElasticFulltextStorageEngine
 
   public function isEnabled() {
     return $this->enabled;
+  }
+
+  public function isEnabledForViewer(PhabricatorUser $viewer) {
+    if (!$this->isEnabled()){
+      return false;
+    }
+    $setting_class = 'PhabricatorElasticSearchBackendSetting';
+    $setting = $viewer->getUserSetting(
+      $setting_class::SETTINGKEY);
+    $enabled = $setting_class::VALUE_ELASTICSEARCH_ENABLED;
+    phlog('setting:'.$setting.' '.$enabled);
+    return $setting == $enabled;
   }
 
   public function setURI($uri) {
@@ -104,15 +113,15 @@ final class PhabricatorElasticFulltextStorageEngine
     return join(' ', $keywords);
   }
 
-  public function getRelationshipTypes() {
-    static $relationships = null;
-    if (!empty($relationships)) {
-      return $relationships;
+  public function getTypeConstants($class) {
+    static $typeconstants = [];
+    if (!empty($typeconstants[$class])) {
+      return $typeconstants[$class];
     }
 
-    $relationship_class = new ReflectionClass("PhabricatorSearchRelationship");
-    $relationships = $relationship_class->getConstants();
-    return array_unique(array_values($relationships));
+    $relationship_class = new ReflectionClass($class);
+    $typeconstants[$class] = $relationship_class->getConstants();
+    return array_unique(array_values($typeconstants[$class]));
   }
 
   public function reindexAbstractDocument(
@@ -137,8 +146,16 @@ final class PhabricatorElasticFulltextStorageEngine
 
     foreach ($doc->getFieldData() as $field) {
       list($field_name, $corpus, $aux) = $field;
-      $spec[$field_name] = $corpus;
-      $spec['field'][] = array('type' => $field_name, 'aux' => $aux);
+      if (!isset($spec[$field_name])) {
+        $spec[$field_name] = $corpus;
+      } else if (!is_array($spec[$field_name])) {
+        $spec[$field_name] = array($spec[$field_name], $corpus);
+      } else {
+        $spec[$field_name][] = $corpus;
+      }
+      if ($aux != null) {
+        $spec[$field_name.'_aux_phid'] = $aux;
+      }
     }
 
     $tags = array();
@@ -196,20 +213,29 @@ final class PhabricatorElasticFulltextStorageEngine
 
   private function buildSpec(PhabricatorSavedQuery $query) {
     $q = new PhabricatorElasticSearchQueryBuilder('bool');
-    $spec = array();
-    $must = array();
-    $should = array();
-    $filter = array();
+    $queryString = $query->getParameter('query');
+    if (strlen($queryString)) {
+      $fields = $this->getTypeConstants("PhabricatorSearchDocumentFieldType");
 
-    if (strlen($query->getParameter('query'))) {
       $q->must(array(
         'simple_query_string' => array(
-          'query'  => $query->getParameter('query'),
+          'query'  => $queryString,
           'fields' => array(
-            'title^3',
-            'body^2',
+            'title^4',
+            'body^3',
+            'cmnt^2',
             'tags',
+            '_all',
           ),
+          "default_operator" => "and",
+        ),
+      ));
+
+      $q->should(array(
+        'simple_query_string' => array(
+          'query'  => $queryString,
+          'fields' => $fields,
+          "analyzer" => 'english_exact',
           "default_operator" => "and",
         ),
       ));
@@ -248,46 +274,34 @@ final class PhabricatorElasticFulltextStorageEngine
     $include_closed = !empty($statuses[$rel_closed]);
 
     if ($include_open && !$include_closed) {
-      $relationship_map[$rel_open] = true;
+      $q->exists($rel_open);
     } else if (!$include_open && $include_closed) {
-      $relationship_map[$rel_closed] = true;
+      $q->exists($rel_closed);
     }
 
     if ($query->getParameter('withUnowned')) {
-      $relationship_map[$rel_unowned] = true;
+      $q->exists($rel_unowned);
     }
 
     $rel_owner = PhabricatorSearchRelationship::RELATIONSHIP_OWNER;
     if ($query->getParameter('withAnyOwner')) {
-      $relationship_map[$rel_owner] = true;
+      $q->exists($rel_owner);
     } else {
       $owner_phids = $query->getParameter('ownerPHIDs', array());
-      $relationship_map[$rel_owner] = $owner_phids;
-    }
-
-    foreach ($relationship_map as $field => $phids) {
-      if (is_array($phids) && $phids) {
-        $q->filter(array(
-          'terms' => array(
-            $field  => array_values($phids),
-          ),
-        ));
-      } else if ($phids === true) {
-        $q->filter(array(
-          'exists' => array(
-            'field' => $field,
-          ),
-        ));
+      if (count($owner_phids)) {
+        $q->terms($rel_owner, $owner_phids);
       }
     }
 
-    if (!count($q->getTerms())) {
-      $q->must(array( "match_all" => array() ));
+    foreach ($relationship_map as $field => $phids) {
+      if (is_array($phids) && !empty($phids)) {
+        $q->terms($field, $phids);
+      }
     }
 
-    $q->must($must)
-      ->should($should)
-      ->filter($filter);
+    if (!count($q->getTerms('must'))) {
+      $q->must(array( "match_all" => array() ));
+    }
 
     $spec = array(
       '_source' => false,
@@ -388,46 +402,45 @@ final class PhabricatorElasticFulltextStorageEngine
       ),
     );
 
-    $relationships = $this->getRelationshipTypes();
+    $fields = $this->getTypeConstants("PhabricatorSearchDocumentFieldType");
+    $relationships = $this->getTypeConstants("PhabricatorSearchRelationship");
 
     $types = array_keys(
       PhabricatorSearchApplicationSearchEngine::getIndexableDocumentTypes());
 
     foreach ($types as $type) {
-      foreach (array('title', 'body') as $field) {
+      $properties = [];
+      foreach ($fields as $field) {
         // Use the custom analyzer for the corpus of text
-        $data['mappings'][$type]['properties'][$field] = array(
-          'type'      => 'string',
-          'analyzer'  => 'english',
-          'fields' => array(
-            "exact" => array(
-              "type"      => "string",
-              "analyzer"  => "english_exact",
-            )
-          )
+        $properties[$field] = array(
+          'type'                  => 'string',
+          'analyzer'              => 'english_exact',
+          'search_analyzer'       => 'english',
+          'search_quote_analyzer' => "english_exact",
         );
       }
 
       foreach($relationships as $rel) {
-        $data['mappings'][$type]['properties'][$rel] = array(
+        $properties[$rel] = array(
           'type'  => 'string',
           'index' => 'not_analyzed'
         );
       }
 
       // Ensure we have dateCreated since the default query requires it
-      $data['mappings'][$type]['properties']['dateCreated']['type'] = 'date';
+      $properties['dateCreated']['type'] = 'date';
 
       // Replaces deprecated _timestamp for elasticsearch 2
       if ((int)$this->version >= 2) {
-        $data['mappings'][$type]['properties']['lastModified']['type'] = 'date';
+        $properties['lastModified']['type'] = 'date';
       }
 
-      $data['mappings'][$type]['properties']['tags'] = array(
+      $properties['tags'] = array(
         'type' => 'string',
         'analyzer' => 'english',
         'store' => true,
       );
+      $data['mappings'][$type]['properties'] = $properties;
     }
 
     return $data;
