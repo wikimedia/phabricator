@@ -44,7 +44,7 @@ final class PhabricatorElasticFulltextStorageEngine
     $setting = $viewer->getUserSetting(
       $setting_class::SETTINGKEY);
     $enabled = $setting_class::VALUE_ELASTICSEARCH_ENABLED;
-    phlog('setting:'.$setting.' '.$enabled);
+
     return $setting == $enabled;
   }
 
@@ -316,7 +316,7 @@ final class PhabricatorElasticFulltextStorageEngine
 
     $spec['from'] = (int)$query->getParameter('offset', 0);
     $spec['size'] = (int)$query->getParameter('limit', 25);
-    phlog(json_encode($spec));
+    //phlog(json_encode($spec));
     return $spec;
   }
 
