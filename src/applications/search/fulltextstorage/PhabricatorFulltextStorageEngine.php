@@ -47,6 +47,12 @@ abstract class PhabricatorFulltextStorageEngine extends Phobject {
    */
   abstract public function isEnabled();
 
+  /** return `true` if the engine is enabled for the specified user.
+   */
+  public function isEnabledForViewer(PhabricatorUser $viewer) {
+    return $this->isEnabled();
+  }
+
 
 /* -(  Managing Documents  )------------------------------------------------- */
 
@@ -133,6 +139,20 @@ abstract class PhabricatorFulltextStorageEngine extends Phobject {
 
   public static function loadEngine() {
     return head(self::loadActiveEngines());
+  }
+
+  public static function loadEngineForViewer($viewer) {
+   $engines = self::loadAllEngines();
+
+    $active = array();
+    foreach ($engines as $key => $engine) {
+      if (!$engine->isEnabledForViewer($viewer)) {
+        continue;
+      }
+
+      $active[$key] = $engine;
+    }
+    return head($active);
   }
 
 }

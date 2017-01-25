@@ -2612,6 +2612,7 @@ phutil_register_library_map(array(
     'PhabricatorEditorMultipleSetting' => 'applications/settings/setting/PhabricatorEditorMultipleSetting.php',
     'PhabricatorEditorSetting' => 'applications/settings/setting/PhabricatorEditorSetting.php',
     'PhabricatorElasticFulltextStorageEngine' => 'applications/search/fulltextstorage/PhabricatorElasticFulltextStorageEngine.php',
+    'PhabricatorElasticSearchQueryBuilder' => 'applications/search/fulltextstorage/PhabricatorElasticSearchQueryBuilder.php',
     'PhabricatorElasticSearchSetupCheck' => 'applications/config/check/PhabricatorElasticSearchSetupCheck.php',
     'PhabricatorEmailAddressesSettingsPanel' => 'applications/settings/panel/PhabricatorEmailAddressesSettingsPanel.php',
     'PhabricatorEmailContentSource' => 'applications/metamta/contentsource/PhabricatorEmailContentSource.php',

@@ -9,6 +9,7 @@ final class PhabricatorElasticFulltextStorageEngine
   private $version;
   private $timestampFieldKey;
   private $enabled = false;
+  private $tag_cache = array();
 
   public function __construct() {
     $this->uri = PhabricatorEnv::getEnvConfig('search.elastic.host');
@@ -21,9 +22,6 @@ final class PhabricatorElasticFulltextStorageEngine
 
     $this->enabled = PhabricatorEnv::getEnvConfigIfExists(
                                'search.elastic.enabled', false);
-    if(isset($_REQUEST['elastic'])) {
-      $this->enabled = true;
-    }
   }
 
   public function getEngineIdentifier() {
@@ -36,6 +34,18 @@ final class PhabricatorElasticFulltextStorageEngine
 
   public function isEnabled() {
     return $this->enabled;
+  }
+
+  public function isEnabledForViewer(PhabricatorUser $viewer) {
+    if (!$this->isEnabled()){
+      return false;
+    }
+    $setting_class = 'PhabricatorElasticSearchBackendSetting';
+    $setting = $viewer->getUserSetting(
+      $setting_class::SETTINGKEY);
+    $enabled = $setting_class::VALUE_ELASTICSEARCH_ENABLED;
+    phlog('setting:'.$setting.' '.$enabled);
+    return $setting == $enabled;
   }
 
   public function setURI($uri) {
@@ -65,6 +75,55 @@ final class PhabricatorElasticFulltextStorageEngine
     return $this->timeout;
   }
 
+  protected function resolveTags($tags) {
+    $lookup_phids = array();
+    foreach($tags as $phid){
+      if (!isset($this->tag_cache[$phid])) {
+        $lookup_phids[]=$phid;
+      }
+    }
+    if (count($lookup_phids)) {
+      $projects = id(new PhabricatorProjectQuery())
+        ->setViewer(PhabricatorUser::getOmnipotentUser())
+        ->withPHIDs($lookup_phids)
+        ->needSlugs(true)
+        ->execute();
+
+      foreach ($projects as $project) {
+        $phid = $project->getPHID();
+        $slugs = $project->getSlugs();
+        $slugs = mpull($slugs, 'getSlug');
+        $keywords = $project->getDisplayName() . ' ' . join(' ', $slugs);
+        $keywords = strtolower($keywords);
+        $keywords = str_replace('_', ' ', $keywords);
+        $keywords = explode(' ', $keywords);
+        $keywords = array_unique($keywords);
+        $this->tag_cache[$phid] = $keywords;
+      }
+    }
+
+    $keywords = array();
+    foreach($tags as $phid) {
+      if (isset($this->tag_cache[$phid])) {
+        $keywords += $this->tag_cache[$phid];
+      }
+    }
+    $keywords = array_unique($keywords);
+    // phlog($result);
+    return join(' ', $keywords);
+  }
+
+  public function getTypeConstants($class) {
+    static $typeconstants = [];
+    if (!empty($typeconstants[$class])) {
+      return $typeconstants[$class];
+    }
+
+    $relationship_class = new ReflectionClass($class);
+    $typeconstants[$class] = $relationship_class->getConstants();
+    return array_unique(array_values($typeconstants[$class]));
+  }
+
   public function reindexAbstractDocument(
     PhabricatorSearchAbstractDocument $doc) {
 
@@ -83,21 +142,34 @@ final class PhabricatorElasticFulltextStorageEngine
       'url'           => PhabricatorEnv::getProductionURI($handle->getURI()),
       'dateCreated'   => $doc->getDocumentCreated(),
       $timestamp_key  => $doc->getDocumentModified(),
-      'field'         => array(),
-      'relationship'  => array(),
     );
 
     foreach ($doc->getFieldData() as $field) {
-      $spec['field'][] = array_combine(array('type', 'corpus', 'aux'), $field);
+      list($field_name, $corpus, $aux) = $field;
+      if (!isset($spec[$field_name])) {
+        $spec[$field_name] = $corpus;
+      } else if (!is_array($spec[$field_name])) {
+        $spec[$field_name] = array($spec[$field_name], $corpus);
+      } else {
+        $spec[$field_name][] = $corpus;
+      }
+      if ($aux != null) {
+        $spec[$field_name.'_aux_phid'] = $aux;
+      }
     }
+
+    $tags = array();
 
     foreach ($doc->getRelationshipData() as $relationship) {
       list($rtype, $to_phid, $to_type, $time) = $relationship;
-      $spec['relationship'][$rtype][] = array(
-        'phid'      => $to_phid,
-        'phidType'  => $to_type,
-        'when'      => (int)$time,
-      );
+      $spec[$rtype][] = $to_phid;
+      if ($rtype == PhabricatorSearchRelationship::RELATIONSHIP_PROJECT) {
+        $tags[] = $to_phid;
+      }
+    }
+
+    if (!empty($tags)) {
+      $spec['tags'] = $this->resolveTags($tags);
     }
 
     $this->executeRequest("/{$type}/{$phid}/", $spec, 'PUT');
@@ -122,7 +194,8 @@ final class PhabricatorElasticFulltextStorageEngine
     $doc->setDocumentModified($hit[$this->timestampFieldKey]);
 
     foreach ($hit['field'] as $fdef) {
-      $doc->addField($fdef['type'], $fdef['corpus'], $fdef['aux']);
+      $field_type = $fdef['type'];
+      $doc->addField($field_type, $hit[$field_type], $fdef['aux']);
     }
 
     foreach ($hit['relationship'] as $rtype => $rships) {
@@ -139,37 +212,44 @@ final class PhabricatorElasticFulltextStorageEngine
   }
 
   private function buildSpec(PhabricatorSavedQuery $query) {
-    $spec = array();
-    $filter = array();
-    $title_spec = array();
+    $q = new PhabricatorElasticSearchQueryBuilder('bool');
+    $queryString = $query->getParameter('query');
+    if (strlen($queryString)) {
+      $fields = $this->getTypeConstants("PhabricatorSearchDocumentFieldType");
 
-    if (strlen($query->getParameter('query'))) {
-      $spec[] = array(
+      $q->must(array(
         'simple_query_string' => array(
-          'query'  => $query->getParameter('query'),
-          'fields' => array('title^2', 'field.corpus', 'field.corpus.text'),
-          'default_operator' => 'and',
+          'query'  => $queryString,
+          'fields' => array(
+            'title^4',
+            'body^3',
+            'cmnt^2',
+            'tags',
+            '_all',
+          ),
+          "default_operator" => "and",
         ),
-      );
+      ));
 
-      $title_spec = array(
+      $q->should(array(
         'simple_query_string' => array(
-          'query'  => $query->getParameter('query'),
-          'fields' => array('title'),
-          'default_operator' => 'and',
+          'query'  => $queryString,
+          'fields' => $fields,
+          "analyzer" => 'english_exact',
+          "default_operator" => "and",
         ),
-      );
+      ));
     }
 
     $exclude = $query->getParameter('exclude');
     if ($exclude) {
-      $filter[] = array(
+      $q->filter(array(
         'not' => array(
           'ids' => array(
             'values' => array($exclude),
           ),
         ),
-      );
+      ));
     }
 
     $relationship_map = array(
@@ -194,66 +274,39 @@ final class PhabricatorElasticFulltextStorageEngine
     $include_closed = !empty($statuses[$rel_closed]);
 
     if ($include_open && !$include_closed) {
-      $relationship_map[$rel_open] = true;
+      $q->exists($rel_open);
     } else if (!$include_open && $include_closed) {
-      $relationship_map[$rel_closed] = true;
+      $q->exists($rel_closed);
     }
 
     if ($query->getParameter('withUnowned')) {
-      $relationship_map[$rel_unowned] = true;
+      $q->exists($rel_unowned);
     }
 
     $rel_owner = PhabricatorSearchRelationship::RELATIONSHIP_OWNER;
     if ($query->getParameter('withAnyOwner')) {
-      $relationship_map[$rel_owner] = true;
+      $q->exists($rel_owner);
     } else {
       $owner_phids = $query->getParameter('ownerPHIDs', array());
-      $relationship_map[$rel_owner] = $owner_phids;
-    }
-
-    foreach ($relationship_map as $field => $param) {
-      if (is_array($param) && $param) {
-        $should = array();
-        foreach ($param as $val) {
-          $should[] = array(
-            'match' => array(
-              "relationship.{$field}.phid" => array(
-                'query' => $val,
-                'type' => 'phrase',
-              ),
-            ),
-          );
-        }
-        // We couldn't solve it by minimum_number_should_match because it can
-        // match multiple owners without matching author.
-        $spec[] = array('bool' => array('should' => $should));
-      } else if ($param) {
-        $filter[] = array(
-          'exists' => array(
-            'field' => "relationship.{$field}.phid",
-          ),
-        );
+      if (count($owner_phids)) {
+        $q->terms($rel_owner, $owner_phids);
       }
     }
 
-    if ($spec) {
-      $spec = array('query' => array('bool' => array('must' => $spec)));
-      if ($title_spec) {
-        $spec['query']['bool']['should'] = $title_spec;
+    foreach ($relationship_map as $field => $phids) {
+      if (is_array($phids) && !empty($phids)) {
+        $q->terms($field, $phids);
       }
     }
 
-    if ($filter) {
-      $filter = array('filter' => array('and' => $filter));
-      if (!$spec) {
-        $spec = array('query' => array('match_all' => new stdClass()));
-      }
-      $spec = array(
-        'query' => array(
-          'filtered' => $spec + $filter,
-        ),
-      );
+    if (!count($q->getTerms('must'))) {
+      $q->must(array( "match_all" => array() ));
     }
+
+    $spec = array(
+      '_source' => false,
+      'query' => $q->toArray());
+
 
     if (!$query->getParameter('query')) {
       $spec['sort'] = array(
@@ -263,7 +316,7 @@ final class PhabricatorElasticFulltextStorageEngine
 
     $spec['from'] = (int)$query->getParameter('offset', 0);
     $spec['size'] = (int)$query->getParameter('limit', 25);
-
+    phlog(json_encode($spec));
     return $spec;
   }
 
@@ -338,26 +391,56 @@ final class PhabricatorElasticFulltextStorageEngine
               ),
               'tokenizer' => 'standard',
             ),
+            "english_exact" => array(
+              "tokenizer" => "standard",
+              "filter"    => array(
+                "lowercase"
+              )
+            ),
           ),
         ),
       ),
     );
 
+    $fields = $this->getTypeConstants("PhabricatorSearchDocumentFieldType");
+    $relationships = $this->getTypeConstants("PhabricatorSearchRelationship");
+
     $types = array_keys(
       PhabricatorSearchApplicationSearchEngine::getIndexableDocumentTypes());
+
     foreach ($types as $type) {
-      // Use the custom trigram analyzer for the corpus of text
-      $data['mappings'][$type]['properties']['field']['properties']['corpus'] =
-        array('type' => 'string', 'analyzer' => 'custom_trigrams', 'fields' =>
-          array('text' => array('type' => 'string', 'analyzer' => 'standard')));
+      $properties = [];
+      foreach ($fields as $field) {
+        // Use the custom analyzer for the corpus of text
+        $properties[$field] = array(
+          'type'                  => 'string',
+          'analyzer'              => 'english_exact',
+          'search_analyzer'       => 'english',
+          'search_quote_analyzer' => "english_exact",
+        );
+      }
+
+      foreach($relationships as $rel) {
+        $properties[$rel] = array(
+          'type'  => 'string',
+          'index' => 'not_analyzed'
+        );
+      }
 
       // Ensure we have dateCreated since the default query requires it
-      $data['mappings'][$type]['properties']['dateCreated']['type'] = 'string';
+      $properties['dateCreated']['type'] = 'date';
 
       // Replaces deprecated _timestamp for elasticsearch 2
       if ((int)$this->version >= 2) {
-        $data['mappings'][$type]['properties']['lastModified']['type'] = 'date';
+        $properties['lastModified']['type'] = 'date';
       }
+
+      $properties['tags'] = array(
+        'type' => 'string',
+        'analyzer' => 'english',
+        'store' => true,
+      );
+      $data['mappings'][$type]['properties'] = $properties;
     }
 
     return $data;

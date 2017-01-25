@@ -506,7 +506,9 @@ final class ManiphestTaskQuery extends PhabricatorCursorPagedPolicyAwareQuery {
     $fulltext_query->setParameter('types',
       array(ManiphestTaskPHIDType::TYPECONST));
 
-    $engine = PhabricatorFulltextStorageEngine::loadEngine();
+    $engine = PhabricatorFulltextStorageEngine::loadEngineForViewer(
+      $this->getViewer());
+
     $fulltext_results = $engine->executeSearch($fulltext_query);
 
     if (empty($fulltext_results)) {
