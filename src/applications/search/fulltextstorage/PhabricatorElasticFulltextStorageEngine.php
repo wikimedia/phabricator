@@ -332,10 +332,11 @@ final class PhabricatorElasticFulltextStorageEngine
     // else in the index (for example if 'phabricator' is only an alias to
     // some bigger index). Use '/$types/_search' instead.
     $uri = '/'.implode(',', $types).'/_search';
-
+    $spec = $this->buildSpec($query);
     try {
-      $response = $this->executeRequest($uri, $this->buildSpec($query));
+      $response = $this->executeRequest($uri, $spec);
     } catch (HTTPFutureHTTPResponseStatus $ex) {
+      phlog($uri, $spec);
       // elasticsearch probably uses Lucene query syntax:
       // http://lucene.apache.org/core/3_6_1/queryparsersyntax.html
       // Try literal search if operator search fails.
