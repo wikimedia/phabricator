@@ -37,15 +37,16 @@ final class PhabricatorElasticFulltextStorageEngine
   }
 
   public function isEnabledForViewer(PhabricatorUser $viewer) {
-    if (!$this->isEnabled()){
-      return false;
-    }
     $setting_class = 'PhabricatorElasticSearchBackendSetting';
     $setting = $viewer->getUserSetting(
       $setting_class::SETTINGKEY);
     $enabled = $setting_class::VALUE_ELASTICSEARCH_ENABLED;
 
-    return $setting == $enabled;
+    if ($setting == $enabled) {
+      return true;
+    }
+
+    return $this->isEnabled();
   }
 
   public function setURI($uri) {
