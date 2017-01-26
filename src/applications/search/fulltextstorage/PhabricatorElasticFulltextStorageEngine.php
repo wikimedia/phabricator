@@ -235,7 +235,7 @@ final class PhabricatorElasticFulltextStorageEngine
       $q->should(array(
         'simple_query_string' => array(
           'query'  => $queryString,
-          'fields' => $fields,
+          'fields' => array_values($fields),
           "analyzer" => 'english_exact',
           "default_operator" => "and",
         ),
