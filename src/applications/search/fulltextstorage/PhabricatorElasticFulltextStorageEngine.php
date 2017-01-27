@@ -316,7 +316,7 @@ final class PhabricatorElasticFulltextStorageEngine
     }
 
     $spec['from'] = (int)$query->getParameter('offset', 0);
-    $spec['size'] = (int)$query->getParameter('limit', 25);
+    $spec['size'] = min(10000, (int)$query->getParameter('limit', 25));
     //phlog(json_encode($spec));
     return $spec;
   }
