@@ -38,7 +38,7 @@ final class PhabricatorProjectProfileMenuEngine
         PhabricatorProjectSubprojectsProfileMenuItem::MENUITEMKEY);
 
     if (class_exists('PhabricatorMilestoneNavProfileMenuItem')) {
-      $panels[] = $this->newItem()
+      $items[] = $this->newItem()
         ->setBuiltinKey(PhabricatorMilestoneNavProfileMenuItem::MENUITEMKEY)
         ->setMenuItemKey(PhabricatorMilestoneNavProfileMenuItem::MENUITEMKEY);
     }
