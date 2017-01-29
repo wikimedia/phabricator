@@ -10,6 +10,7 @@ final class PhabricatorElasticFulltextStorageEngine
   private $timestampFieldKey;
   private $enabled = false;
   private $tag_cache = array();
+  private $textFieldType;
 
   public function __construct() {
     $this->uri = PhabricatorEnv::getEnvConfig('search.elastic.host');
@@ -19,6 +20,10 @@ final class PhabricatorElasticFulltextStorageEngine
     $this->timestampFieldKey = $this->version < 2
                                ? '_timestamp'
                                : 'lastModified';
+
+    $this->textFieldType = $this->version >= 5
+                         ? "text"
+                         : "string";
 
     $this->enabled = PhabricatorEnv::getEnvConfigIfExists(
                                'search.elastic.enabled', false);
@@ -218,28 +223,39 @@ final class PhabricatorElasticFulltextStorageEngine
     if (strlen($queryString)) {
       $fields = $this->getTypeConstants("PhabricatorSearchDocumentFieldType");
 
-      $q->must(array(
-        'simple_query_string' => array(
+      $q->must([
+        'simple_query_string' => [
           'query'  => $queryString,
-          'fields' => array(
+          'fields' => [
             'title^4',
             'body^3',
             'cmnt^2',
             'tags',
             '_all',
-          ),
+          ],
           "default_operator" => "and",
-        ),
-      ));
+        ],
+      ]);
 
-      $q->should(array(
-        'simple_query_string' => array(
+      $q->should([
+        'simple_query_string' => [
           'query'  => $queryString,
           'fields' => array_values($fields),
           "analyzer" => 'english_exact',
           "default_operator" => "and",
-        ),
-      ));
+        ],
+      ]);
+    }
+
+    if ($viewer = $this->getViewer()) {
+      $q->should( [
+        "term" => [
+          PhabricatorSearchRelationship::RELATIONSHIP_SUBSCRIBER => [
+            "value" => $viewer->getPHID(),
+            "boost" => 1.5,
+          ]
+        ]
+      ]);
     }
 
     $exclude = $query->getParameter('exclude');
@@ -376,28 +392,10 @@ final class PhabricatorElasticFulltextStorageEngine
       'index' => array(
         'auto_expand_replicas' => '0-2',
         'analysis' => array(
-          'filter' => array(
-            'trigrams_filter' => array(
-              'min_gram' => 3,
-              'type' => 'ngram',
-              'max_gram' => 3,
-            ),
-          ),
           'analyzer' => array(
-            'custom_trigrams' => array(
-              'type' => 'custom',
-              'filter' => array(
-                'lowercase',
-                'kstem',
-                'trigrams_filter',
-              ),
-              'tokenizer' => 'standard',
-            ),
             "english_exact" => array(
               "tokenizer" => "standard",
-              "filter"    => array(
-                "lowercase"
-              )
+              "filter"    => array("lowercase")
             ),
           ),
         ),
@@ -415,7 +413,7 @@ final class PhabricatorElasticFulltextStorageEngine
       foreach ($fields as $field) {
         // Use the custom analyzer for the corpus of text
         $properties[$field] = array(
-          'type'                  => 'string',
+          'type'                  => $this->textFieldType,
           'analyzer'              => 'english_exact',
           'search_analyzer'       => 'english',
           'search_quote_analyzer' => "english_exact",
@@ -424,7 +422,7 @@ final class PhabricatorElasticFulltextStorageEngine
 
       foreach($relationships as $rel) {
         $properties[$rel] = array(
-          'type'  => 'string',
+          'type'  => $this->textFieldType,
           'index' => 'not_analyzed'
         );
       }
@@ -438,7 +436,7 @@ final class PhabricatorElasticFulltextStorageEngine
       }
 
       $properties['tags'] = array(
-        'type' => 'string',
+        'type' => $this->textFieldType,
         'analyzer' => 'english',
         'store' => true,
       );

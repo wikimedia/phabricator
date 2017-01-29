@@ -7,6 +7,8 @@
  */
 abstract class PhabricatorFulltextStorageEngine extends Phobject {
 
+  protected $viewer;
+
 /* -(  Engine Metadata  )---------------------------------------------------- */
 
   /**
@@ -53,6 +55,20 @@ abstract class PhabricatorFulltextStorageEngine extends Phobject {
     return $this->isEnabled();
   }
 
+  /**
+   * Callers pass a reference to the current viewer so that fulltext queries
+   * can be boosted by user's phid
+   */
+  public function setViewer(PhabricatorUser $viewer) {
+    $this->viewer = $viewer;
+  }
+
+  /**
+  * @return PhabricatorUser
+  */
+  public function getViewer() {
+    return $this->viewer;
+  }
 
 /* -(  Managing Documents  )------------------------------------------------- */
 
@@ -149,7 +165,7 @@ abstract class PhabricatorFulltextStorageEngine extends Phobject {
       if (!$engine->isEnabledForViewer($viewer)) {
         continue;
       }
-
+      $engine->setViewer($viewer);
       $active[$key] = $engine;
     }
     return head($active);
