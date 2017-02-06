@@ -498,7 +498,8 @@ final class ManiphestTaskQuery extends PhabricatorCursorPagedPolicyAwareQuery {
     // fulltext search, and then use that to limit the rest of the search
     $fulltext_query = id(new PhabricatorSavedQuery())
       ->setEngineClassName('PhabricatorSearchApplicationSearchEngine')
-      ->setParameter('query', $this->fullTextSearch);
+      ->setParameter('query', $this->fullTextSearch)
+      ->setViewer($this->getViewer());
 
     // NOTE: Setting this to something larger than 2^53 will raise errors in
     // ElasticSearch, and billions of results won't fit in memory anyway.
@@ -506,8 +507,9 @@ final class ManiphestTaskQuery extends PhabricatorCursorPagedPolicyAwareQuery {
     $fulltext_query->setParameter('types',
       array(ManiphestTaskPHIDType::TYPECONST));
 
-    $engine = PhabricatorFulltextStorageEngine::loadEngine();
-    $fulltext_results = $engine->executeSearch($fulltext_query);
+    $fulltext_results = PhabricatorFulltextStorageEngine::loadEngines()
+      ->needReadable(true)
+      ->executeSearch($fulltext_query);
 
     if (empty($fulltext_results)) {
       $fulltext_results = array(null);

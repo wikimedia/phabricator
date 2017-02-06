@@ -123,21 +123,38 @@ final class PhabricatorElasticFulltextStorageEngine
   }
 
   private function buildSpec(PhabricatorSavedQuery $query) {
-    $spec = array();
-    $filter = array();
-    $title_spec = array();
+    //phlog($query);
+    $q = new PhabricatorElasticSearchQueryBuilder('bool');
+    $queryString = $query->getParameter('query');
+    if (strlen($queryString)) {
+      $fields = $this->getTypeConstants("PhabricatorSearchDocumentFieldType");
 
-    if (strlen($query->getParameter('query'))) {
-      $spec[] = array(
-        'simple_query_string' => array(
-          'query'  => $query->getParameter('query'),
-          'fields' => array('field.corpus'),
-        ),
-      );
+      $q->must([
+        'simple_query_string' => [
+          'query'  => $queryString,
+          'fields' => [
+            'title^4',
+            'body^3',
+            'cmnt^2',
+            'tags',
+            '_all',
+          ],
+          "default_operator" => "and",
+        ],
+      ]);
+
+      $q->should([
+        'simple_query_string' => [
+          'query'  => $queryString,
+          'fields' => array_values($fields),
+          "analyzer" => 'english_exact',
+          "default_operator" => "and",
+        ],
+      ]);
 
       $title_spec = array(
         'simple_query_string' => array(
-          'query'  => $query->getParameter('query'),
+          'query'  => $queryString,
           'fields' => array('title'),
         ),
       );
@@ -261,22 +278,9 @@ final class PhabricatorElasticFulltextStorageEngine
     // some bigger index). Use '/$types/_search' instead.
     $uri = '/'.implode(',', $types).'/_search';
 
-    try {
-      $response = $this->executeRequest($uri, $this->buildSpec($query));
-    } catch (HTTPFutureHTTPResponseStatus $ex) {
-      // elasticsearch probably uses Lucene query syntax:
-      // http://lucene.apache.org/core/3_6_1/queryparsersyntax.html
-      // Try literal search if operator search fails.
-      if (!strlen($query->getParameter('query'))) {
-        throw $ex;
-      }
-      $query = clone $query;
-      $query->setParameter(
-        'query',
-        addcslashes(
-          $query->getParameter('query'), '+-&|!(){}[]^"~*?:\\'));
-      $response = $this->executeRequest($uri, $this->buildSpec($query));
-    }
+    $spec = $this->buildSpec($query);
+    $response = $this->executeRequest($uri, $spec);
+    //phlog($response);
 
     $phids = ipull($response['hits']['hits'], '_id');
     return $phids;
