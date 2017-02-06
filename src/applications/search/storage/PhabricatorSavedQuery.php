@@ -66,6 +66,7 @@ final class PhabricatorSavedQuery extends PhabricatorSearchDAO
 
   public function setViewer(PhabricatorUser $viewer) {
     $this->viewer = $viewer;
+    return $this;
   }
 
   /** @returns PhabricatorUser */

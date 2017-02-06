@@ -218,7 +218,6 @@ final class PhabricatorElasticFulltextStorageEngine
   }
 
   private function buildSpec(PhabricatorSavedQuery $query) {
-
     $q = new PhabricatorElasticSearchQueryBuilder('bool');
     $queryString = $query->getParameter('query');
     if (strlen($queryString)) {
@@ -345,6 +344,7 @@ final class PhabricatorElasticFulltextStorageEngine
     // else in the index (for example if 'phabricator' is only an alias to
     // some bigger index). Use '/$types/_search' instead.
     $uri = '/'.implode(',', $types).'/_search';
+
     $spec = $this->buildSpec($query);
     $response = $this->executeRequest($uri, $spec);
     //phlog($response);
