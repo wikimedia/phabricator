@@ -6,6 +6,7 @@ final class PhabricatorSavedQuery extends PhabricatorSearchDAO
   protected $parameters = array();
   protected $queryKey;
   protected $engineClassName;
+  protected $viewer;
 
   private $parameterMap = self::ATTACHABLE;
 
@@ -61,6 +62,16 @@ final class PhabricatorSavedQuery extends PhabricatorSearchDAO
 
   public function getEvaluatedParameter($key, $default = null) {
     return $this->assertAttachedKey($this->parameterMap, $key, $default);
+  }
+
+  public function setViewer(PhabricatorUser $viewer) {
+    $this->viewer = $viewer;
+    return $this;
+  }
+
+  /** @returns PhabricatorUser */
+  public function getViewer() {
+    return $this->viewer;
   }
 
 

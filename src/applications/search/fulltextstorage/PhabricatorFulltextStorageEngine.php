@@ -36,17 +36,26 @@ abstract class PhabricatorFulltextStorageEngine extends Phobject {
   abstract public function getEnginePriority();
 
   /**
-   * Return `true` if the engine is currently writable.
+   * Return `true` if the engine is enabled.
    *
    * Engines that are disabled or missing configuration should return `false`
-   * to prevent new writes. If writes were made with this engine in the past,
-   * the application may still try to perform reads.
+   * to prevent Phabricator from attempting to read from or write to this index.
    *
-   * @return bool True if this engine can support new writes.
+   * @return bool True if this engine can/should handle requests.
    * @task meta
    */
   abstract public function isEnabled();
 
+  /**
+   * Return `true` if the engine is currently writable.
+   *
+   * Engines that are unable to service write requests should return `false`
+   * to prevent new writes.
+   *
+   * @return bool True if this engine can support new writes.
+   * @task meta
+   */
+  abstract public function isWritable();
 
 /* -(  Managing Documents  )------------------------------------------------- */
 
@@ -133,6 +142,12 @@ abstract class PhabricatorFulltextStorageEngine extends Phobject {
 
   public static function loadEngine() {
     return head(self::loadActiveEngines());
+  }
+
+  /** @return PhabricatorFulltextStorageEngineAggregate */
+  public static function loadEngines() {
+    return id(new PhabricatorFulltextStorageEngineAggregate())
+      ->addEngines(self::loadAllEngines());
   }
 
 }
