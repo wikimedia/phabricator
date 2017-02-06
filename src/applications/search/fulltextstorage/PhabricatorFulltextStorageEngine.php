@@ -38,37 +38,26 @@ abstract class PhabricatorFulltextStorageEngine extends Phobject {
   abstract public function getEnginePriority();
 
   /**
-   * Return `true` if the engine is currently writable.
+   * Return `true` if the engine is enabled.
    *
    * Engines that are disabled or missing configuration should return `false`
-   * to prevent new writes. If writes were made with this engine in the past,
-   * the application may still try to perform reads.
+   * to prevent Phabricator from attempting to read from or write to this index.
    *
-   * @return bool True if this engine can support new writes.
+   * @return bool True if this engine can/should handle requests.
    * @task meta
    */
   abstract public function isEnabled();
 
-  /** return `true` if the engine is enabled for the specified user.
-   */
-  public function isEnabledForViewer(PhabricatorUser $viewer) {
-    return $this->isEnabled();
-  }
-
   /**
-   * Callers pass a reference to the current viewer so that fulltext queries
-   * can be boosted by user's phid
+   * Return `true` if the engine is currently writable.
+   *
+   * Engines that are unable to service write requests should return `false`
+   * to prevent new writes.
+   *
+   * @return bool True if this engine can support new writes.
+   * @task meta
    */
-  public function setViewer(PhabricatorUser $viewer) {
-    $this->viewer = $viewer;
-  }
-
-  /**
-  * @return PhabricatorUser
-  */
-  public function getViewer() {
-    return $this->viewer;
-  }
+  abstract public function isWritable();
 
 /* -(  Managing Documents  )------------------------------------------------- */
 
@@ -157,18 +146,11 @@ abstract class PhabricatorFulltextStorageEngine extends Phobject {
     return head(self::loadActiveEngines());
   }
 
-  public static function loadEngineForViewer($viewer) {
-   $engines = self::loadAllEngines();
 
-    $active = array();
-    foreach ($engines as $key => $engine) {
-      if (!$engine->isEnabledForViewer($viewer)) {
-        continue;
-      }
-      $engine->setViewer($viewer);
-      $active[$key] = $engine;
-    }
-    return head($active);
+  /** @return PhabricatorFulltextStorageEngineAggregate */
+  public static function loadEngines() {
+    return id(new PhabricatorFulltextStorageEngineAggregate())
+      ->addEngines(self::loadAllEngines());
   }
 
 }

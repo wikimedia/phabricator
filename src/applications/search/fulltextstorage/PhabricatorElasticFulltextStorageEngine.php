@@ -218,6 +218,7 @@ final class PhabricatorElasticFulltextStorageEngine
   }
 
   private function buildSpec(PhabricatorSavedQuery $query) {
+
     $q = new PhabricatorElasticSearchQueryBuilder('bool');
     $queryString = $query->getParameter('query');
     if (strlen($queryString)) {
@@ -245,17 +246,13 @@ final class PhabricatorElasticFulltextStorageEngine
           "default_operator" => "and",
         ],
       ]);
-    }
 
-    if ($viewer = $this->getViewer()) {
-      $q->should( [
-        "term" => [
-          PhabricatorSearchRelationship::RELATIONSHIP_SUBSCRIBER => [
-            "value" => $viewer->getPHID(),
-            "boost" => 1.5,
-          ]
-        ]
-      ]);
+      $title_spec = array(
+        'simple_query_string' => array(
+          'query'  => $queryString,
+          'fields' => array('title'),
+        ),
+      );
     }
 
     $exclude = $query->getParameter('exclude');
@@ -349,23 +346,8 @@ final class PhabricatorElasticFulltextStorageEngine
     // some bigger index). Use '/$types/_search' instead.
     $uri = '/'.implode(',', $types).'/_search';
     $spec = $this->buildSpec($query);
-    try {
-      $response = $this->executeRequest($uri, $spec);
-    } catch (HTTPFutureHTTPResponseStatus $ex) {
-      phlog($uri, $spec);
-      // elasticsearch probably uses Lucene query syntax:
-      // http://lucene.apache.org/core/3_6_1/queryparsersyntax.html
-      // Try literal search if operator search fails.
-      if (!strlen($query->getParameter('query'))) {
-        throw $ex;
-      }
-      $query = clone $query;
-      $query->setParameter(
-        'query',
-        addcslashes(
-          $query->getParameter('query'), '+-&|!(){}[]^"~*?:\\'));
-      $response = $this->executeRequest($uri, $this->buildSpec($query));
-    }
+    $response = $this->executeRequest($uri, $spec);
+    //phlog($response);
 
     $phids = ipull($response['hits']['hits'], '_id');
     return $phids;
