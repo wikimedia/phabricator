@@ -61,7 +61,7 @@ class PhabricatorFulltextStorageEngineAggregate {
       if ($this->need_writable && !$engine->isWritable()) {
         continue;
       }
-      $results[] = call_user_method_array($name, $engine, $args);
+      $results[] = call_user_func_array(array($engine, $name), $args);
     }
     return $results;
   }

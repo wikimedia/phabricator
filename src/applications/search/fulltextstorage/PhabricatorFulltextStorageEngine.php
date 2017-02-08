@@ -57,7 +57,9 @@ abstract class PhabricatorFulltextStorageEngine extends Phobject {
    * @return bool True if this engine can support new writes.
    * @task meta
    */
-  abstract public function isWritable();
+  public function isWritable() {
+    return $this->isEnabled();
+  }
 
 /* -(  Managing Documents  )------------------------------------------------- */
 

@@ -6,7 +6,7 @@ final class PhabricatorSavedQuery extends PhabricatorSearchDAO
   protected $parameters = array();
   protected $queryKey;
   protected $engineClassName;
-  protected $viewer;
+  private $viewer;
 
   private $parameterMap = self::ATTACHABLE;
 
