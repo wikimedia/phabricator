@@ -252,6 +252,19 @@ final class PhabricatorCalendarEventSearchEngine
     $query = $this->newSavedQuery();
     $query->setQueryKey($query_key);
 
+    // WMF HACK: default queries should show events tagged with #general-events
+    // so we need to get the PHID for that project.
+    if ($query_key !== 'all') {
+      $project_query = new PhabricatorProjectQuery();
+      $project = $project_query->setViewer(PhabricatorUser::getOmnipotentUser())
+                     ->withNames(array('general-events'))
+                     ->needMembers(false)
+                     ->executeOne();
+      if ($project) {
+        $query->setParameter('projectPHIDs', array($project->getPHID()));
+      }
+    }
+
     switch ($query_key) {
       case 'month':
         return $query->setParameter('display', 'month');

@@ -1,7 +1,7 @@
 {
   "phabricator.uri": "https://phabricator.wikimedia.org/",
   "repository.callsign": "PHAB",
-  "load": ["src/"],
+  "load": ["src/", "../libext/misc/"],
   "base": "arc:amended, git:HEAD^",
   "history.immutable": false
 }

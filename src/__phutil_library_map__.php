@@ -2794,6 +2794,7 @@ phutil_register_library_map(array(
     'PhabricatorFulltextIndexEngineExtension' => 'applications/search/engineextension/PhabricatorFulltextIndexEngineExtension.php',
     'PhabricatorFulltextInterface' => 'applications/search/interface/PhabricatorFulltextInterface.php',
     'PhabricatorFulltextStorageEngine' => 'applications/search/fulltextstorage/PhabricatorFulltextStorageEngine.php',
+    'PhabricatorFulltextStorageEngineAggregate' => 'applications/search/fulltextstorage/PhabricatorFulltextStorageEngineAggregate.php',
     'PhabricatorFundApplication' => 'applications/fund/application/PhabricatorFundApplication.php',
     'PhabricatorGDSetupCheck' => 'applications/config/check/PhabricatorGDSetupCheck.php',
     'PhabricatorGarbageCollector' => 'infrastructure/daemon/garbagecollector/PhabricatorGarbageCollector.php',
