@@ -252,12 +252,13 @@ final class PhabricatorCalendarEventSearchEngine
     $query = $this->newSavedQuery();
     $query->setQueryKey($query_key);
 
-    // WMF HACK: default queries should show events tagged with #general-events
-    // so we need to get the PHID for that project.
     if ($query_key !== 'all') {
+    // WMF HACK: default queries should show only events that are tagged with
+    // the project named #events so we need to get the PHID for that project
+    // and add it to the query. See https://phabricator.wikimedia.org/T157488
       $project_query = new PhabricatorProjectQuery();
       $project = $project_query->setViewer(PhabricatorUser::getOmnipotentUser())
-                     ->withNames(array('general-events'))
+                     ->withNames(array('events'))
                      ->needMembers(false)
                      ->executeOne();
       if ($project) {
