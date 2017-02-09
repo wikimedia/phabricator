@@ -28,6 +28,18 @@ final class PhabricatorPhurlURL extends PhabricatorPhurlDAO
 
   const DEFAULT_ICON = 'fa-compress';
 
+  private static $domain_whitelist = array(
+    'wikimedia.org',
+    'wikipedia.org',
+    'mediawiki.org',
+    'wmflabs.org',
+    'toolserver.org',
+    'wikimediafoundation.org',
+    'wikinews.org',
+    'wiktionary.org',
+    'wikidata.org',
+    'github.com');
+
   public static function initializeNewPhurlURL(PhabricatorUser $actor) {
     $app = id(new PhabricatorApplicationQuery())
       ->setViewer($actor)
@@ -87,8 +99,11 @@ final class PhabricatorPhurlURL extends PhabricatorPhurlDAO
   public function isValid() {
     $allowed_protocols = PhabricatorEnv::getEnvConfig('uri.allowed-protocols');
     $uri = new PhutilURI($this->getLongURL());
+    $domain = explode('.', strtolower($uri->getDomain()));
+    $tld = join('.', array_slice($domain, -2));
 
-    return isset($allowed_protocols[$uri->getProtocol()]);
+    return isset($allowed_protocols[$uri->getProtocol()]) &&
+       in_array($tld, self::$domain_whitelist);
   }
 
   public function getDisplayName() {

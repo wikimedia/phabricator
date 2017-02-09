@@ -36,7 +36,7 @@ final class PhabricatorPhurlURLViewController
     $details = $this->buildPropertySectionView($url);
 
     $url_error = id(new PHUIInfoView())
-      ->setErrors(array(pht('This URL is invalid due to a bad protocol.')))
+      ->setErrors(array(pht('URL must match approved domains / protocols.')))
       ->setIsHidden($url->isValid());
 
     $is_serious = PhabricatorEnv::getEnvConfig('phabricator.serious-business');
