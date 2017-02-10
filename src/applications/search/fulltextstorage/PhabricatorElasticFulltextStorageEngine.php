@@ -15,8 +15,8 @@ final class PhabricatorElasticFulltextStorageEngine
   public function __construct() {
     $this->uri = PhabricatorEnv::getEnvConfig('search.elastic.host');
     $this->index = PhabricatorEnv::getEnvConfig('search.elastic.namespace');
-    $this->version = (int)PhabricatorEnv::getEnvConfig(
-                               'search.elastic.version');
+    $this->version = PhabricatorEnv::getEnvConfig('search.elastic.version');
+
     $this->timestampFieldKey = $this->version < 2
                                ? '_timestamp'
                                : 'lastModified';
@@ -120,7 +120,7 @@ final class PhabricatorElasticFulltextStorageEngine
   }
 
   public function getTypeConstants($class) {
-    static $typeconstants = [];
+    static $typeconstants = array();
     if (!empty($typeconstants[$class])) {
       return $typeconstants[$class];
     }
@@ -223,28 +223,28 @@ final class PhabricatorElasticFulltextStorageEngine
     if (strlen($queryString)) {
       $fields = $this->getTypeConstants("PhabricatorSearchDocumentFieldType");
 
-      $q->must([
-        'simple_query_string' => [
+      $q->must(array(
+        'simple_query_string' => array(
           'query'  => $queryString,
-          'fields' => [
+          'fields' => array(
             'title^4',
             'body^3',
             'cmnt^2',
             'tags',
             '_all',
-          ],
+          ),
           "default_operator" => "and",
-        ],
-      ]);
+        ),
+      ));
 
-      $q->should([
-        'simple_query_string' => [
+      $q->should(array(
+        'simple_query_string' => array(
           'query'  => $queryString,
           'fields' => array_values($fields),
           "analyzer" => 'english_exact',
           "default_operator" => "and",
-        ],
-      ]);
+        ),
+      ));
 
       $title_spec = array(
         'simple_query_string' => array(
@@ -329,7 +329,7 @@ final class PhabricatorElasticFulltextStorageEngine
 
     $spec['from'] = (int)$query->getParameter('offset', 0);
     $spec['size'] = min(10000, (int)$query->getParameter('limit', 25));
-    //phlog(json_encode($spec));
+    // phlog(json_encode($spec));
     return $spec;
   }
 
@@ -347,7 +347,7 @@ final class PhabricatorElasticFulltextStorageEngine
 
     $spec = $this->buildSpec($query);
     $response = $this->executeRequest($uri, $spec);
-    //phlog($response);
+    // phlog($response);
 
     $phids = ipull($response['hits']['hits'], '_id');
     return $phids;
@@ -355,11 +355,17 @@ final class PhabricatorElasticFulltextStorageEngine
 
   public function indexExists() {
     try {
-      if ((int)$this->version >= 2) {
-        return (bool)$this->executeRequest('/', array(), 'GET');
+
+      if ($this->version >= 5) {
+        $uri = '/_stats/';
+        $res = $this->executeRequest($uri, array());
+        return isset($res['indices']['phabricator']);
+      } else if ($this->version >= 2) {
+        $uri = '';
       } else {
-        return (bool)$this->executeRequest('/_status/', array());
+        $uri = '/_status/';
       }
+      return (bool)$this->executeRequest($uri, array());
     } catch (HTTPFutureHTTPResponseStatus $e) {
       if ($e->getStatusCode() == 404) {
         return false;
@@ -391,7 +397,7 @@ final class PhabricatorElasticFulltextStorageEngine
       PhabricatorSearchApplicationSearchEngine::getIndexableDocumentTypes());
 
     foreach ($types as $type) {
-      $properties = [];
+      $properties = array();
       foreach ($fields as $field) {
         // Use the custom analyzer for the corpus of text
         $properties[$field] = array(
@@ -405,8 +411,10 @@ final class PhabricatorElasticFulltextStorageEngine
       foreach($relationships as $rel) {
         $properties[$rel] = array(
           'type'  => $this->textFieldType,
-          'index' => 'not_analyzed'
         );
+        if ($this->version == 2) {
+        $properties[$rel]['index'] = 'not_analyzed';
+        }
       }
 
       // Ensure we have dateCreated since the default query requires it
@@ -449,6 +457,7 @@ final class PhabricatorElasticFulltextStorageEngine
    * @return bool
    */
   private function check($actual, $required) {
+
     foreach ($required as $key => $value) {
       if (!array_key_exists($key, $actual)) {
         if ($key === '_all') {
