@@ -7,14 +7,6 @@ final class PhabricatorMySQLFulltextStorageEngine
     return 'mysql';
   }
 
-  public function getEnginePriority() {
-    return 100;
-  }
-
-  public function isEnabled() {
-    return true;
-  }
-
   public function reindexAbstractDocument(
     PhabricatorSearchAbstractDocument $doc) {
 
