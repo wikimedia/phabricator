@@ -7,8 +7,6 @@
  */
 abstract class PhabricatorFulltextStorageEngine extends Phobject {
 
-  protected $viewer;
-
 /* -(  Engine Metadata  )---------------------------------------------------- */
 
   /**
@@ -18,48 +16,6 @@ abstract class PhabricatorFulltextStorageEngine extends Phobject {
    * @task meta
    */
   abstract public function getEngineIdentifier();
-
-  /**
-   * Prioritize this engine relative to other engines.
-   *
-   * Engines with a smaller priority number get an opportunity to write files
-   * first. Generally, lower-latency filestores should have lower priority
-   * numbers, and higher-latency filestores should have higher priority
-   * numbers. Setting priority to approximately the number of milliseconds of
-   * read latency will generally produce reasonable results.
-   *
-   * In conjunction with filesize limits, the goal is to store small files like
-   * profile images, thumbnails, and text snippets in lower-latency engines,
-   * and store large files in higher-capacity engines.
-   *
-   * @return float Engine priority.
-   * @task meta
-   */
-  abstract public function getEnginePriority();
-
-  /**
-   * Return `true` if the engine is enabled.
-   *
-   * Engines that are disabled or missing configuration should return `false`
-   * to prevent Phabricator from attempting to read from or write to this index.
-   *
-   * @return bool True if this engine can/should handle requests.
-   * @task meta
-   */
-  abstract public function isEnabled();
-
-  /**
-   * Return `true` if the engine is currently writable.
-   *
-   * Engines that are unable to service write requests should return `false`
-   * to prevent new writes.
-   *
-   * @return bool True if this engine can support new writes.
-   * @task meta
-   */
-  public function isWritable() {
-    return $this->isEnabled();
-  }
 
 /* -(  Managing Documents  )------------------------------------------------- */
 
@@ -112,47 +68,5 @@ abstract class PhabricatorFulltextStorageEngine extends Phobject {
    */
   public function initIndex() {}
 
-
-/* -(  Loading Storage Engines  )-------------------------------------------- */
-
-  /**
-   * @task load
-   */
-  public static function loadAllEngines() {
-    return id(new PhutilClassMapQuery())
-      ->setAncestorClass(__CLASS__)
-      ->setUniqueMethod('getEngineIdentifier')
-      ->setSortMethod('getEnginePriority')
-      ->execute();
-  }
-
-  /**
-   * @task load
-   */
-  public static function loadActiveEngines() {
-    $engines = self::loadAllEngines();
-
-    $active = array();
-    foreach ($engines as $key => $engine) {
-      if (!$engine->isEnabled()) {
-        continue;
-      }
-
-      $active[$key] = $engine;
-    }
-
-    return $active;
-  }
-
-  public static function loadEngine() {
-    return head(self::loadActiveEngines());
-  }
-
-
-  /** @return PhabricatorFulltextStorageEngineAggregate */
-  public static function loadEngines() {
-    return id(new PhabricatorFulltextStorageEngineAggregate())
-      ->addEngines(self::loadAllEngines());
-  }
 
 }

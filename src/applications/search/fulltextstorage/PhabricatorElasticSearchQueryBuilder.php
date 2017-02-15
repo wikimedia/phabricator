@@ -2,85 +2,77 @@
 
 class PhabricatorElasticSearchQueryBuilder {
   protected $name;
-  protected $terms;
-  protected $current_context = null;
-  protected $parent = null;
+  protected $clauses = array();
 
-  function __construct($name='query') {
-    $this->name = $name;
-    $this->terms = array();
-  }
 
-  function toArray() {
-    return array($this->name => $this->getTerms());
-  }
-
-  function getTerms($termkey=null) {
-    $terms = $this->terms;
+  public function getClauses($termkey = null) {
+    $clauses = $this->clauses;
     if ($termkey == null) {
-      return $terms;
+      return $clauses;
     }
-    if (isset($terms[$termkey])){
-      return $terms[$termkey];
+    if (isset($clauses[$termkey])) {
+      return $clauses[$termkey];
     }
-    return [];
+    return array();
   }
 
-  function branch($term) {
-    $child = new PhabricatorElasticSearchQueryBuilder($term);
-    $child->parent = $this;
-    $this->terms[$this->current_context][] = $child;
-    return $child;
+  public function clauseCount($clausekey) {
+    if (isset($this->clauses[$clausekey])) {
+      return count($this->clauses[$clausekey]);
+    } else {
+      return 0;
+    }
   }
 
-  function bool() {
-    return $this->branch('bool');
+  public function exists($field) {
+    return $this->addClause('filter', array(
+      'exists' => array(
+        'field' => $field,
+      ),
+    ));
   }
 
-  function match() {
-    return $this->branch('match');
-  }
-
-  function exists($field) {
-    $this->filter([
-      'exists' => [
-        'field' => $field
-      ]
-    ]);
-    return $this;
-  }
-
-  function terms($field, $values) {
-    $this->filter([
-      'terms' => [
+  public function terms($field, $values) {
+    return $this->addClause('filter', array(
+      'terms' => array(
         $field  => array_values($values),
-      ],
-    ]);
+      ),
+    ));
+  }
+
+  public function must($clause) {
+    return $this->addClause('must', $clause);
+  }
+
+  public function filter($clause) {
+    return $this->addClause('filter', $clause);
+  }
+
+  public function should($clause) {
+    return $this->addClause('should', $clause);
+  }
+
+  public function mustNot($clause) {
+    return $this->addClause('must_not', $clause);
+  }
+
+  public function addClause($clause, $terms) {
+    $this->clauses[$clause][] = $terms;
     return $this;
   }
 
-  function query_string($str, $fields=['title','body']) {
-
-  }
-
-  function __call($name, $args) {
-    $this->current_context = $name;
-
-    foreach($args as $arg) {
-      if (empty($arg)){
-        continue;
+  public function toArray() {
+    $clauses = $this->getClauses();
+    return $clauses;
+    $cleaned = array();
+    foreach ($clauses as $clause => $subclauses) {
+      if (is_array($subclauses) && count($subclauses) == 1) {
+        $cleaned[$clause] = array_shift($subclauses);
+      } else {
+        $cleaned[$clause] = $subclauses;
       }
-      $this->terms[$name][] = $arg;
     }
-    return $this;
-  }
-
-  function __invoke() {
-    return $this->toArray();
-  }
-
-  function __toString() {
-    return json_encode($this->toArray());
+    return $cleaned;
   }
 
 }

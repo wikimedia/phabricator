@@ -71,14 +71,9 @@ final class PhabricatorSearchDocumentQuery
 
   public function loadDocumentPHIDsWithoutPolicyChecks() {
     $query = id(clone($this->savedQuery))
-      ->setViewer($this->getViewer())
       ->setParameter('offset', $this->getOffset())
       ->setParameter('limit', $this->getRawResultLimit());
-
-    $engine = PhabricatorFulltextStorageEngine::loadEngines()
-      ->needReadable(true);
-
-    return $engine->executeSearch($query);
+    return PhabricatorSearchCluster::executeSearch($query);
   }
 
   public function getQueryApplicationClass() {

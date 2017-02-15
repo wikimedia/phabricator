@@ -501,15 +501,14 @@ final class ManiphestTaskQuery extends PhabricatorCursorPagedPolicyAwareQuery {
       ->setParameter('query', $this->fullTextSearch)
       ->setViewer($this->getViewer());
 
-    // NOTE: Setting this to something larger than 2^53 will raise errors in
+    // NOTE: Setting this to something larger than 10,000 will raise errors in
     // ElasticSearch, and billions of results won't fit in memory anyway.
-    $fulltext_query->setParameter('limit', 100000);
+    $fulltext_query->setParameter('limit', 10000);
     $fulltext_query->setParameter('types',
       array(ManiphestTaskPHIDType::TYPECONST));
 
-    $fulltext_results = PhabricatorFulltextStorageEngine::loadEngines()
-      ->needReadable(true)
-      ->executeSearch($fulltext_query);
+    $fulltext_results = PhabricatorSearchCluster::executeSearch(
+      $fulltext_query);
 
     if (empty($fulltext_results)) {
       $fulltext_results = array(null);
