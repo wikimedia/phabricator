@@ -412,4 +412,9 @@ final class PhabricatorMySQLFulltextStorageEngine
   public function indexExists() {
     return true;
   }
+
+  public function getIndexStats() {
+    return false;
+  }
+
 }

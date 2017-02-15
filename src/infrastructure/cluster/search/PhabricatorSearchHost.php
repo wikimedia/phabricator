@@ -97,6 +97,10 @@ abstract class PhabricatorSearchHost
     }
   }
 
+  /**
+   * @return string[] Get a list of fields to show in the status overview UI
+   */
+  abstract public function getStatusViewColumns();
 
   /**
    * @return PhabricatorFulltextStorageEngine

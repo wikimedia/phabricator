@@ -44,75 +44,111 @@ final class PhabricatorConfigClusterSearchController
 
     $services = PhabricatorSearchCluster::getAllServices();
     Javelin::initBehavior('phabricator-tooltips');
-    $status_map = PhabricatorSearchCluster::getConnectionStatusMap();
-    $rows = array();
+
+    $view = array();
     foreach ($services as $service) {
-      foreach ($service->getHosts() as $host) {
+      $view[] = $this->renderStatusView($service);
+    }
+    return $view;
+  }
+
+  private function renderStatusView($service) {
+    $rows = array();
+
+    $head = array_merge(
+        array(pht('Type')),
+        array_keys($service->getStatusViewColumns()),
+        array(pht('Status')));
+
+    $status_map = PhabricatorSearchCluster::getConnectionStatusMap();
+    foreach ($service->getHosts() as $host) {
+      $reachable = false;
+      try {
+        $engine = $host->getEngine();
+        $reachable = $engine->indexExists();
+      } catch (Exception $ex) {
         $reachable = false;
-        try {
-          $engine = $host->getEngine();
-          $reachable = $engine->indexExists();
-        } catch (Exception $ex) {
-          $reachable = false;
-        }
-        $host->didHealthCheck($reachable);
-
-        try {
-          $status = $host->getConnectionStatus();
-          $status = idx($status_map, $status, array());
-        } catch (Exception $ex) {
-          $status['icon'] = 'fa-times';
-          $status['label'] = pht('Connection Error');
-          $status['color'] = 'red';
-        }
-
-        $type_icon = 'fa-search sky';
-        $type_tip = $host->getDisplayName();
-
-        $type_icon = id(new PHUIIconView())
-          ->setIcon($type_icon);
-        $status_view = array(
-          id(new PHUIIconView())->setIcon($status['icon'].' '.$status['color']),
-          ' ',
-          $status['label'],
-        );
-
-        $roles = implode(', ', array_keys($host->getRoles()));
-        $rows[] = array(
-          array($type_icon, ' ', $type_tip),
-          $host->getProtocol(),
-          $host->getHost(),
-          $host->getPort(),
-          $status_view,
-          $roles,
-        );
       }
+      $host->didHealthCheck($reachable);
+      try {
+        $status = $host->getConnectionStatus();
+        $status = idx($status_map, $status, array());
+        $stats = $engine->getIndexStats();
+      } catch (Exception $ex) {
+        $status['icon'] = 'fa-times';
+        $status['label'] = pht('Connection Error');
+        $status['color'] = 'red';
+        $stats = array();
+      }
+      $stats_view = $this->renderIndexStats($stats);
+      $type_icon = 'fa-search sky';
+      $type_tip = $host->getDisplayName();
+
+      $type_icon = id(new PHUIIconView())
+        ->setIcon($type_icon);
+      $status_view = array(
+        id(new PHUIIconView())->setIcon($status['icon'].' '.$status['color']),
+        ' ',
+        $status['label'],
+      );
+      $row = array(array($type_icon, ' ', $type_tip));
+      $row = array_merge($row, array_values(
+        $host->getStatusViewColumns()));
+      $row[] = $status_view;
+      $rows[] = $row;
     }
 
     $table = id(new AphrontTableView($rows))
-      ->setNoDataString(
-        pht('No search servers are configured.'))
-      ->setHeaders(
-        array(
-          pht('Type'),
-          pht('Protocol'),
-          pht('Host'),
-          pht('Port'),
-          pht('Status'),
-          pht('Roles'),
-          null,
-        ))
-      ->setColumnClasses(
-        array(
-          null,
-          null,
-          null,
-          null,
-          null,
-          null,
-          'wide',
-        ));
+    ->setNoDataString(pht('No search servers are configured.'))
+    ->setHeaders($head);
 
-    return $table;
+    return id(new PHUIObjectBoxView())
+      ->setHeaderText($service->getDisplayName())
+      ->addPropertyList($stats_view)
+      ->setBackground(PHUIObjectBoxView::BLUE_PROPERTY)
+      ->setTable($table);
   }
+
+  private function renderIndexStats($stats) {
+    $view = id(new PHUIPropertyListView());
+    if ($stats == false) {
+      $view->addProperty(pht('Stats'), $this->renderNo(pht('N/A')));
+      return $view;
+    }
+    $view->addProperty(pht('Queries'),
+      $stats['total']['search']['query_total']);
+    $view->addProperty(pht('Documents'),
+      $stats['total']['docs']['count']);
+    $view->addProperty(pht('Deleted'),
+      $stats['total']['docs']['deleted']);
+    $view->addProperty(pht('Storage Used'),
+      phutil_format_bytes($stats['total']['store']['size_in_bytes']));
+
+    return $view;
+  }
+
+  private function renderYes($info) {
+    return array(
+      id(new PHUIIconView())->setIcon('fa-check', 'green'),
+      ' ',
+      $info,
+    );
+  }
+
+  private function renderNo($info) {
+    return array(
+      id(new PHUIIconView())->setIcon('fa-times-circle', 'red'),
+      ' ',
+      $info,
+    );
+  }
+
+  private function renderInfo($info) {
+    return array(
+      id(new PHUIIconView())->setIcon('fa-info-circle', 'grey'),
+      ' ',
+      $info,
+    );
+  }
+
 }

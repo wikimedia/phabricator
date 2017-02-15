@@ -23,6 +23,13 @@ final class PhabricatorMySQLSearchHost
     return 'mysql';
   }
 
+  public function getStatusViewColumns() {
+    return array(
+        pht('Protocol') => $this->getEngineIdentifier(),
+        pht('Roles') => implode(', ', array_keys($this->getRoles())),
+    );
+  }
+
   public function getEngine() {
     return $this->engine;
   }

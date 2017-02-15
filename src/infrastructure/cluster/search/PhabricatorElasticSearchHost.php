@@ -28,6 +28,17 @@ final class PhabricatorElasticSearchHost
     return 'elasticsearch';
   }
 
+  public function getStatusViewColumns() {
+    return array(
+        pht('Protocol') => $this->getEngineIdentifier(),
+        pht('Host') => $this->getHost(),
+        pht('Port') => $this->getPort(),
+        pht('Index Path') => $this->getPath(),
+        pht('Elastic Version') => $this->getVersion(),
+        pht('Roles') => implode(', ', array_keys($this->getRoles())),
+    );
+  }
+
   public function setProtocol($protocol) {
     $this->protocol = $protocol;
     return $this;

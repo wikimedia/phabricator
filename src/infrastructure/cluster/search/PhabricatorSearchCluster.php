@@ -15,7 +15,7 @@ class PhabricatorSearchCluster
   const STATUS_OKAY = 'okay';
   const STATUS_FAIL = 'fail';
 
-  public function __construct($host_type) {
+  public function __construct(PhabricatorSearchHost $host_type) {
     $this->hostType = $host_type;
   }
 
@@ -32,6 +32,10 @@ class PhabricatorSearchCluster
 
   public function getDisplayName() {
     return $this->hostType->getDisplayName();
+  }
+
+  public function getStatusViewColumns() {
+    return $this->hostType->getStatusViewColumns();
   }
 
   public function setConfig($config) {

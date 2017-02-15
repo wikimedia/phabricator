@@ -493,6 +493,15 @@ final class PhabricatorElasticFulltextStorageEngine
     return $this;
   }
 
+  public function getIndexStats() {
+    if ($this->version < 2) {
+      return false;
+    }
+    $uri = '/_stats/';
+    $res = $this->executeRequest($uri, array());
+    return $res['indices'][$this->index];
+  }
+
   private function executeRequest($path, array $data, $method = 'GET') {
     $uri = $this->ref->getURI($path);
     $data = json_encode($data);
