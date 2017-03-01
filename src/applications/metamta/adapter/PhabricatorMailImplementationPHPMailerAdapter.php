@@ -20,7 +20,7 @@ final class PhabricatorMailImplementationPHPMailerAdapter
     if (PhabricatorEnv::getEnvConfig('metamta.can-suppress-mail')) {
       $this->can_suppress_send = true;
     }
-    $encoding = PhabricatorEnv::getEnvConfig('phpmailer.smtp-encoding', '8bit');
+    $encoding = PhabricatorEnv::getEnvConfig('phpmailer.smtp-encoding');
     $this->mailer->Encoding = $encoding;
 
     // By default, PHPMailer sends one mail per recipient. We handle

@@ -60,8 +60,8 @@ final class PhabricatorSavedQuery extends PhabricatorSearchDAO
     return $this;
   }
 
-  public function getEvaluatedParameter($key, $default = null) {
-    return $this->assertAttachedKey($this->parameterMap, $key, $default);
+  public function getEvaluatedParameter($key) {
+    return $this->assertAttachedKey($this->parameterMap, $key);
   }
 
   public function setViewer(PhabricatorUser $viewer) {
