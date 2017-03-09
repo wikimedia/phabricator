@@ -1,16 +1,10 @@
 <?php
 
-class PhabricatorClusterNoHostForRoleException
+final class PhabricatorClusterNoHostForRoleException
   extends Exception {
 
-  private $role;
-
   public function __construct($role) {
-    $this->role = $role;
+    parent::__construct(pht('Search cluster has no hosts for role "%s".',
+      $role));
   }
-
-  public function getExceptionTitle() {
-    return pht('Search cluster has no hosts for role "%s"', $this->role);
-  }
-
 }

@@ -22,12 +22,6 @@ final class PhabricatorClusterSearchConfigOptionType
             'the value with index "%s" is not a dictionary.',
             $index));
       }
-      if (!array_key_exists($spec['type'], $types)) {
-        throw new Exception(
-          pht('Invalid search cluster type: %s. Valid types include: %s',
-            $spec['type'],
-            implode(', ', array_keys($types))));
-      }
 
       try {
         PhutilTypeSpec::checkMap(
@@ -49,6 +43,14 @@ final class PhabricatorClusterSearchConfigOptionType
             $index,
             $ex->getMessage()));
       }
+
+      if (!array_key_exists($spec['type'], $types)) {
+        throw new Exception(
+          pht('Invalid search cluster type: %s. Valid types include: %s',
+            $spec['type'],
+            implode(', ', array_keys($types))));
+      }
+
       if (isset($spec['hosts'])) {
         foreach ($spec['hosts'] as $hostindex => $host) {
           try {

@@ -4,9 +4,7 @@ class PhabricatorSearchCluster
   extends Phobject {
 
   const KEY_REFS = 'cluster.search.refs';
-  const KEY_HEALTH = 'cluster.search.health';
 
-  protected $healthRecord;
   protected $roles = array();
   protected $disabled;
   protected $hosts = array();
@@ -17,7 +15,6 @@ class PhabricatorSearchCluster
   const STATUS_OKAY = 'okay';
   const STATUS_FAIL = 'fail';
 
-
   public function __construct($host_type) {
     $this->hostType = $host_type;
   }
@@ -27,10 +24,14 @@ class PhabricatorSearchCluster
    */
   public function newHost($config) {
     $host = clone($this->hostType);
-    $host->setConfig($this->config)
-      ->setConfig($config);
+    $host_config = $this->config + $config;
+    $host->setConfig($host_config);
     $this->hosts[] = $host;
     return $host;
+  }
+
+  public function getDisplayName() {
+    return $this->hostType->getDisplayName();
   }
 
   public function setConfig($config) {

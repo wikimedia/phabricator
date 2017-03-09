@@ -16,7 +16,7 @@ class PhabricatorElasticSearchQueryBuilder {
     return array();
   }
 
-  public function clauseCount($clausekey) {
+  public function getClauseCount($clausekey) {
     if (isset($this->clauses[$clausekey])) {
       return count($this->clauses[$clausekey]);
     } else {
@@ -24,7 +24,7 @@ class PhabricatorElasticSearchQueryBuilder {
     }
   }
 
-  public function exists($field) {
+  public function addExistsClause($field) {
     return $this->addClause('filter', array(
       'exists' => array(
         'field' => $field,
@@ -32,7 +32,7 @@ class PhabricatorElasticSearchQueryBuilder {
     ));
   }
 
-  public function terms($field, $values) {
+  public function addTermsClause($field, $values) {
     return $this->addClause('filter', array(
       'terms' => array(
         $field  => array_values($values),
@@ -40,19 +40,19 @@ class PhabricatorElasticSearchQueryBuilder {
     ));
   }
 
-  public function must($clause) {
+  public function addMustClause($clause) {
     return $this->addClause('must', $clause);
   }
 
-  public function filter($clause) {
+  public function addFilterClause($clause) {
     return $this->addClause('filter', $clause);
   }
 
-  public function should($clause) {
+  public function addShouldClause($clause) {
     return $this->addClause('should', $clause);
   }
 
-  public function mustNot($clause) {
+  public function addMustNotClause($clause) {
     return $this->addClause('must_not', $clause);
   }
 

@@ -190,7 +190,7 @@ final class PhabricatorElasticFulltextStorageEngine
     if (strlen($query_string)) {
       $fields = $this->getTypeConstants('PhabricatorSearchDocumentFieldType');
 
-      $q->must(array(
+      $q->addMustClause(array(
         'simple_query_string' => array(
           'query'  => $query_string,
           'fields' => array(
@@ -204,7 +204,7 @@ final class PhabricatorElasticFulltextStorageEngine
         ),
       ));
 
-      $q->should(array(
+      $q->addShouldClause(array(
         'simple_query_string' => array(
           'query'  => $query_string,
           'fields' => array_values($fields),
@@ -217,7 +217,7 @@ final class PhabricatorElasticFulltextStorageEngine
 
     $exclude = $query->getParameter('exclude');
     if ($exclude) {
-      $q->filter(array(
+      $q->addFilterClause(array(
         'not' => array(
           'ids' => array(
             'values' => array($exclude),
@@ -248,33 +248,33 @@ final class PhabricatorElasticFulltextStorageEngine
     $include_closed = !empty($statuses[$rel_closed]);
 
     if ($include_open && !$include_closed) {
-      $q->exists($rel_open);
+      $q->addExistsClause($rel_open);
     } else if (!$include_open && $include_closed) {
-      $q->exists($rel_closed);
+      $q->addExistsClause($rel_closed);
     }
 
     if ($query->getParameter('withUnowned')) {
-      $q->exists($rel_unowned);
+      $q->addExistsClause($rel_unowned);
     }
 
     $rel_owner = PhabricatorSearchRelationship::RELATIONSHIP_OWNER;
     if ($query->getParameter('withAnyOwner')) {
-      $q->exists($rel_owner);
+      $q->addExistsClause($rel_owner);
     } else {
       $owner_phids = $query->getParameter('ownerPHIDs', array());
       if (count($owner_phids)) {
-        $q->terms($rel_owner, $owner_phids);
+        $q->addTermsClause($rel_owner, $owner_phids);
       }
     }
 
     foreach ($relationship_map as $field => $phids) {
       if (is_array($phids) && !empty($phids)) {
-        $q->terms($field, $phids);
+        $q->addTermsClause($field, $phids);
       }
     }
 
-    if (!$q->clauseCount('must')) {
-      $q->must(array('match_all' => array('boost' => 1 )));
+    if (!$q->getClauseCount('must')) {
+      $q->addMustClause(array('match_all' => array('boost' => 1 )));
     }
 
     $spec = array(
@@ -291,8 +291,14 @@ final class PhabricatorElasticFulltextStorageEngine
       );
     }
 
-    $offset = min(10000, (int)$query->getParameter('offset', 0));
-    $limit = min(10000, (int)$query->getParameter('limit', 101));
+    $offset = (int)$query->getParameter('offset', 0);
+    $limit =  (int)$query->getParameter('limit', 101);
+    if ($offset + $limit > 10000) {
+      throw new Exception(pht(
+        'Query offset is too large. offset+limit=%s (max=%s)',
+        $offset + $limit,
+        10000));
+    }
     $spec['from'] = $offset;
     $spec['size'] = $limit;
     return $spec;
