@@ -7,6 +7,24 @@
  */
 abstract class PhabricatorFulltextStorageEngine extends Phobject {
 
+  protected $service;
+
+  public function getHosts() {
+    return $this->service->getHosts();
+  }
+
+  public function setService(PhabricatorSearchService $service) {
+    $this->service = $service;
+    return $this;
+  }
+
+  /**
+   * Implementations must return a prototype host instance which is cloned
+   * by the PhabricatorSearchService infrastructure to configure each engine.
+   * @return PhabricatorSearchHost
+   */
+  abstract public function getHostType();
+
 /* -(  Engine Metadata  )---------------------------------------------------- */
 
   /**
@@ -51,6 +69,13 @@ abstract class PhabricatorFulltextStorageEngine extends Phobject {
    * @return bool
    */
   abstract public function indexExists();
+
+  /**
+    * Implementations should override this method to return a dictionary of
+    * stats which are suitable for display in the admin UI.
+    */
+  abstract public function getIndexStats();
+
 
   /**
    * Is the index in a usable state?

@@ -6,6 +6,7 @@ abstract class PhabricatorSearchHost
   const KEY_REFS = 'cluster.search.refs';
   const KEY_HEALTH = 'cluster.search.health';
 
+  protected $engine;
   protected $healthRecord;
   protected $roles = array();
 
@@ -17,6 +18,9 @@ abstract class PhabricatorSearchHost
   const STATUS_OKAY = 'okay';
   const STATUS_FAIL = 'fail';
 
+  public function __construct(PhabricatorFulltextStorageEngine $engine) {
+    $this->engine = $engine;
+  }
 
   public function setDisabled($disabled) {
     $this->disabled = $disabled;
@@ -25,6 +29,13 @@ abstract class PhabricatorSearchHost
 
   public function getDisabled() {
     return $this->disabled;
+  }
+
+  /**
+   * @return PhabricatorFulltextStorageEngine
+   */
+  public function getEngine() {
+    return $this->engine;
   }
 
   public function isWritable() {
@@ -101,11 +112,6 @@ abstract class PhabricatorSearchHost
    * @return string[] Get a list of fields to show in the status overview UI
    */
   abstract public function getStatusViewColumns();
-
-  /**
-   * @return PhabricatorFulltextStorageEngine
-   */
-  abstract public function getEngine();
 
   abstract public function getConnectionStatus();
 

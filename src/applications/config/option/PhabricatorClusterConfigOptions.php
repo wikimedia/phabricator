@@ -40,10 +40,10 @@ EOTEXT
 
     $search_type = 'custom:PhabricatorClusterSearchConfigOptionType';
     $search_help = $this->deformat(pht(<<<EOTEXT
-Define one or more fulltext storage clusters. Here you can configure which
-ElasticSearch and/or MySQL hosts will handle fulltext search queries and
-indexing. For help with configuring fulltext search clusters,
-see **[[ %s | %s ]]** in the documentation.
+Define one or more fulltext storage services. Here you can configure which
+hosts will handle fulltext search queries and indexing. For help with
+configuring fulltext search clusters, see **[[ %s | %s ]]** in the
+documentation.
 EOTEXT
     ,
     PhabricatorEnv::getDoclink('Cluster: Search'),

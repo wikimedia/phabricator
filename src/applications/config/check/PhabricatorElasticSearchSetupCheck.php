@@ -7,7 +7,7 @@ final class PhabricatorElasticSearchSetupCheck extends PhabricatorSetupCheck {
   }
 
   protected function executeChecks() {
-    $services = PhabricatorSearchCluster::getAllServices();
+    $services = PhabricatorSearchService::getAllServices();
 
     foreach ($services as $service) {
       try {

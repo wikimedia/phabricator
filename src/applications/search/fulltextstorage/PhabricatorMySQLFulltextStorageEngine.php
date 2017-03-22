@@ -7,6 +7,10 @@ final class PhabricatorMySQLFulltextStorageEngine
     return 'mysql';
   }
 
+  public function getHostType() {
+    return new PhabricatorMySQLSearchHost($this);
+  }
+
   public function reindexAbstractDocument(
     PhabricatorSearchAbstractDocument $doc) {
 

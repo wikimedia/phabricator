@@ -7,27 +7,43 @@ final class PhabricatorElasticFulltextStorageEngine
   private $index;
   private $timeout;
   private $version;
-  private $timestampFieldKey;
-  private $textFieldType;
-  private static $tagCache = array();
 
-  public function setRef(PhabricatorElasticSearchHost $ref) {
-    $this->ref = $ref;
-    $this->index = str_replace('/', '', $ref->getPath());
-    $this->version = (int)$ref->getVersion();
-
-    $this->timestampFieldKey = $this->version < 2
-                               ? '_timestamp'
-                               : 'lastModified';
-
-    $this->textFieldType = $this->version >= 5
-                         ? 'text'
-                         : 'string';
-    return $this;
+  public function setService($service) {
+    $this->service = $service;
+    $config = $service->getConfig();
+    $index = idx($config, 'path', '/phabricator');
+    $this->index = str_replace('/', '', $index);
+    $this->timeout = idx($config, 'timeout', 15);
+    $this->version = (int)idx($config, 'version', 5);
   }
 
   public function getEngineIdentifier() {
     return 'elasticsearch';
+  }
+
+  public function getTimestampField() {
+    return $this->version < 2 ?
+      '_timestamp' : 'lastModified';
+  }
+
+  public function getTextFieldType() {
+    return $this->version >= 5
+      ? 'text' : 'string';
+  }
+
+  public function getHostType() {
+    return new PhabricatorElasticSearchHost($this);
+  }
+
+  /**
+   * @return PhabricatorElasticSearchHost[]
+   */
+  public function getHostForRead() {
+    return $this->service->getAnyHostForRole('read');
+  }
+
+  public function getHostForWrite() {
+    return $this->service->getAnyHostForRole('write');
   }
 
   public function setTimeout($timeout) {
@@ -35,70 +51,20 @@ final class PhabricatorElasticFulltextStorageEngine
     return $this;
   }
 
-  public function getURI($path = '') {
-    return $this->ref->getURI($path);
-  }
-
-  public function getIndex() {
-    return $this->index;
-  }
-
   public function getTimeout() {
     return $this->timeout;
   }
 
-
-  protected function resolveTags($tags) {
-
-    $lookup_phids = array();
-    foreach ($tags as $phid) {
-      if (!isset(self::$tagCache[$phid])) {
-        $lookup_phids[] = $phid;
-      }
-    }
-    if (count($lookup_phids)) {
-      $projects = id(new PhabricatorProjectQuery())
-        ->setViewer(PhabricatorUser::getOmnipotentUser())
-        ->withPHIDs($lookup_phids)
-        ->needSlugs(true)
-        ->execute();
-
-      foreach ($projects as $project) {
-        $phid = $project->getPHID();
-        $slugs = $project->getSlugs();
-        $slugs = mpull($slugs, 'getSlug');
-        $keywords = $project->getDisplayName().' '.implode(' ', $slugs);
-        $keywords = strtolower($keywords);
-        $keywords = str_replace('_', ' ', $keywords);
-        $keywords = explode(' ', $keywords);
-        $keywords = array_unique($keywords);
-        self::$tagCache[$phid] = $keywords;
-      }
-    }
-
-    $keywords = array();
-    foreach ($tags as $phid) {
-      if (isset(self::$tagCache[$phid])) {
-        $keywords += self::$tagCache[$phid];
-      }
-    }
-    $keywords = array_unique($keywords);
-    return implode(' ', $keywords);
-  }
-
   public function getTypeConstants($class) {
-    static $typeconstants = array();
-    if (!empty($typeconstants[$class])) {
-      return $typeconstants[$class];
-    }
-
     $relationship_class = new ReflectionClass($class);
-    $typeconstants[$class] = $relationship_class->getConstants();
-    return array_unique(array_values($typeconstants[$class]));
+    $typeconstants = $relationship_class->getConstants();
+    return array_unique(array_values($typeconstants));
   }
 
   public function reindexAbstractDocument(
     PhabricatorSearchAbstractDocument $doc) {
+
+    $host = $this->getHostForWrite();
 
     $type = $doc->getDocumentType();
     $phid = $doc->getPHID();
@@ -107,7 +73,7 @@ final class PhabricatorElasticFulltextStorageEngine
       ->withPHIDs(array($phid))
       ->executeOne();
 
-    $timestamp_key = $this->timestampFieldKey;
+    $timestamp_key = $this->getTimestampField();
 
     // URL is not used internally but it can be useful externally.
     $spec = array(
@@ -141,17 +107,13 @@ final class PhabricatorElasticFulltextStorageEngine
       }
     }
 
-    if (!empty($tags)) {
-      $spec['tags'] = $this->resolveTags($tags);
-    }
-
-    $this->executeRequest("/{$type}/{$phid}/", $spec, 'PUT');
+    $this->executeRequest($host, "/{$type}/{$phid}/", $spec, 'PUT');
   }
 
   public function reconstructDocument($phid) {
     $type = phid_get_type($phid);
-
-    $response = $this->executeRequest("/{$type}/{$phid}", array());
+    $host = $this->getHostForRead();
+    $response = $this->executeRequest($host, "/{$type}/{$phid}", array());
 
     if (empty($response['exists'])) {
       return null;
@@ -164,7 +126,7 @@ final class PhabricatorElasticFulltextStorageEngine
     $doc->setDocumentType($response['_type']);
     $doc->setDocumentTitle($hit['title']);
     $doc->setDocumentCreated($hit['dateCreated']);
-    $doc->setDocumentModified($hit[$this->timestampFieldKey]);
+    $doc->setDocumentModified($hit[$this->getTimestampField()]);
 
     foreach ($hit['field'] as $fdef) {
       $field_type = $fdef['type'];
@@ -190,24 +152,30 @@ final class PhabricatorElasticFulltextStorageEngine
     if (strlen($query_string)) {
       $fields = $this->getTypeConstants('PhabricatorSearchDocumentFieldType');
 
+      // Build a simple_query_string query over all fields that must match all
+      // of the words in the search string.
       $q->addMustClause(array(
         'simple_query_string' => array(
           'query'  => $query_string,
           'fields' => array(
-            'title^4',
-            'body^3',
-            'cmnt^2',
-            'tags',
             '_all',
           ),
           'default_operator' => 'and',
         ),
       ));
 
+      // This second query clause is "SHOULD' so it only affects ranking of
+      // documents which already matched the Must clause. This amplifies the
+      // score of documents which have an exact match on title, body
+      // or comments.
       $q->addShouldClause(array(
         'simple_query_string' => array(
           'query'  => $query_string,
-          'fields' => array_values($fields),
+          'fields' => array(
+            PhabricatorSearchDocumentFieldType::FIELD_TITLE.'^4',
+            PhabricatorSearchDocumentFieldType::FIELD_BODY.'^2',
+            PhabricatorSearchDocumentFieldType::FIELD_COMMENT.'^1.2',
+          ),
           'analyzer' => 'english_exact',
           'default_operator' => 'and',
         ),
@@ -317,25 +285,33 @@ final class PhabricatorElasticFulltextStorageEngine
     $uri = '/'.implode(',', $types).'/_search';
 
     $spec = $this->buildSpec($query);
-    $response = $this->executeRequest($uri, $spec);
+    $exceptions = array();
 
-    $phids = ipull($response['hits']['hits'], '_id');
-    return $phids;
+    foreach ($this->service->getAllHostsForRole('read') as $host) {
+      try {
+        $response = $this->executeRequest($host, $uri, $spec);
+        $phids = ipull($response['hits']['hits'], '_id');
+        return $phids;
+      } catch (Exception $e) {
+        $exceptions[] = $e;
+      }
+    }
+    throw new PhutilAggregateException('All search hosts failed:', $exceptions);
   }
 
   public function indexExists() {
+    $host = $this->getHostForRead();
     try {
-
       if ($this->version >= 5) {
         $uri = '/_stats/';
-        $res = $this->executeRequest($uri, array());
+        $res = $this->executeRequest($host, $uri, array());
         return isset($res['indices']['phabricator']);
       } else if ($this->version >= 2) {
         $uri = '';
       } else {
         $uri = '/_status/';
       }
-      return (bool)$this->executeRequest($uri, array());
+      return (bool)$this->executeRequest($host, $uri, array());
     } catch (HTTPFutureHTTPResponseStatus $e) {
       if ($e->getStatusCode() == 404) {
         return false;
@@ -371,7 +347,7 @@ final class PhabricatorElasticFulltextStorageEngine
       foreach ($fields as $field) {
         // Use the custom analyzer for the corpus of text
         $properties[$field] = array(
-          'type'                  => $this->textFieldType,
+          'type'                  => $this->getTextFieldType(),
           'analyzer'              => 'english_exact',
           'search_analyzer'       => 'english',
           'search_quote_analyzer' => 'english_exact',
@@ -380,7 +356,7 @@ final class PhabricatorElasticFulltextStorageEngine
 
       foreach ($relationships as $rel) {
         $properties[$rel] = array(
-          'type'  => $this->textFieldType,
+          'type'  => $this->getTextFieldType(),
         );
         if ($this->version < 5) {
           $properties[$rel]['index'] = 'not_analyzed';
@@ -391,12 +367,12 @@ final class PhabricatorElasticFulltextStorageEngine
       $properties['dateCreated']['type'] = 'date';
 
       // Replaces deprecated _timestamp for elasticsearch 2
-      if ((int)$this->version >= 2) {
+      if ($this->version >= 2) {
         $properties['lastModified']['type'] = 'date';
       }
 
       $properties['tags'] = array(
-        'type' => $this->textFieldType,
+        'type' => $this->getTextFieldType(),
         'analyzer' => 'english',
         'store' => true,
       );
@@ -410,9 +386,9 @@ final class PhabricatorElasticFulltextStorageEngine
     if (!$this->indexExists()) {
       return false;
     }
-
-    $cur_mapping = $this->executeRequest('/_mapping/', array());
-    $cur_settings = $this->executeRequest('/_settings/', array());
+    $host = $this->getHostForRead();
+    $cur_mapping = $this->executeRequest($host, '/_mapping/', array());
+    $cur_settings = $this->executeRequest($host, '/_settings/', array());
     $actual = array_merge($cur_settings[$this->index],
       $cur_mapping[$this->index]);
 
@@ -442,6 +418,8 @@ final class PhabricatorElasticFulltextStorageEngine
           return false;
         }
         if (!$this->check($actual[$key], $value)) {
+          $act = print_r($actual[$key], true);
+          $val = print_r($value, true);
           return false;
         }
         continue;
@@ -475,22 +453,12 @@ final class PhabricatorElasticFulltextStorageEngine
   }
 
   public function initIndex() {
+    $host = $this->getHostForWrite();
     if ($this->indexExists()) {
-      $this->executeRequest('/', array(), 'DELETE');
+      $this->executeRequest($host, '/', array(), 'DELETE');
     }
     $data = $this->getIndexConfiguration();
-    $this->executeRequest('/', $data, 'PUT');
-  }
-
-  public function didHealthCheck($reachable) {
-    static $cache=null;
-    if ($cache !== null) {
-      return;
-    }
-
-    $cache = $reachable;
-    $this->ref->didHealthCheck($reachable);
-    return $this;
+    $this->executeRequest($host, '/', $data, 'PUT');
   }
 
   public function getIndexStats() {
@@ -498,12 +466,25 @@ final class PhabricatorElasticFulltextStorageEngine
       return false;
     }
     $uri = '/_stats/';
-    $res = $this->executeRequest($uri, array());
-    return $res['indices'][$this->index];
+    $host = $this->getHostForRead();
+
+    $res = $this->executeRequest($host, $uri, array());
+    $stats = $res['indices'][$this->index];
+    return array(
+      pht('Queries') =>
+        idxv($stats, array('primaries', 'search', 'query_total')),
+      pht('Documents') =>
+        idxv($stats, array('total', 'docs', 'count')),
+      pht('Deleted') =>
+        idxv($stats, array('total', 'docs', 'deleted')),
+      pht('Storage Used') =>
+        phutil_format_bytes(idxv($stats,
+          array('total', 'store', 'size_in_bytes'))),
+    );
   }
 
-  private function executeRequest($path, array $data, $method = 'GET') {
-    $uri = $this->ref->getURI($path);
+  private function executeRequest($host, $path, array $data, $method = 'GET') {
+    $uri = $host->getURI($path);
     $data = json_encode($data);
     $future = new HTTPSFuture($uri, $data);
     if ($method != 'GET') {
@@ -516,7 +497,7 @@ final class PhabricatorElasticFulltextStorageEngine
       list($body) = $future->resolvex();
     } catch (HTTPFutureResponseStatus $ex) {
       if ($ex->isTimeout() || (int)$ex->getStatusCode() > 499) {
-        $this->didHealthCheck(false);
+        $host->didHealthCheck(false);
       }
       throw $ex;
     }
@@ -527,10 +508,10 @@ final class PhabricatorElasticFulltextStorageEngine
 
     try {
       $data = phutil_json_decode($body);
-      $this->didHealthCheck(true);
+      $host->didHealthCheck(true);
       return $data;
     } catch (PhutilJSONParserException $ex) {
-      $this->didHealthCheck(false);
+      $host->didHealthCheck(false);
       throw new PhutilProxyException(
         pht('ElasticSearch server returned invalid JSON!'),
         $ex);

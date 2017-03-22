@@ -14,7 +14,7 @@ final class PhabricatorSearchManagementInitWorkflow
     $console = PhutilConsole::getConsole();
 
     $work_done = false;
-    foreach (PhabricatorSearchCluster::getAllServices() as $service) {
+    foreach (PhabricatorSearchService::getAllServices() as $service) {
       $console->writeOut(
         "%s\n",
         pht('Initializing search service "%s"', $service->getDisplayName()));
@@ -23,7 +23,7 @@ final class PhabricatorSearchManagementInitWorkflow
         $host = $service->getAnyHostForRole('write');
       } catch (PhabricatorClusterNoHostForRoleException $e) {
         // If there are no writable hosts for a given cluster, skip it
-        $console->writeOut("%s\n", $e->getExceptionTitle());
+        $console->writeOut("%s\n", $e->getMessage());
         continue;
       }
 

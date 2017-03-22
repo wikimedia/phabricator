@@ -3,12 +3,12 @@
 final class PhabricatorElasticSearchHost
   extends PhabricatorSearchHost {
 
-  private $engine;
   private $version = 5;
   private $path = 'phabricator/';
   private $protocol = 'http';
 
   const KEY_REFS = 'search.elastic.refs';
+
 
   public function setConfig($config) {
     $this->setRoles(idx($config, 'roles', $this->getRoles()))
@@ -24,13 +24,9 @@ final class PhabricatorElasticSearchHost
     return pht('ElasticSearch');
   }
 
-  public function getEngineIdentifier() {
-    return 'elasticsearch';
-  }
-
   public function getStatusViewColumns() {
     return array(
-        pht('Protocol') => $this->getEngineIdentifier(),
+        pht('Protocol') => $this->getProtocol(),
         pht('Host') => $this->getHost(),
         pht('Port') => $this->getPort(),
         pht('Index Path') => $this->getPath(),
@@ -78,16 +74,6 @@ final class PhabricatorElasticSearchHost
     return $uri;
   }
 
-  /**
-   * @return PhabricatorElasticFulltextStorageEngine
-   */
-  public function getEngine() {
-    if (!$this->engine) {
-      $engine = new PhabricatorElasticFulltextStorageEngine();
-      $this->engine = $engine->setRef($this);
-    }
-    return $this->engine;
-  }
 
   public function getConnectionStatus() {
     $status = $this->getEngine()->indexIsSane()

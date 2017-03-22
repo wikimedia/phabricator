@@ -199,7 +199,7 @@ final class PhabricatorExtraConfigSetupCheck extends PhabricatorSetupCheck {
         'homepage customization. See T11533 for more details.');
 
     $elastic_reason = pht(
-        'Elasticsearch is now configured with "%s"',
+        'Elasticsearch is now configured with "%s".',
         'cluster.search');
 
     $ancient_config += array(
@@ -353,10 +353,9 @@ final class PhabricatorExtraConfigSetupCheck extends PhabricatorSetupCheck {
         'Phabricator now has application-level management of partitioning '.
         'and replicas.'),
 
-      'search.elastic.enabled' => $elastic_reason,
       'search.elastic.host' => $elastic_reason,
       'search.elastic.namespace' => $elastic_reason,
-      'search.elastic.version' => $elastic_reason,
+
     );
 
     return $ancient_config;

@@ -11,7 +11,7 @@ final class PhabricatorClusterSearchConfigOptionType
           'list of search hosts.'));
     }
 
-    $types = PhabricatorSearchCluster::getValidHostTypes();
+    $engines = PhabricatorSearchService::loadAllFulltextStorageEngines();
 
     foreach ($value as $index => $spec) {
       if (!is_array($spec)) {
@@ -38,17 +38,17 @@ final class PhabricatorClusterSearchConfigOptionType
       } catch (Exception $ex) {
         throw new Exception(
           pht(
-            'Search cluster configuration has an invalid service '.
+            'Search engine configuration has an invalid service '.
             'specification (at index "%s"): %s.',
             $index,
             $ex->getMessage()));
       }
 
-      if (!array_key_exists($spec['type'], $types)) {
+      if (!array_key_exists($spec['type'], $engines)) {
         throw new Exception(
-          pht('Invalid search cluster type: %s. Valid types include: %s',
+          pht('Invalid search engine type: %s. Valid types include: %s',
             $spec['type'],
-            implode(', ', array_keys($types))));
+            implode(', ', array_keys($engines))));
       }
 
       if (isset($spec['hosts'])) {

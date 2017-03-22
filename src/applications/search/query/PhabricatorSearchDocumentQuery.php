@@ -73,7 +73,7 @@ final class PhabricatorSearchDocumentQuery
     $query = id(clone($this->savedQuery))
       ->setParameter('offset', $this->getOffset())
       ->setParameter('limit', $this->getRawResultLimit());
-    return PhabricatorSearchCluster::executeSearch($query);
+    return PhabricatorSearchService::executeSearch($query);
   }
 
   public function getQueryApplicationClass() {

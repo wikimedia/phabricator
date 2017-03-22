@@ -3,9 +3,10 @@
 
 $use_mysql = false;
 
-$services = PhabricatorSearchCluster::getAllServices();
+$services = PhabricatorSearchService::getAllServices();
 foreach ($services as $service) {
-  if ($service instanceof PhabricatorMySQLSearchHost) {
+  $engine = $service->getEngine();
+  if ($engine instanceof PhabricatorMySQLFulltextStorageEngine) {
     $use_mysql = true;
   }
 }

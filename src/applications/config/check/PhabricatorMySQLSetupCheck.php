@@ -379,7 +379,7 @@ final class PhabricatorMySQLSetupCheck extends PhabricatorSetupCheck {
   }
 
   protected function shouldUseMySQLSearchEngine() {
-    $services = PhabricatorSearchCluster::getAllServices();
+    $services = PhabricatorSearchService::getAllServices();
     foreach ($services as $service) {
       if ($service instanceof PhabricatorMySQLSearchHost) {
         return true;

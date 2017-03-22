@@ -40,7 +40,7 @@ abstract class PhabricatorFulltextEngine
       $extension->indexFulltextObject($object, $document);
     }
 
-    PhabricatorSearchCluster::reindexAbstractDocument($document);
+    PhabricatorSearchService::reindexAbstractDocument($document);
   }
 
   protected function newAbstractDocument($object) {

@@ -3,12 +3,6 @@
 final class PhabricatorMySQLSearchHost
   extends PhabricatorSearchHost {
 
-  private $engine;
-
-  public function __construct() {
-    $this->engine = new PhabricatorMySQLFulltextStorageEngine();
-  }
-
   public function setConfig($config) {
     $this->setRoles(idx($config, 'roles',
       array('read' => true, 'write' => true)));
@@ -19,19 +13,11 @@ final class PhabricatorMySQLSearchHost
     return 'MySQL';
   }
 
-  public function getEngineIdentifier() {
-    return 'mysql';
-  }
-
   public function getStatusViewColumns() {
     return array(
-        pht('Protocol') => $this->getEngineIdentifier(),
+        pht('Protocol') => 'mysql',
         pht('Roles') => implode(', ', array_keys($this->getRoles())),
     );
-  }
-
-  public function getEngine() {
-    return $this->engine;
   }
 
   public function getProtocol() {

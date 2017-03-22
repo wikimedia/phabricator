@@ -42,7 +42,7 @@ final class PhabricatorConfigClusterSearchController
   private function buildClusterSearchStatus() {
     $viewer = $this->getViewer();
 
-    $services = PhabricatorSearchCluster::getAllServices();
+    $services = PhabricatorSearchService::getAllServices();
     Javelin::initBehavior('phabricator-tooltips');
 
     $view = array();
@@ -53,14 +53,14 @@ final class PhabricatorConfigClusterSearchController
   }
 
   private function renderStatusView($service) {
-    $rows = array();
-
     $head = array_merge(
         array(pht('Type')),
         array_keys($service->getStatusViewColumns()),
         array(pht('Status')));
 
-    $status_map = PhabricatorSearchCluster::getConnectionStatusMap();
+    $rows = array();
+
+    $status_map = PhabricatorSearchService::getConnectionStatusMap();
     foreach ($service->getHosts() as $host) {
       $reachable = false;
       try {
@@ -99,8 +99,8 @@ final class PhabricatorConfigClusterSearchController
     }
 
     $table = id(new AphrontTableView($rows))
-    ->setNoDataString(pht('No search servers are configured.'))
-    ->setHeaders($head);
+      ->setNoDataString(pht('No search servers are configured.'))
+      ->setHeaders($head);
 
     return id(new PHUIObjectBoxView())
       ->setHeaderText($service->getDisplayName())
@@ -111,44 +111,12 @@ final class PhabricatorConfigClusterSearchController
 
   private function renderIndexStats($stats) {
     $view = id(new PHUIPropertyListView());
-    if ($stats == false) {
-      $view->addProperty(pht('Stats'), $this->renderNo(pht('N/A')));
-      return $view;
+    if ($stats !== false) {
+      foreach ($stats as $label => $val) {
+        $view->addProperty($label, $val);
+      }
     }
-    $view->addProperty(pht('Queries'),
-      $stats['total']['search']['query_total']);
-    $view->addProperty(pht('Documents'),
-      $stats['total']['docs']['count']);
-    $view->addProperty(pht('Deleted'),
-      $stats['total']['docs']['deleted']);
-    $view->addProperty(pht('Storage Used'),
-      phutil_format_bytes($stats['total']['store']['size_in_bytes']));
-
     return $view;
-  }
-
-  private function renderYes($info) {
-    return array(
-      id(new PHUIIconView())->setIcon('fa-check', 'green'),
-      ' ',
-      $info,
-    );
-  }
-
-  private function renderNo($info) {
-    return array(
-      id(new PHUIIconView())->setIcon('fa-times-circle', 'red'),
-      ' ',
-      $info,
-    );
-  }
-
-  private function renderInfo($info) {
-    return array(
-      id(new PHUIIconView())->setIcon('fa-info-circle', 'grey'),
-      ' ',
-      $info,
-    );
   }
 
 }
