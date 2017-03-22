@@ -1,6 +1,6 @@
 <?php
 
-final class PhabricatorElasticFulltextStorageEngine
+class PhabricatorElasticFulltextStorageEngine
   extends PhabricatorFulltextStorageEngine {
 
   private $ref;
@@ -8,13 +8,14 @@ final class PhabricatorElasticFulltextStorageEngine
   private $timeout;
   private $version;
 
-  public function setService($service) {
+  public function setService(PhabricatorSearchService $service) {
     $this->service = $service;
     $config = $service->getConfig();
     $index = idx($config, 'path', '/phabricator');
     $this->index = str_replace('/', '', $index);
     $this->timeout = idx($config, 'timeout', 15);
     $this->version = (int)idx($config, 'version', 5);
+    return $this;
   }
 
   public function getEngineIdentifier() {
