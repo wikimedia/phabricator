@@ -19,8 +19,7 @@ final class DifferentialRevisionSearchEngine
     return id(new DifferentialRevisionQuery())
       ->needFlags(true)
       ->needDrafts(true)
-      ->needRelationships(true)
-      ->needReviewerStatus(true);
+      ->needReviewers(true);
   }
 
   protected function buildQueryFromParameters(array $map) {

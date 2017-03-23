@@ -3,7 +3,6 @@
 class PhabricatorElasticFulltextStorageEngine
   extends PhabricatorFulltextStorageEngine {
 
-  private $ref;
   private $index;
   private $timeout;
   private $version;
@@ -87,24 +86,24 @@ class PhabricatorElasticFulltextStorageEngine
     foreach ($doc->getFieldData() as $field) {
       list($field_name, $corpus, $aux) = $field;
       if (!isset($spec[$field_name])) {
-        $spec[$field_name] = $corpus;
-      } else if (!is_array($spec[$field_name])) {
-        $spec[$field_name] = array($spec[$field_name], $corpus);
+        $spec[$field_name] = array($corpus);
       } else {
         $spec[$field_name][] = $corpus;
       }
       if ($aux != null) {
-        $spec[$field_name.'_aux_phid'] = $aux;
+        $spec[$field_name][] = $aux;
       }
     }
 
-    $tags = array();
-
-    foreach ($doc->getRelationshipData() as $relationship) {
-      list($rtype, $to_phid, $to_type, $time) = $relationship;
-      $spec[$rtype][] = $to_phid;
-      if ($rtype == PhabricatorSearchRelationship::RELATIONSHIP_PROJECT) {
-        $tags[] = $to_phid;
+    foreach ($doc->getRelationshipData() as $field) {
+      list($field_name, $related_phid, $rtype, $time) = $field;
+      if (!isset($spec[$field_name])) {
+        $spec[$field_name] = array($related_phid);
+      } else {
+        $spec[$field_name][] = $related_phid;
+      }
+      if ($time) {
+        $spec[$field_name.'_ts'] = $time;
       }
     }
 
@@ -161,7 +160,7 @@ class PhabricatorElasticFulltextStorageEngine
           'fields' => array(
             '_all',
           ),
-          'default_operator' => 'and',
+          'default_operator' => 'OR',
         ),
       ));
 
@@ -174,7 +173,7 @@ class PhabricatorElasticFulltextStorageEngine
           'query'  => $query_string,
           'fields' => array(
             PhabricatorSearchDocumentFieldType::FIELD_TITLE.'^4',
-            PhabricatorSearchDocumentFieldType::FIELD_BODY.'^2',
+            PhabricatorSearchDocumentFieldType::FIELD_BODY.'^3',
             PhabricatorSearchDocumentFieldType::FIELD_COMMENT.'^1.2',
           ),
           'analyzer' => 'english_exact',
@@ -270,6 +269,7 @@ class PhabricatorElasticFulltextStorageEngine
     }
     $spec['from'] = $offset;
     $spec['size'] = $limit;
+
     return $spec;
   }
 
@@ -340,50 +340,61 @@ class PhabricatorElasticFulltextStorageEngine
     $fields = $this->getTypeConstants('PhabricatorSearchDocumentFieldType');
     $relationships = $this->getTypeConstants('PhabricatorSearchRelationship');
 
-    $types = array_keys(
+    $doc_types = array_keys(
       PhabricatorSearchApplicationSearchEngine::getIndexableDocumentTypes());
 
-    foreach ($types as $type) {
+    $text_type = $this->getTextFieldType();
+
+    foreach ($doc_types as $type) {
       $properties = array();
       foreach ($fields as $field) {
         // Use the custom analyzer for the corpus of text
         $properties[$field] = array(
-          'type'                  => $this->getTextFieldType(),
+          'type'                  => $text_type,
           'analyzer'              => 'english_exact',
           'search_analyzer'       => 'english',
           'search_quote_analyzer' => 'english_exact',
         );
       }
 
-      foreach ($relationships as $rel) {
-        $properties[$rel] = array(
-          'type'  => $this->getTextFieldType(),
-        );
-        if ($this->version < 5) {
-          $properties[$rel]['index'] = 'not_analyzed';
+      if ($this->version < 5) {
+        foreach ($relationships as $rel) {
+          $properties[$rel] = array(
+            'type'  => 'string',
+            'index' => 'not_analyzed',
+            'include_in_all' => false,
+          );
+          $properties[$rel.'_ts'] = array(
+            'type'  => 'date',
+            'include_in_all' => false,
+          );
+        }
+      } else {
+        foreach ($relationships as $rel) {
+          $properties[$rel] = array(
+            'type'  => 'keyword',
+            'index' => true,
+            'include_in_all' => false,
+            'doc_values' => false,
+          );
+          $properties[$rel.'_ts'] = array(
+            'type'  => 'date',
+            'index' => true,
+            'include_in_all' => false,
+          );
         }
       }
 
       // Ensure we have dateCreated since the default query requires it
       $properties['dateCreated']['type'] = 'date';
+      $properties['lastModified']['type'] = 'date';
 
-      // Replaces deprecated _timestamp for elasticsearch 2
-      if ($this->version >= 2) {
-        $properties['lastModified']['type'] = 'date';
-      }
-
-      $properties['tags'] = array(
-        'type' => $this->getTextFieldType(),
-        'analyzer' => 'english',
-        'store' => true,
-      );
       $data['mappings'][$type]['properties'] = $properties;
     }
     return $data;
   }
 
   public function indexIsSane() {
-
     if (!$this->indexExists()) {
       return false;
     }
