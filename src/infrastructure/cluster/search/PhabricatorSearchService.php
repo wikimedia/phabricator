@@ -16,6 +16,9 @@ class PhabricatorSearchService
   const STATUS_OKAY = 'okay';
   const STATUS_FAIL = 'fail';
 
+  const ROLE_WRITE = 'write';
+  const ROLE_READ = 'read';
+
   public function __construct(PhabricatorFulltextStorageEngine $engine) {
     $this->engine = $engine;
     $this->hostType = $engine->getHostType();
@@ -67,15 +70,6 @@ class PhabricatorSearchService
     return $this->config;
   }
 
-  public function setDisabled($disabled) {
-    $this->disabled = $disabled;
-    return $this;
-  }
-
-  public function getDisabled() {
-    return $this->disabled;
-  }
-
   public static function getConnectionStatusMap() {
     return array(
       self::STATUS_OKAY => array(
@@ -92,30 +86,11 @@ class PhabricatorSearchService
   }
 
   public function isWritable() {
-    return $this->hasRole('write');
+    return (bool)$this->getAllHostsForRole(self::ROLE_WRITE);
   }
 
   public function isReadable() {
-    return $this->hasRole('read');
-  }
-
-  public function hasRole($role) {
-    return isset($this->roles[$role]) && $this->roles[$role] === true;
-  }
-
-  public function setRoles(array $roles) {
-    foreach ($roles as $role => $val) {
-      if ($val === false && isset($this->roles[$role])) {
-        unset($this->roles[$role]);
-      } else {
-        $this->roles[$role] = $val;
-      }
-    }
-    return $this;
-  }
-
-  public function getRoles() {
-    return $this->roles;
+    return (bool)$this->getAllHostsForRole(self::ROLE_READ);
   }
 
   public function getPort() {
@@ -160,6 +135,12 @@ class PhabricatorSearchService
    * @return PhabricatorSearchHost[]
    */
   public function getAllHostsForRole($role) {
+    // if the role is explicitly set to false at the top level, then all hosts
+    // have the role disabled.
+    if (idx($this->config, $role) === false) {
+      return array();
+    }
+
     $hosts = array();
     foreach ($this->hosts as $host) {
       if ($host->hasRole($role)) {
@@ -205,6 +186,18 @@ class PhabricatorSearchService
     $refs = array();
 
     foreach ($services as $config) {
+
+      // Normally, we've validated configuration before we get this far, but
+      // make sure we don't fatal if we end up here with a bogus configuration.
+      if (!isset($engines[$config['type']])) {
+        throw new Exception(
+          pht(
+            'Configured search engine type "%s" is unknown. Valid engines '.
+            'are: %s.',
+            $config['type'],
+            implode(', ', array_keys($engines))));
+      }
+
       $engine = $engines[$config['type']];
       $cluster = new self($engine);
       $cluster->setConfig($config);
@@ -225,8 +218,11 @@ class PhabricatorSearchService
     PhabricatorSearchAbstractDocument $doc) {
     $indexed = 0;
     foreach (self::getAllServices() as $service) {
-      $service->getEngine()->reindexAbstractDocument($doc);
-      $indexed++;
+      $hosts = $service->getAllHostsForRole('write');
+      if (count($hosts)) {
+        $service->getEngine()->reindexAbstractDocument($doc);
+        $indexed++;
+      }
     }
     if ($indexed == 0) {
       throw new PhabricatorClusterNoHostForRoleException('write');
@@ -239,21 +235,20 @@ class PhabricatorSearchService
    * @throws PhutilAggregateException
    */
   public static function executeSearch(PhabricatorSavedQuery $query) {
-    $services = self::getAllServices();
     $exceptions = array();
-    foreach ($services as $service) {
-      $engine = $service->getEngine();
-      // try all hosts until one succeeds
+    // try all services until one succeeds
+    foreach (self::getAllServices() as $service) {
       try {
+        $engine = $service->getEngine();
         $res = $engine->executeSearch($query);
-        // return immediately if we get results without an exception
+        // return immediately if we get results
         return $res;
       } catch (Exception $ex) {
         $exceptions[] = $ex;
       }
     }
-    throw new PhutilAggregateException('All search engines failed:',
-      $exceptions);
+    $msg = pht('All of the configured Fulltext Search services failed.');
+    throw new PhutilAggregateException($msg, $exceptions);
   }
 
 }
