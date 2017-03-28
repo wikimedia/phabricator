@@ -61,26 +61,29 @@ final class PhabricatorConfigClusterSearchController
     $rows = array();
 
     $status_map = PhabricatorSearchService::getConnectionStatusMap();
+    $stats = false;
+    $stats_view = false;
+
     foreach ($service->getHosts() as $host) {
-      $reachable = false;
-      try {
-        $engine = $host->getEngine();
-        $reachable = $engine->indexExists();
-      } catch (Exception $ex) {
-        $reachable = false;
-      }
-      $host->didHealthCheck($reachable);
       try {
         $status = $host->getConnectionStatus();
         $status = idx($status_map, $status, array());
-        $stats = $engine->getIndexStats();
       } catch (Exception $ex) {
         $status['icon'] = 'fa-times';
         $status['label'] = pht('Connection Error');
         $status['color'] = 'red';
-        $stats = array();
+        $host->didHealthCheck(false);
       }
-      $stats_view = $this->renderIndexStats($stats);
+
+      if (!$stats_view) {
+        try {
+          $stats = $host->getEngine()->getIndexStats($host);
+          $stats_view = $this->renderIndexStats($stats);
+        } catch (Exception $e) {
+          $stats_view = false;
+        }
+      }
+
       $type_icon = 'fa-search sky';
       $type_tip = $host->getDisplayName();
 
@@ -102,11 +105,15 @@ final class PhabricatorConfigClusterSearchController
       ->setNoDataString(pht('No search servers are configured.'))
       ->setHeaders($head);
 
-    return id(new PHUIObjectBoxView())
+    $view = id(new PHUIObjectBoxView())
       ->setHeaderText($service->getDisplayName())
-      ->addPropertyList($stats_view)
       ->setBackground(PHUIObjectBoxView::BLUE_PROPERTY)
       ->setTable($table);
+
+    if ($stats_view) {
+      $view->addPropertyList($stats_view);
+    }
+    return $view;
   }
 
   private function renderIndexStats($stats) {

@@ -36,14 +36,17 @@ class PhabricatorElasticFulltextStorageEngine
   }
 
   /**
-   * @return PhabricatorElasticSearchHost[]
+   * @return PhabricatorElasticSearchHost
    */
   public function getHostForRead() {
-    return $this->service->getAnyHostForRole('read');
+    return $this->getService()->getAnyHostForRole('read');
   }
 
+  /**
+   * @return PhabricatorElasticSearchHost
+   */
   public function getHostForWrite() {
-    return $this->service->getAnyHostForRole('write');
+    return $this->getService()->getAnyHostForRole('write');
   }
 
   public function setTimeout($timeout) {
@@ -300,8 +303,10 @@ class PhabricatorElasticFulltextStorageEngine
     throw new PhutilAggregateException('All search hosts failed:', $exceptions);
   }
 
-  public function indexExists() {
-    $host = $this->getHostForRead();
+  public function indexExists(PhabricatorElasticSearchHost $host = null) {
+    if (!$host) {
+      $host = $this->getHostForRead();
+    }
     try {
       if ($this->version >= 5) {
         $uri = '/_stats/';
@@ -373,13 +378,11 @@ class PhabricatorElasticFulltextStorageEngine
         foreach ($relationships as $rel) {
           $properties[$rel] = array(
             'type'  => 'keyword',
-            'index' => true,
             'include_in_all' => false,
             'doc_values' => false,
           );
           $properties[$rel.'_ts'] = array(
             'type'  => 'date',
-            'index' => true,
             'include_in_all' => false,
           );
         }
@@ -394,11 +397,13 @@ class PhabricatorElasticFulltextStorageEngine
     return $data;
   }
 
-  public function indexIsSane() {
-    if (!$this->indexExists()) {
+  public function indexIsSane(PhabricatorElasticSearchHost $host = null) {
+    if (!$host) {
+      $host = $this->getHostForRead();
+    }
+    if (!$this->indexExists($host)) {
       return false;
     }
-    $host = $this->getHostForRead();
     $cur_mapping = $this->executeRequest($host, '/_mapping/', array());
     $cur_settings = $this->executeRequest($host, '/_settings/', array());
     $actual = array_merge($cur_settings[$this->index],
@@ -415,7 +420,7 @@ class PhabricatorElasticFulltextStorageEngine
    * @param $required array
    * @return bool
    */
-  private function check($actual, $required) {
+  private function check($actual, $required, $path = '') {
     foreach ($required as $key => $value) {
       if (!array_key_exists($key, $actual)) {
         if ($key === '_all') {
@@ -429,9 +434,7 @@ class PhabricatorElasticFulltextStorageEngine
         if (!is_array($actual[$key])) {
           return false;
         }
-        if (!$this->check($actual[$key], $value)) {
-          $act = print_r($actual[$key], true);
-          $val = print_r($value, true);
+        if (!$this->check($actual[$key], $value, $path.'.'.$key)) {
           return false;
         }
         continue;
@@ -473,9 +476,12 @@ class PhabricatorElasticFulltextStorageEngine
     $this->executeRequest($host, '/', $data, 'PUT');
   }
 
-  public function getIndexStats() {
+  public function getIndexStats(PhabricatorElasticSearchHost $host = null) {
     if ($this->version < 2) {
       return false;
+    }
+    if (!$host) {
+      $host = $this->getHostForRead();
     }
     $uri = '/_stats/';
     $host = $this->getHostForRead();
@@ -495,7 +501,9 @@ class PhabricatorElasticFulltextStorageEngine
     );
   }
 
-  private function executeRequest($host, $path, array $data, $method = 'GET') {
+  private function executeRequest(PhabricatorElasticSearchHost $host, $path,
+    array $data, $method = 'GET') {
+
     $uri = $host->getURI($path);
     $data = json_encode($data);
     $future = new HTTPSFuture($uri, $data);

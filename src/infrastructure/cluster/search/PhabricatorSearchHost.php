@@ -58,7 +58,13 @@ abstract class PhabricatorSearchHost
   }
 
   public function getRoles() {
-    return $this->roles;
+    $roles = array();
+    foreach ($this->roles as $key => $val) {
+      if ($val) {
+        $roles[$key] = $val;
+      }
+    }
+    return $roles;
   }
 
   public function setPort($value) {
@@ -139,10 +145,12 @@ abstract class PhabricatorSearchHost
         try {
           $res = $host->getEngine()->executeSearch($query);
           // return immediately if we get results without an exception
+          $host->didHealthCheck(true);
           return $res;
         } catch (Exception $ex) {
           // try each server in turn, only throw if none succeed
           $last_exception = $ex;
+          $host->didHealthCheck(false);
         }
       }
     }

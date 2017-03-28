@@ -74,12 +74,9 @@ final class PhabricatorElasticSearchHost
     return $uri;
   }
 
-
   public function getConnectionStatus() {
-    $status = $this->getEngine()->indexIsSane()
-          ? parent::STATUS_OKAY
-          : parent::STATUS_FAIL;
-    return $status;
+    $status = $this->getEngine()->indexIsSane($this);
+    return $status ? parent::STATUS_OKAY : parent::STATUS_FAIL;
   }
 
 }

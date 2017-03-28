@@ -136,18 +136,29 @@ class PhabricatorSearchService
   }
 
 
-  /** @return PhabricatorSearchHost */
+  /**
+   * Get a random host reference with the specified role, skipping hosts which
+   * failed recent health checks.
+   * @throws PhabricatorClusterNoHostForRoleException if no healthy hosts match.
+   * @return PhabricatorSearchHost
+   */
   public function getAnyHostForRole($role) {
     $hosts = $this->getAllHostsForRole($role);
-    if (empty($hosts)) {
-      throw new PhabricatorClusterNoHostForRoleException($role);
+    shuffle($hosts);
+    foreach ($hosts as $host) {
+      $health = $host->getHealthRecord();
+      if ($health->getIsHealthy()) {
+        return $host;
+      }
     }
-    $random = array_rand($hosts);
-    return $hosts[$random];
+    throw new PhabricatorClusterNoHostForRoleException($role);
   }
 
 
-  /** @return PhabricatorSearchHost[] */
+  /**
+   * Get all configured hosts for this service which have the specified role.
+   * @return PhabricatorSearchHost[]
+   */
   public function getAllHostsForRole($role) {
     $hosts = array();
     foreach ($this->hosts as $host) {
@@ -208,6 +219,7 @@ class PhabricatorSearchService
   /**
    * (re)index the document: attempt to pass the document to all writable
    * fulltext search hosts
+   * @throws PhabricatorClusterNoHostForRoleException
    */
   public static function reindexAbstractDocument(
     PhabricatorSearchAbstractDocument $doc) {
@@ -224,6 +236,7 @@ class PhabricatorSearchService
   /**
    * Execute a full-text query and return a list of PHIDs of matching objects.
    * @return string[]
+   * @throws PhutilAggregateException
    */
   public static function executeSearch(PhabricatorSavedQuery $query) {
     $services = self::getAllServices();

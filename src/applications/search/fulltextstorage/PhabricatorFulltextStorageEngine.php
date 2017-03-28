@@ -19,6 +19,13 @@ abstract class PhabricatorFulltextStorageEngine extends Phobject {
   }
 
   /**
+   * @return PhabricatorSearchService
+   */
+  public function getService() {
+    return $this->service;
+  }
+
+  /**
    * Implementations must return a prototype host instance which is cloned
    * by the PhabricatorSearchService infrastructure to configure each engine.
    * @return PhabricatorSearchHost
