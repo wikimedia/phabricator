@@ -550,7 +550,11 @@ class PhabricatorElasticFulltextStorageEngine
 
     $uri = $host->getURI($path);
     $data = phutil_json_encode($data);
-    $future = new HTTPSFuture($uri, $data);
+    $future = new HTTPSFuture($uri);
+
+    $future->addHeader('Content-Type', 'application/json');
+    $future->write($data);
+
     if ($method != 'GET') {
       $future->setMethod($method);
     }
