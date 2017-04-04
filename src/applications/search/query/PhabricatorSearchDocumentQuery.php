@@ -24,7 +24,8 @@ final class PhabricatorSearchDocumentQuery
   }
 
   protected function loadPage() {
-    $phids = $this->loadDocumentPHIDsWithoutPolicyChecks();
+    $hits = $this->loadDocumentHitsWithoutPolicyChecks();
+    $phids = array_keys($hits);
 
     $handles = id(new PhabricatorHandleQuery())
       ->setViewer($this->getViewer())
@@ -34,7 +35,11 @@ final class PhabricatorSearchDocumentQuery
 
     // Retain engine order.
     $handles = array_select_keys($handles, $phids);
-
+    foreach($handles as $phid=>$handle) {
+      if (isset($hits[$phid]['highlight'])) {
+        $handle->setSubtitle(new PhutilSafeHTML($hits[$phid]['highlight']['body'][0]));
+      }
+    }
     return $handles;
   }
 
@@ -69,7 +74,7 @@ final class PhabricatorSearchDocumentQuery
     return $handles;
   }
 
-  public function loadDocumentPHIDsWithoutPolicyChecks() {
+  public function loadDocumentHitsWithoutPolicyChecks() {
     $query = id(clone($this->savedQuery))
       ->setParameter('offset', $this->getOffset())
       ->setParameter('limit', $this->getRawResultLimit());
