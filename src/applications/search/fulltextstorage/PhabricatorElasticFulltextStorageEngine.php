@@ -270,8 +270,8 @@ class PhabricatorElasticFulltextStorageEngine
         $offset + $limit,
         10000));
     }
-    $spec['from'] = $offset;
-    $spec['size'] = $limit;
+    $spec['from'] = 0;
+    $spec['size'] = $offset + $limit;
 
     $spec['highlight'] = array(
       'pre_tags' => array('<strong>'),
