@@ -40,7 +40,8 @@ final class PhabricatorSearchResultView extends AphrontView {
       ->setHref($handle->getURI())
       ->setImageURI($handle->getImageURI())
       ->addAttribute($type_name)
-      ->setImageIcon($handle->getTypeIcon());
+      ->setImageIcon($handle->getTypeIcon())
+      ->setSubhead($handle->getSubtitle());
 
     if ($handle->getStatus() == PhabricatorObjectHandle::STATUS_CLOSED) {
       $item->setDisabled(true);

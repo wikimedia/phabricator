@@ -525,6 +525,8 @@ final class ManiphestTaskQuery extends PhabricatorCursorPagedPolicyAwareQuery {
 
     if (empty($fulltext_results)) {
       $fulltext_results = array(null);
+    } else {
+      $fulltext_results = array_keys($fulltext_results);
     }
 
     return qsprintf(

@@ -150,6 +150,10 @@ class PhabricatorElasticFulltextStorageEngine
   }
 
   private function buildSpec(PhabricatorSavedQuery $query) {
+    $field_title = PhabricatorSearchDocumentFieldType::FIELD_TITLE;
+    $field_body = PhabricatorSearchDocumentFieldType::FIELD_BODY;
+    $field_comment = PhabricatorSearchDocumentFieldType::FIELD_COMMENT;
+
     $q = new PhabricatorElasticSearchQueryBuilder('bool');
     $query_string = $query->getParameter('query');
     if (strlen($query_string)) {
@@ -161,9 +165,10 @@ class PhabricatorElasticFulltextStorageEngine
         'simple_query_string' => array(
           'query'  => $query_string,
           'fields' => array(
-            PhabricatorSearchDocumentFieldType::FIELD_TITLE.'.*',
-            PhabricatorSearchDocumentFieldType::FIELD_BODY.'.*',
-            PhabricatorSearchDocumentFieldType::FIELD_COMMENT.'.*',
+            $field_title.'.*',
+            $field_body,
+            $field_body.'.*',
+            $field_comment.'.*',
           ),
           'default_operator' => 'AND',
         ),
@@ -178,12 +183,12 @@ class PhabricatorElasticFulltextStorageEngine
           'query'  => $query_string,
           'fields' => array(
             '*.raw',
-            PhabricatorSearchDocumentFieldType::FIELD_TITLE.'^4',
-            PhabricatorSearchDocumentFieldType::FIELD_BODY.'^3',
-            PhabricatorSearchDocumentFieldType::FIELD_COMMENT.'^1.2',
+            $field_title.'^4',
+            $field_body.'^3',
+            $field_comment.'^1.2',
           ),
           'analyzer' => 'english_exact',
-          'default_operator' => 'and',
+          'default_operator' => 'AND',
         ),
       ));
 
@@ -276,6 +281,20 @@ class PhabricatorElasticFulltextStorageEngine
     $spec['from'] = $offset;
     $spec['size'] = $limit;
 
+    $spec['highlight'] = array(
+      "pre_tags" => array("<strong>"),
+      "post_tags" => array("</strong>"),
+      "fields" => array(
+        $field_body => array(
+          "matched_fields" => array(
+            $field_body.".raw",
+            $field_body.".keywords",
+            $field_body.".stems",
+          )
+        )
+      )
+    );
+
     return $spec;
   }
 
@@ -297,7 +316,7 @@ class PhabricatorElasticFulltextStorageEngine
     foreach ($this->service->getAllHostsForRole('read') as $host) {
       try {
         $response = $this->executeRequest($host, $uri, $spec);
-        $phids = ipull($response['hits']['hits'], '_id');
+        $phids = ipull($response['hits']['hits'], null, '_id');
         return $phids;
       } catch (Exception $e) {
         $exceptions[] = $e;
