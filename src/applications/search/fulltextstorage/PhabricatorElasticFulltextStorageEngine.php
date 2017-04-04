@@ -265,8 +265,8 @@ class PhabricatorElasticFulltextStorageEngine
         $offset + $limit,
         10000));
     }
-    $spec['from'] = $offset;
-    $spec['size'] = $limit;
+    $spec['from'] = 0;
+    $spec['size'] = $offset + $limit;
 
     return $spec;
   }
