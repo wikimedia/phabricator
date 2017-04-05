@@ -308,8 +308,18 @@ class PhabricatorElasticFulltextStorageEngine
     foreach ($this->service->getAllHostsForRole('read') as $host) {
       try {
         $response = $this->executeRequest($host, $uri, $spec);
-        $phids = ipull($response['hits']['hits'], null, '_id');
-        return $phids;
+
+        $hits = array();
+        foreach ($response['hits']['hits'] as $hit) {
+          $phid = $hit['_id'];
+          $result = new PhabricatorFulltextResult($phid);
+          if (isset($hit['highlight'])) {
+            $result->setHighlights($hit['highlight']);
+          }
+          $hits[$phid] = $result;
+        }
+        //phlog($hits);
+        return $hits;
       } catch (Exception $e) {
         $exceptions[] = $e;
       }

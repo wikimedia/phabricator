@@ -24,8 +24,8 @@ final class PhabricatorSearchDocumentQuery
   }
 
   protected function loadPage() {
-    $hits = $this->loadDocumentHitsWithoutPolicyChecks();
-    $phids = array_keys($hits);
+    $results = $this->loadDocumentHitsWithoutPolicyChecks();
+    $phids = array_keys($results);
 
     $handles = id(new PhabricatorHandleQuery())
       ->setViewer($this->getViewer())
@@ -33,17 +33,14 @@ final class PhabricatorSearchDocumentQuery
       ->withPHIDs($phids)
       ->execute();
 
-    // Retain engine order.
-    $handles = array_select_keys($handles, $phids);
-    foreach($handles as $phid=>$handle) {
-      if (isset($hits[$phid]['highlight'])) {
-        $handle->setSubtitle(new PhutilSafeHTML($hits[$phid]['highlight']['body'][0]));
-      }
+    foreach($phids as $phid) {
+      $results[$phid]->setHandle($handles[$phid]);
     }
-    return $handles;
+
+    return $results;
   }
 
-  protected function willFilterPage(array $handles) {
+  protected function willFilterPage(array $results) {
     // NOTE: This is used by the object selector dialog to exclude the object
     // you're looking at, so that, e.g., a task can't be set as a dependency
     // of itself in the UI.
@@ -56,22 +53,23 @@ final class PhabricatorSearchDocumentQuery
       $exclude = array_fuse($exclude_phids);
     }
 
-    foreach ($handles as $key => $handle) {
+    foreach ($results as $key => $result) {
+      $handle = $result->getHandle();
       if (!$handle->isComplete()) {
-        unset($handles[$key]);
+        unset($results[$key]);
         continue;
       }
       if ($handle->getPolicyFiltered()) {
-        unset($handles[$key]);
+        unset($results[$key]);
         continue;
       }
       if (isset($exclude[$handle->getPHID()])) {
-        unset($handles[$key]);
+        unset($results[$key]);
         continue;
       }
     }
 
-    return $handles;
+    return $results;
   }
 
   public function loadDocumentHitsWithoutPolicyChecks() {

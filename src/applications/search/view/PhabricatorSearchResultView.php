@@ -5,9 +5,16 @@ final class PhabricatorSearchResultView extends AphrontView {
   private $handle;
   private $query;
   private $object;
+  private $result;
 
   public function setHandle(PhabricatorObjectHandle $handle) {
     $this->handle = $handle;
+    return $this;
+  }
+
+  public function setFulltextResult(PhabricatorFulltextResult $result) {
+    $this->result = $result;
+    $this->setHandle($result->getHandle());
     return $this;
   }
 
@@ -40,12 +47,18 @@ final class PhabricatorSearchResultView extends AphrontView {
       ->setHref($handle->getURI())
       ->setImageURI($handle->getImageURI())
       ->addAttribute($type_name)
-      ->setImageIcon($handle->getTypeIcon())
-      ->setSubhead($handle->getSubtitle());
+      ->setImageIcon($handle->getTypeIcon());
 
     if ($handle->getStatus() == PhabricatorObjectHandle::STATUS_CLOSED) {
       $item->setDisabled(true);
       $item->addAttribute(pht('Closed'));
+    }
+
+    $ext = PhabricatorSearchResultEngineExtension::getAllEnabledExtensions();
+    foreach($ext as $extension) {
+      if ($extension->canRenderItemView($this->result)) {
+        $item = $extension->renderItemView($item, $this->result);
+      }
     }
 
     return $item;

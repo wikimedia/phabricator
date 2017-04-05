@@ -253,9 +253,9 @@ final class PhabricatorSearchApplicationSearchEngine
         ->withPHIDs(mpull($results, 'getPHID'))
         ->execute();
 
-      foreach ($results as $phid => $handle) {
+      foreach ($results as $phid => $result) {
         $view = id(new PhabricatorSearchResultView())
-          ->setHandle($handle)
+          ->setFulltextResult($result)
           ->setQuery($query)
           ->setObject(idx($objects, $phid))
           ->render();
