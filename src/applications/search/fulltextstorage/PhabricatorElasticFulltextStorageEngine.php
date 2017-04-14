@@ -274,8 +274,8 @@ class PhabricatorElasticFulltextStorageEngine
     $spec['size'] = $offset + $limit;
 
     $spec['highlight'] = array(
-      'pre_tags' => array('<strong>'),
-      'post_tags' => array('</strong>'),
+      'pre_tags' => array('||SPLIT||##STARTHIGHLIGHT##||SPLIT||'),
+      'post_tags' => array('||SPLIT||##ENDHIGHLIGHT##||SPLIT||'),
       'fields' => array(
         $field_body => array(
           'matched_fields' => array(
