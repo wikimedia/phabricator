@@ -344,7 +344,7 @@ final class DifferentialTransactionEditor
       $downgrade[] = DifferentialReviewerStatus::STATUS_ACCEPTED;
     }
 
-    if ($downgrade_accepts) {
+    if ($downgrade_rejects) {
       $downgrade[] = DifferentialReviewerStatus::STATUS_REJECTED;
     }
 
@@ -672,6 +672,8 @@ final class DifferentialTransactionEditor
               $active_phid = $active_diff->getPHID();
               if ($reviewer->isRejected($active_phid)) {
                 $has_rejecting_reviewer = true;
+              } else {
+                $has_rejecting_older_reviewer = true;
               }
               break;
             case DifferentialReviewerStatus::STATUS_REJECTED_OLDER:

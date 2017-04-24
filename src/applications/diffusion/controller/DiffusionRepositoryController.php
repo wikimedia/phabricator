@@ -362,9 +362,9 @@ final class DiffusionRepositoryController extends DiffusionController {
       }
 
       if ($repository->isSVN()) {
-        $label = pht('Checkout');
+        $label = phutil_tag_div('diffusion-clone-label', pht('Checkout'));
       } else {
-        $label = pht('Clone');
+        $label = phutil_tag_div('diffusion-clone-label', pht('Clone'));
       }
 
       $view->addProperty(
@@ -694,15 +694,10 @@ final class DiffusionRepositoryController extends DiffusionController {
     $pager->setURI($browse_uri, 'offset');
 
     if ($pager->willShowPagingControls()) {
-      $pager_box = $this->renderTablePagerBox($pager);
-    } else {
-      $pager_box = null;
+      $browse_panel->setPager($pager);
     }
 
-    return array(
-      $browse_panel,
-      $pager_box,
-    );
+    return $browse_panel;
   }
 
   private function renderCloneURI(

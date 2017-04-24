@@ -1,10 +1,12 @@
 <?php
 
 final class PhabricatorSearchDocumentQuery
-  extends PhabricatorCursorPagedPolicyAwareQuery {
+  extends PhabricatorPolicyAwareQuery {
 
   private $savedQuery;
   private $objectCapabilities;
+  private $unfilteredOffset;
+  private $fulltextResultSet;
 
   public function withSavedQuery(PhabricatorSavedQuery $query) {
     $this->savedQuery = $query;
@@ -20,12 +22,38 @@ final class PhabricatorSearchDocumentQuery
     if ($this->objectCapabilities) {
       return $this->objectCapabilities;
     }
+
     return $this->getRequiredCapabilities();
   }
 
+  public function getFulltextResultSet() {
+    if (!$this->fulltextResultSet) {
+      throw new PhutilInvalidStateException('execute');
+    }
+
+    return $this->fulltextResultSet;
+  }
+
+  protected function willExecute() {
+    $this->unfilteredOffset = 0;
+    $this->fulltextResultSet = null;
+  }
+
   protected function loadPage() {
-    $results = $this->loadDocumentHitsWithoutPolicyChecks();
-    $phids = array_keys($results);
+    // NOTE: The offset and limit information in the inherited properties of
+    // this object represent a policy-filtered offset and limit, but the
+    // underlying query engine needs an unfiltered offset and limit. We keep
+    // track of an unfiltered result offset internally.
+
+    $query = id(clone($this->savedQuery))
+      ->setParameter('offset', $this->unfilteredOffset)
+      ->setParameter('limit', $this->getRawResultLimit());
+
+    $result_set = PhabricatorSearchService::newResultSet($query, $this);
+    $phids = $result_set->getPHIDs();
+
+    $this->fulltextResultSet = $result_set;
+    $this->unfilteredOffset += count($phids);
 
     $handles = id(new PhabricatorHandleQuery())
       ->setViewer($this->getViewer())
@@ -33,14 +61,13 @@ final class PhabricatorSearchDocumentQuery
       ->withPHIDs($phids)
       ->execute();
 
-    foreach($phids as $phid) {
-      $results[$phid]->setHandle($handles[$phid]);
-    }
+    // Retain engine order.
+    $handles = array_select_keys($handles, $phids);
 
     return $results;
   }
 
-  protected function willFilterPage(array $results) {
+  protected function willFilterPage(array $handles) {
     // NOTE: This is used by the object selector dialog to exclude the object
     // you're looking at, so that, e.g., a task can't be set as a dependency
     // of itself in the UI.
@@ -53,44 +80,31 @@ final class PhabricatorSearchDocumentQuery
       $exclude = array_fuse($exclude_phids);
     }
 
-    foreach ($results as $key => $result) {
-      $handle = $result->getHandle();
+    foreach ($handles as $key => $handle) {
       if (!$handle->isComplete()) {
-        unset($results[$key]);
+        unset($handles[$key]);
         continue;
       }
       if ($handle->getPolicyFiltered()) {
-        unset($results[$key]);
+        unset($handles[$key]);
         continue;
       }
       if (isset($exclude[$handle->getPHID()])) {
-        unset($results[$key]);
+        unset($handles[$key]);
         continue;
       }
     }
 
-    return $results;
-  }
-
-  public function loadDocumentHitsWithoutPolicyChecks() {
-    $query = id(clone($this->savedQuery))
-      ->setParameter('offset', $this->getOffset())
-      ->setParameter('limit', $this->getRawResultLimit());
-    return PhabricatorSearchService::executeSearch($query);
+    return $handles;
   }
 
   public function getQueryApplicationClass() {
     return 'PhabricatorSearchApplication';
   }
 
-  protected function getResultCursor($result) {
-    throw new Exception(
-      pht(
-        'This query does not support cursor paging; it must be offset paged.'));
-  }
-
   protected function nextPage(array $page) {
-    $this->setOffset($this->getOffset() + count($page));
+    // We already updated the internal offset in `loadPage()` after loading
+    // results, so we do not need to make any additional state updates here.
     return $this;
   }
 

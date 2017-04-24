@@ -20,6 +20,7 @@ final class PhabricatorRobotsController extends PhabricatorController {
 
     $out[] = 'User-Agent: *';
     $out[] = 'Disallow: /diffusion/';
+    $out[] = 'Disallow: /source/';
     $out[] = 'Disallow: /multimeter/';
     $out[] = 'Disallow: /file/';
     $out[] = 'Disallow: /project/sprint';
@@ -39,12 +40,13 @@ final class PhabricatorRobotsController extends PhabricatorController {
     $out[] = 'Disallow: /calendar';
     $out[] = 'Disallow: /herald';
 
+
     // Add a small crawl delay (number of seconds between requests) for spiders
     // which respect it. The intent here is to prevent spiders from affecting
     // performance for users. The possible cost is slower indexing, but that
     // seems like a reasonable tradeoff, since most Phabricator installs are
     // probably not hugely concerned about cutting-edge SEO.
-    $out[] = 'Crawl-delay: 2';
+    $out[] = 'Crawl-delay: 1';
 
     $content = implode("\n", $out)."\n";
 
