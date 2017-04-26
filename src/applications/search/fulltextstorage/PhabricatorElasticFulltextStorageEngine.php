@@ -310,16 +310,21 @@ class PhabricatorElasticFulltextStorageEngine
         $response = $this->executeRequest($host, $uri, $spec);
 
         $hits = array();
+        $highlights = array();
+
         foreach ($response['hits']['hits'] as $hit) {
           $phid = $hit['_id'];
-          $result = new PhabricatorFulltextResult($phid);
           if (isset($hit['highlight'])) {
-            $result->setHighlights($hit['highlight']);
+            $highlights[$phid] = $hit['highlight'];
           }
-          $hits[$phid] = $result;
+          $phids[] = $phid;
         }
-        //phlog($hits);
-        return $hits;
+
+        return id(new PhabricatorFulltextResultSet())
+          ->setPHIDs($phids)
+          ->setFulltextTokens($this->getFulltextTokens())
+          ->setFulltextHighlights($highlights);
+
       } catch (Exception $e) {
         $exceptions[] = $e;
       }

@@ -13,17 +13,17 @@ class PhabricatorSearchResultHighlightsEngineExtension
     return 'SearchResultHighlights';
   }
 
-  public function canRenderItemView(PhabricatorFulltextResult $result) {
-    return true;
-  }
-
   public function renderItemView(
-    PHUIObjectItemView $item,
-    PhabricatorFulltextResult $result) {
+    PhabricatorFulltextResultSet $result_set, PHUIObjectItemView $item,
+      $phid) {
 
-    $highlights = $result->getHighlights('body');
+    $highlights = $result_set->getHighlightsForPHID($phid);
     if ($highlights) {
-      $parts = explode('||SPLIT||', $highlights);
+      $flattened = "";
+      foreach($highlights as $field => $values) {
+        $flattened .= implode(' ', array_values($values));
+      }
+      $parts = explode('||SPLIT||', $flattened);
       $highlights = array();
       foreach ($parts as $part) {
         if ($part == '##STARTHIGHLIGHT##') {

@@ -21,9 +21,7 @@ abstract class PhabricatorSearchResultEngineExtension extends Phobject {
 
   abstract public function getExtensionName();
 
-  abstract public function canRenderItemView(PhabricatorFulltextResult $result);
-
-  public function getExtensionOrder() {
+    public function getExtensionOrder() {
     return 5000;
   }
 
@@ -32,9 +30,9 @@ abstract class PhabricatorSearchResultEngineExtension extends Phobject {
   }
 
   abstract public function renderItemView(
+    PhabricatorFulltextResultSet $result_set,
     PHUIObjectItemView $item,
-    PhabricatorFulltextResult $result);
-
+    $phid);
 
   final public static function getAllExtensions() {
     return id(new PhutilClassMapQuery())

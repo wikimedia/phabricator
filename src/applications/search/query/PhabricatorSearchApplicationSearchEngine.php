@@ -258,12 +258,21 @@ final class PhabricatorSearchApplicationSearchEngine
         ->withPHIDs(mpull($results, 'getPHID'))
         ->execute();
 
-      foreach ($results as $phid => $result) {
+      $ext = PhabricatorSearchResultEngineExtension::getAllEnabledExtensions();
+
+      foreach ($results as $phid => $handle) {
         $view = id(new PhabricatorSearchResultView())
-          ->setFulltextResult($result)
+          ->setHandle($handle)
           ->setQuery($query)
           ->setObject(idx($objects, $phid))
           ->render();
+
+        foreach($ext as $extension) {
+          $ext_view = $extension->renderItemView($result_set, $view, $phid);
+          if ($ext_view) {
+            $view = $ext_view;
+          }
+        }
         $list->addItem($view);
       }
     }

@@ -184,7 +184,9 @@ final class PhabricatorMySQLFulltextStorageEngine
       $offset,
       $limit);
 
-    return ipull($results, 'documentPHID');
+    return id(new PhabricatorFulltextResultSet())
+      ->setPHIDs(ipull($results, 'documentPHID'))
+      ->setFulltextTokens($this->getFulltextTokens());
   }
 
   private function newFulltextSubquery(

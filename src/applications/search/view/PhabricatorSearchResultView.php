@@ -12,12 +12,6 @@ final class PhabricatorSearchResultView extends AphrontView {
     return $this;
   }
 
-  public function setFulltextResult(PhabricatorFulltextResult $result) {
-    $this->result = $result;
-    $this->setHandle($result->getHandle());
-    return $this;
-  }
-
   public function setQuery(PhabricatorSavedQuery $query) {
     $this->query = $query;
     return $this;
@@ -52,13 +46,6 @@ final class PhabricatorSearchResultView extends AphrontView {
     if ($handle->getStatus() == PhabricatorObjectHandle::STATUS_CLOSED) {
       $item->setDisabled(true);
       $item->addAttribute(pht('Closed'));
-    }
-
-    $ext = PhabricatorSearchResultEngineExtension::getAllEnabledExtensions();
-    foreach($ext as $extension) {
-      if ($extension->canRenderItemView($this->result)) {
-        $item = $extension->renderItemView($item, $this->result);
-      }
     }
 
     return $item;

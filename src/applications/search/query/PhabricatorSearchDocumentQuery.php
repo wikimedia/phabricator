@@ -64,7 +64,7 @@ final class PhabricatorSearchDocumentQuery
     // Retain engine order.
     $handles = array_select_keys($handles, $phids);
 
-    return $results;
+    return $handles;
   }
 
   protected function willFilterPage(array $handles) {
