@@ -317,7 +317,7 @@ class PhabricatorElasticFulltextStorageEngine
           if (isset($hit['highlight'])) {
             $highlights[$phid] = $hit['highlight'];
           }
-          $phids[] = $phid;
+          $phids[$phid] = $phid;
         }
 
         return id(new PhabricatorFulltextResultSet())
