@@ -304,6 +304,7 @@ class PhabricatorElasticFulltextStorageEngine
 
     $spec = $this->buildSpec($query);
     $exceptions = array();
+    $phids = array();
 
     foreach ($this->service->getAllHostsForRole('read') as $host) {
       try {
