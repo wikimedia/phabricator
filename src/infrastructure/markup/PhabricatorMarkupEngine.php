@@ -455,6 +455,8 @@ final class PhabricatorMarkupEngine extends Phobject {
       'pygments'      => PhabricatorEnv::getEnvConfig('pygments.enabled'),
       'youtube'       => PhabricatorEnv::getEnvConfig(
         'remarkup.enable-embedded-youtube'),
+      'commons'       => PhabricatorEnv::getEnvConfig(
+        'remarkup.enable-embedded-commons'),
       'differential.diff' => null,
       'header.generate-toc' => false,
       'macros'        => true,
@@ -513,6 +515,10 @@ final class PhabricatorMarkupEngine extends Phobject {
 
     if ($options['youtube']) {
       $rules[] = new PhabricatorYoutubeRemarkupRule();
+    }
+
+    if ($options['commons']) {
+      $rules[] = new WikimediaCommonsRemarkupRule();
     }
 
     $rules[] = new PhabricatorIconRemarkupRule();

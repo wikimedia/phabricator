@@ -4832,6 +4832,7 @@ phutil_register_library_map(array(
     'UserQueryConduitAPIMethod' => 'applications/people/conduit/UserQueryConduitAPIMethod.php',
     'UserSearchConduitAPIMethod' => 'applications/people/conduit/UserSearchConduitAPIMethod.php',
     'UserWhoAmIConduitAPIMethod' => 'applications/people/conduit/UserWhoAmIConduitAPIMethod.php',
+    'WikimediaCommonsRemarkupRule' => 'infrastructure/markup/rule/WikimediaCommonsRemarkupRule.php',
   ),
   'function' => array(
     'celerity_generate_unique_node_id' => 'applications/celerity/api.php',
@@ -10517,5 +10518,6 @@ phutil_register_library_map(array(
     'UserQueryConduitAPIMethod' => 'UserConduitAPIMethod',
     'UserSearchConduitAPIMethod' => 'PhabricatorSearchEngineAPIMethod',
     'UserWhoAmIConduitAPIMethod' => 'UserConduitAPIMethod',
+    'WikimediaCommonsRemarkupRule' => 'PhutilRemarkupRule',
   ),
 ));

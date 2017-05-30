@@ -263,6 +263,18 @@ EOTEXT
             "inline. This has mild security implications (you'll leak ".
             "referrers to YouTube) and is pretty silly (but sort of ".
             "awesome).")),
+       $this->newOption('remarkup.enable-embedded-commons', 'bool', false)
+        ->setBoolOptions(
+          array(
+            pht('Embed Commons videos'),
+            pht("Don't embed Commons videos"),
+          ))
+        ->setSummary(
+          pht('Determines whether Wikimedia Commons videos get embedded.'))
+        ->setDescription(
+          pht(
+            'If you enable this, linked Commons videos will be embedded '.
+            'inline.')),
         $this->newOption(
           'security.outbound-blacklist',
           'list<string>',
