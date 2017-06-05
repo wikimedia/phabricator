@@ -105,17 +105,18 @@ final class PhabricatorCalendarNotificationEngine
       }
       $attendee_map[$key] = array_fuse($notifiable_phids);
     }
-    if (!$attendee_map) {
-      // None of the events have any notifiable attendees, so there is no
-      // one to notify of anything.
-      return;
-    }
 
     $all_attendees = array();
     foreach ($attendee_map as $key => $attendee_phids) {
       foreach ($attendee_phids as $attendee_phid) {
         $all_attendees[$attendee_phid] = $attendee_phid;
       }
+    }
+
+    if (!$all_attendees) {
+      // None of the events have any notifiable attendees, so there is no
+      // one to notify of anything.
+      return;
     }
 
     $user_map = id(new PhabricatorPeopleQuery())
