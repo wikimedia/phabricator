@@ -174,7 +174,7 @@ final class DifferentialChangesetListView extends AphrontView {
           $load = javelin_tag(
             'a',
             array(
-              'class' => 'button grey',
+              'class' => 'button button-grey',
               'href' => '#'.$uniq_id,
               'sigil' => 'differential-load',
               'meta' => array(
@@ -203,15 +203,11 @@ final class DifferentialChangesetListView extends AphrontView {
 
     $this->requireResource('aphront-tooltip-css');
 
-    $show_objectives =
-      PhabricatorEnv::getEnvConfig('phabricator.show-prototypes');
-
     $this->initBehavior(
       'differential-populate',
       array(
       'changesetViewIDs' => $ids,
       'inlineURI' => $this->inlineURI,
-      'showObjectives' => $show_objectives,
       'pht' => array(
         'Open in Editor' => pht('Open in Editor'),
         'Show All Context' => pht('Show All Context'),
@@ -279,6 +275,10 @@ final class DifferentialChangesetListView extends AphrontView {
           pht('Hide or show the current file.'),
         'You must select a file to hide or show.' =>
           pht('You must select a file to hide or show.'),
+
+        'Unsaved' => pht('Unsaved'),
+        'Unsubmitted' => pht('Unsubmitted'),
+        'Comments' => pht('Comments'),
       ),
     ));
 
