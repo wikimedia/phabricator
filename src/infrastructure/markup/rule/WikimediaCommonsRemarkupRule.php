@@ -9,7 +9,11 @@ final class WikimediaCommonsRemarkupRule extends PhutilRemarkupRule {
   }
 
   public function apply($text) {
-    $this->uri = new PhutilURI($text);
+    try {
+      $this->uri = new PhutilURI($text);
+    } catch (Exception $ex) {
+      return $text;
+    }
 
     if (preg_match('/^https:\/\/commons\.wikimedia\.org\/(w|wiki)\/'.
                   '(index.php\?title=)?File.*\.(webm|ogv)$/', $text)) {
