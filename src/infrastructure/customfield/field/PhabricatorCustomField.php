@@ -72,14 +72,14 @@ abstract class PhabricatorCustomField extends Phobject {
         $spec,
         $object);
 
+      foreach ($fields as $field) {
+        $field->setObject($object);
+      }
+
       foreach ($fields as $key => $field) {
         if (!$field->shouldEnableForRole($role)) {
           unset($fields[$key]);
         }
-      }
-
-      foreach ($fields as $field) {
-        $field->setObject($object);
       }
 
       $field_list = new PhabricatorCustomFieldList($fields);
