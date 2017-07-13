@@ -806,7 +806,7 @@ final class DiffusionCommitController extends DiffusionController {
     $curtain->addAction($action);
 
     if (class_exists('CustomGithubDownloadLinks')) {
-      CustomGithubDownloadLinks::AddActionLinksToCurtain(
+      CustomGithubDownloadLinks::AddActionLinksToBottom(
         $repository, $identifier, $curtain);
     }
 

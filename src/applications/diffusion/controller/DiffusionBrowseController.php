@@ -5,6 +5,7 @@ final class DiffusionBrowseController extends DiffusionController {
   private $lintCommit;
   private $lintMessages;
   private $coverage;
+  private static $githubDownloadButton = '';
 
   public function shouldAllowPublic() {
     return true;
@@ -1701,7 +1702,19 @@ final class DiffusionBrowseController extends DiffusionController {
       ->setIcon('fa-history')
       ->setColor(PHUIButtonView::GREY);
 
-    return array($history, $compare, $head);
+    if (class_exists('CustomGithubDownloadLinks')) {
+      self::$githubDownloadButton =
+        CustomGithubDownloadLinks::AddActionLinksToCurtain(
+          $drequest,
+          $viewer);
+    }
+
+    return array(
+    self::$githubDownloadButton,
+                 $history,
+                 $compare,
+                 $head,
+    );
   }
 
   protected function buildPropertyView(

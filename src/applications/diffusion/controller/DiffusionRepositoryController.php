@@ -6,6 +6,7 @@ final class DiffusionRepositoryController extends DiffusionController {
   private $browseFuture;
   private $tagFuture;
   private $branchFuture;
+  private static $githubDownloadButton = '';
 
   public function shouldAllowPublic() {
     return true;
@@ -108,9 +109,21 @@ final class DiffusionRepositoryController extends DiffusionController {
       ->setWorkflow(true)
       ->setHref($clone_uri);
 
+    if (class_exists('CustomGithubDownloadLinks')) {
+      self::$githubDownloadButton =
+        CustomGithubDownloadLinks::AddActionLinksToCurtain(
+          $drequest,
+          $viewer,
+          PHUIButtonView::BLUE);
+    }
+
     $bar = id(new PHUILeftRightView())
       ->setLeft($locate_file)
-      ->setRight($clone_button)
+      ->setRight(array(
+          $clone_button,
+          phutil_tag('span', array(), ' '),
+          self::$githubDownloadButton,
+      ))
       ->addClass('diffusion-action-bar');
 
     $view = id(new PHUITwoColumnView())
