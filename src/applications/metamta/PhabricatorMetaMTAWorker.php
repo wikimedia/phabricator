@@ -4,7 +4,7 @@ final class PhabricatorMetaMTAWorker
   extends PhabricatorWorker {
 
   public function getMaximumRetryCount() {
-    return 250;
+    return 100;
   }
 
   public function getWaitBeforeRetry(PhabricatorWorkerTask $task) {
