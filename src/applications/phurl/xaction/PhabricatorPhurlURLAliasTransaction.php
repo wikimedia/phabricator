@@ -58,10 +58,10 @@ final class PhabricatorPhurlURLAliasTransaction
               'letter.',
               $debug_alias));
         }
-        if (preg_match('/[^a-z0-9]/i', $new_alias)) {
+        if (preg_match('/[^a-z0-9.\-]/i', $new_alias)) {
           $errors[] = $this->newRequiredError(
-            pht('The alias you provided (%s) may only contain letters and '.
-              'numbers.',
+            pht('The alias you provided (%s) may only contain '.
+              'latin letters, digits, periods, and hyphens.',
               $debug_alias));
         }
       }
