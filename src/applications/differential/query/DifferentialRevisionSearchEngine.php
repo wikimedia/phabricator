@@ -116,7 +116,8 @@ final class DifferentialRevisionSearchEngine
     switch ($query_key) {
       case 'review':
         return $query
-          ->setParameter('status', DifferentialRevisionQuery::STATUS_NEEDS_REVIEW);
+          ->setParameter('status',
+            DifferentialLegacyQuery::STATUS_NEEDS_REVIEW);
       case 'active':
         $bucket_key = DifferentialRevisionRequiredActionResultBucket::BUCKETKEY;
 
@@ -131,13 +132,13 @@ final class DifferentialRevisionSearchEngine
         return $query;
       case 'open':
         return $query
-          ->setParameter('status', DifferentialRevisionQuery::STATUS_OPEN);
+          ->setParameter('status', DifferentialLegacyQuery::STATUS_OPEN);
       case 'merged':
         return $query
-          ->setParameter('status', DifferentialRevisionQuery::STATUS_CLOSED);
+          ->setParameter('status', DifferentialLegacyQuery::STATUS_CLOSED);
       case 'abandoned':
         return $query
-          ->setParameter('status', DifferentialRevisionQuery::STATUS_ABANDONED);
+          ->setParameter('status', DifferentialLegacyQuery::STATUS_ABANDONED);
     }
 
     return parent::buildSavedQueryFromBuiltin($query_key);
