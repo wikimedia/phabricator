@@ -116,9 +116,13 @@ only screen and (min-resolution: 1.5dppx) {
 }
 
 .tokens-wmf-1 {
-  background-position: 0px -95px;
+  background-position: -76px -76px;
 }
 
 .tokens-wmf-2 {
+  background-position: 0px -95px;
+}
+
+.tokens-wmf-3 {
   background-position: -19px -95px;
 }

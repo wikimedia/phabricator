@@ -53,6 +53,7 @@ final class PhabricatorTokenQuery
       array('emoji-8', pht('Pirate Logo')),
       array('wmf-1', pht('Barnstar')),
       array('wmf-2', pht('Cookie')),
+      array('wmf-3', pht('Goat')),
     );
 
     $type = PhabricatorTokenTokenPHIDType::TYPECONST;
