@@ -69,10 +69,19 @@
   float: left;
   width: calc(100% - 320px);
 }
+!print .device-desktop .phui-two-column-view .phui-main-column {
+  float: none;
+  width: 100%;
+}
 
 .device-desktop .phui-two-column-view .phui-side-column {
   float: right;
   width: 300px;
+}
+
+!print .device-desktop .phui-two-column-view .phui-side-column {
+  float: none;
+  width: 100%;
 }
 
 .device-desktop .phui-two-column-view.phui-side-column-left .phui-main-column {

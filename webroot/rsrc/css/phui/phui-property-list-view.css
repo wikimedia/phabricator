@@ -193,6 +193,10 @@ div.phui-property-list-stacked .phui-property-list-properties
   border-left: 1px solid {$thinblueborder};
 }
 
+!print .phabricator-action-list-view {
+  display: none;
+}
+
 !print .phui-property-list-actions {
   display: none;
 }
