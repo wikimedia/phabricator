@@ -150,7 +150,10 @@ final class DifferentialQueryConduitAPIMethod
     }
 
     if ($status) {
-      $query->withStatus($status);
+      $statuses = DifferentialLegacyQuery::getModernValues($status);
+      if ($statuses) {
+        $query->withStatuses($statuses);
+      }
     }
     if ($order) {
       $query->setOrder($order);
@@ -215,7 +218,11 @@ final class DifferentialQueryConduitAPIMethod
         'dateCreated'         => $revision->getDateCreated(),
         'dateModified'        => $revision->getDateModified(),
         'authorPHID'          => $revision->getAuthorPHID(),
-        'status'              => $revision->getStatus(),
+
+        // NOTE: For backward compatibility this is explicitly a string, like
+        // "2", even though the value of the string is an integer. See PHI14.
+        'status'              => (string)$revision->getLegacyRevisionStatus(),
+
         'statusName'          => $revision->getStatusDisplayName(),
         'properties' => $revision->getProperties(),
         'branch'              => $diff->getBranch(),

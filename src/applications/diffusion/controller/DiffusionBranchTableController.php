@@ -57,6 +57,7 @@ final class DiffusionBranchTableController extends DiffusionController {
       $content = id(new PHUIObjectBoxView())
         ->setHeaderText($repository->getName())
         ->setBackground(PHUIObjectBoxView::BLUE_PROPERTY)
+        ->addClass('diffusion-mobile-view')
         ->setTable($list)
         ->setPager($pager);
     }
@@ -70,6 +71,11 @@ final class DiffusionBranchTableController extends DiffusionController {
     $header = id(new PHUIHeaderView())
       ->setHeader(pht('Branches'))
       ->setHeaderIcon('fa-code-fork');
+
+    if (!$repository->isSVN()) {
+      $branch_tag = $this->renderBranchTag($drequest);
+      $header->addTag($branch_tag);
+    }
 
     $tabs = $this->buildTabsView('branch');
 
