@@ -24,6 +24,17 @@ final class DiffusionRepositoryController extends DiffusionController {
     $drequest = $this->getDiffusionRequest();
     $repository = $drequest->getRepository();
 
+    $extensions = $this->loadRepositoryExtensions();
+    foreach ($extensions as $id => $extension) {
+      $response = $extension->willHandleRequest($request, $repository);
+      if ($response) {
+        return $response;
+      }
+      if ($response === false) {
+        unset($extensions[$id]);
+      }
+    }
+
     $crumbs = $this->buildCrumbs();
     $crumbs->setBorder(true);
 
@@ -158,7 +169,10 @@ final class DiffusionRepositoryController extends DiffusionController {
     if ($page_has_content) {
       $view->setTabs($tabs);
     }
-
+    foreach ($extensions as $extension) {
+      $extension->willModifyPageView($viewer, $request, $repository,
+        $drequest);
+    }
     return $this->newPage()
       ->setTitle(
         array(
@@ -171,6 +185,11 @@ final class DiffusionRepositoryController extends DiffusionController {
       ));
   }
 
+  private function loadRepositoryExtensions() {
+    return id(new PhutilClassMapQuery())
+      ->setAncestorClass('DiffusionRepositoryExtension')
+      ->execute();
+  }
 
   private function buildNormalContent(DiffusionRequest $drequest) {
     $request = $this->getRequest();

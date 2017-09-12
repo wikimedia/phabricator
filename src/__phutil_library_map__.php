@@ -847,6 +847,7 @@ phutil_register_library_map(array(
     'DiffusionRepositoryEditDeleteController' => 'applications/diffusion/controller/DiffusionRepositoryEditDeleteController.php',
     'DiffusionRepositoryEditEngine' => 'applications/diffusion/editor/DiffusionRepositoryEditEngine.php',
     'DiffusionRepositoryEditUpdateController' => 'applications/diffusion/controller/DiffusionRepositoryEditUpdateController.php',
+    'DiffusionRepositoryExtension' => 'applications/diffusion/extension/DiffusionRepositoryExtension.php',
     'DiffusionRepositoryFunctionDatasource' => 'applications/diffusion/typeahead/DiffusionRepositoryFunctionDatasource.php',
     'DiffusionRepositoryHistoryManagementPanel' => 'applications/diffusion/management/DiffusionRepositoryHistoryManagementPanel.php',
     'DiffusionRepositoryListController' => 'applications/diffusion/controller/DiffusionRepositoryListController.php',
