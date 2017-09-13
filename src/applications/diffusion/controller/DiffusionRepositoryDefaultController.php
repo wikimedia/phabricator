@@ -28,6 +28,13 @@ final class DiffusionRepositoryDefaultController extends DiffusionController {
     $drequest = $this->getDiffusionRequest();
     $repository = $drequest->getRepository();
 
+    try {
+      $extensions = DiffusionRepositoryExtension::loadRepositoryExtensions(
+        $request, $repository);
+    } catch (DiffusionOverrideResponseException $e) {
+      return $e->getResponse();
+    }
+
     return id(new AphrontRedirectResponse())
       ->setURI($repository->getURI());
   }

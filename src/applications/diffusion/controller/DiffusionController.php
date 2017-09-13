@@ -72,6 +72,13 @@ abstract class DiffusionController extends PhabricatorController {
     $request_path = $request->getPath();
     $repository = $drequest->getRepository();
 
+    try {
+      $extensions = DiffusionRepositoryExtension::loadRepositoryExtensions(
+        $request, $repository);
+    } catch (DiffusionOverrideResponseException $e) {
+      return $e->getResponse();
+    }
+
     $canonical_path = $repository->getCanonicalPath($request_path);
     if ($canonical_path !== null) {
       if ($canonical_path != $request_path) {
