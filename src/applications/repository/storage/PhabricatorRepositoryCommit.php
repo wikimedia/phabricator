@@ -15,6 +15,7 @@ final class PhabricatorRepositoryCommit
     PhabricatorCustomFieldInterface,
     PhabricatorApplicationTransactionInterface,
     PhabricatorFulltextInterface,
+    PhabricatorFerretInterface,
     PhabricatorConduitResultInterface,
     PhabricatorDraftInterface {
 
@@ -722,6 +723,14 @@ final class PhabricatorRepositoryCommit
 
   public function newFulltextEngine() {
     return new DiffusionCommitFulltextEngine();
+  }
+
+
+/* -(  PhabricatorFerretInterface  )----------------------------------------- */
+
+
+  public function newFerretEngine() {
+    return new DiffusionCommitFerretEngine();
   }
 
 
