@@ -53,6 +53,10 @@ final class DifferentialRevisionListView extends AphrontView {
     foreach ($this->revisions as $revision) {
       $phids[] = array($revision->getAuthorPHID());
       $phids[] = $revision->getReviewerPHIDs();
+      $repo_phid = $revision->getRepositoryPHID();
+      if ($repo_phid) {
+        $phids[] = array($revision->getRepositoryPHID());
+      }
     }
     return array_mergev($phids);
   }
@@ -87,6 +91,12 @@ final class DifferentialRevisionListView extends AphrontView {
             'class' => 'phabricator-flag-icon '.$flag_class,
           ),
           '');
+      }
+
+      $repo_phid = $revision->getRepositoryPHID();
+      if ($repo_phid) {
+        $repo = $this->handles[$repo_phid]->renderLink();
+        $item->addAttribute(pht('Repository: %s', $repo));
       }
 
       if ($revision->getHasDraft($viewer)) {
