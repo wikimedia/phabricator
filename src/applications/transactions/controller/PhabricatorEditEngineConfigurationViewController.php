@@ -111,6 +111,16 @@ final class PhabricatorEditEngineConfigurationViewController
           ->setDisabled(!$can_edit)
           ->setWorkflow(!$can_edit)
           ->setHref($edit_uri));
+
+      $copy_uri = "{$base_uri}/save/{$form_key}/";
+      $curtain->addAction(
+        id(new PhabricatorActionView())
+          ->setName(pht('Duplicate Form'))
+          ->setIcon('fa-copy')
+          ->setDisabled(!$can_edit)
+          ->setWorkflow(!$can_edit)
+          ->setHref($copy_uri));
+
     }
 
     $use_uri = $engine->getEditURI(null, "form/{$form_key}/");

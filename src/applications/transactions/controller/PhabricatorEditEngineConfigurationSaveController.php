@@ -21,11 +21,13 @@ final class PhabricatorEditEngineConfigurationSaveController
 
     $view_uri = $config->getURI();
 
-    if ($config->getID()) {
+    if ($config->getID() && !$request->isFormPost()) {
       return $this->newDialog()
-        ->setTitle(pht('Already Editable'))
+        ->setTitle(pht('Duplicate Form'))
         ->appendParagraph(
-          pht('This form configuration is already editable.'))
+          pht('Create another form with the same settings as this one?'))
+        ->addSubmitButton(pht('Duplicate'))
+        ->addHiddenInput('action', 'duplicate')
         ->addCancelButton($view_uri);
     }
 
@@ -33,10 +35,23 @@ final class PhabricatorEditEngineConfigurationSaveController
       $editor = id(new PhabricatorEditEngineConfigurationEditor())
         ->setActor($viewer)
         ->setContentSourceFromRequest($request)
-        ->setContinueOnNoEffect(true);
+        ->setContinueOnNoEffect(true)
+        ->setContinueOnMissingFields(true);
 
+      if ($request->getStr('action') == 'duplicate') {
+        $engine = $config->getEngine();
+        $new_config = PhabricatorEditEngineConfiguration
+          ::initializeNewConfiguration($viewer, $engine);
+        $new_config->setName($config->getDisplayName());
+        $new_config->setPreamble($config->getPreamble());
+        $new_config->setFieldOrder($config->getFieldOrder());
+        $new_config->setFieldLocks($config->getFieldLocks());
+        $new_config->setProperty('defaults',
+          $config->getProperty('defaults', array()));
+        $new_config->setIsEdit($config->getIsEdit());
+        $config = $new_config;
+      }
       $editor->applyTransactions($config, array());
-
       return id(new AphrontRedirectResponse())
         ->setURI($config->getURI());
     }

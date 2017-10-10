@@ -16,6 +16,10 @@ final class PhabricatorCustomFieldEditField
     return $this->customField;
   }
 
+  public function shouldDefaultHidden() {
+    return true;
+  }
+
   public function setCustomFieldHTTPParameterType(
     AphrontHTTPParameterType $type) {
     $this->httpParameterType = $type;

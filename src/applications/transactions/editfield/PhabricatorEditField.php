@@ -202,6 +202,10 @@ abstract class PhabricatorEditField extends Phobject {
     return $this->isHidden;
   }
 
+  public function shouldDefaultHidden() {
+    return false;
+  }
+
   public function setIsCopyable($is_copyable) {
     $this->isCopyable = $is_copyable;
     return $this;
