@@ -321,6 +321,9 @@ abstract class PhabricatorCustomField extends Phobject {
     return false;
   }
 
+  public function shouldHideByDefault() {
+    return false;
+  }
 
   /**
    * Return an index string which uniquely identifies this field.

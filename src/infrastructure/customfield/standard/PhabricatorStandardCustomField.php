@@ -19,6 +19,8 @@ abstract class PhabricatorStandardCustomField
   private $hasStorageValue;
   private $isBuiltin;
 
+  private $hideByDefault = false;
+
   abstract public function getFieldType();
 
   public static function buildStandardFields(
@@ -52,9 +54,13 @@ abstract class PhabricatorStandardCustomField
 
       if ($builtin) {
         $standard->setIsBuiltin(true);
+        $standard->setHideByDefault(false);
+      } else {
+        $standard->setHideByDefault(true);
       }
 
       $field = $template->setProxy($standard);
+
       $fields[] = $field;
     }
 
@@ -250,6 +256,14 @@ abstract class PhabricatorStandardCustomField
 
   public function shouldAppearInEditView() {
     return $this->getFieldConfigValue('edit', true);
+  }
+
+  public function shouldHideByDefault() {
+    return $this->hideByDefault;
+  }
+
+  public function setHideByDefault($hide) {
+    $this->hideByDefault = $hide;
   }
 
   public function readValueFromRequest(AphrontRequest $request) {

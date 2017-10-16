@@ -175,7 +175,7 @@ final class PhabricatorEditEngineConfiguration
           // If we don't have an explicit value, hide the field. This way,
           // newly added fields don't automatically appear on all forms.
           // WMF hack! This is different from the default behavior upstream.
-          $field->setIsHidden($field->shouldDefaultHidden());
+          $field->setIsHidden($field->shouldHideByDefault());
           break;
       }
     }

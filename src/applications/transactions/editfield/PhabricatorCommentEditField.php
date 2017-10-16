@@ -38,6 +38,10 @@ final class PhabricatorCommentEditField
     return $this->isPrimaryCommentField();
   }
 
+  public function shouldHideByDefault() {
+    return true;
+  }
+
   private function isPrimaryCommentField() {
     return ($this->getKey() === 'comment');
   }

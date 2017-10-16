@@ -16,8 +16,11 @@ final class PhabricatorCustomFieldEditField
     return $this->customField;
   }
 
-  public function shouldDefaultHidden() {
-    return true;
+  public function shouldHideByDefault() {
+    if (!$this->customField) {
+      return false;
+    }
+    return $this->customField->shouldHideByDefault();
   }
 
   public function setCustomFieldHTTPParameterType(

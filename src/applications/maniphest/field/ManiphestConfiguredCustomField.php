@@ -8,6 +8,10 @@ final class ManiphestConfiguredCustomField
     return 'maniphest';
   }
 
+  public function shouldHideByDefault() {
+    return true;
+  }
+
   public function createFields($object) {
     $config = PhabricatorEnv::getEnvConfig(
       'maniphest.custom-field-definitions');

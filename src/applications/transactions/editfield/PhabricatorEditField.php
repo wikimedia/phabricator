@@ -202,7 +202,7 @@ abstract class PhabricatorEditField extends Phobject {
     return $this->isHidden;
   }
 
-  public function shouldDefaultHidden() {
+  public function shouldHideByDefault() {
     return false;
   }
 
