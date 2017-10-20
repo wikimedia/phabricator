@@ -215,16 +215,44 @@ class PhabricatorElasticFulltextStorageEngine
     $spec = array(
       '_source' => false,
       'query' => array(
-        'bool' => $q->toArray(),
+        'function_score' => array(
+          'query' => array('bool' => $q->toArray()),
+          'boost' => 1,
+          'functions' => array(
+            array(
+              'gauss' => array(
+                'lastModified' => array(
+                  'scale' => '10d',
+                  'offset' => '1d',
+                  'decay' => 0.8,
+                ),
+              ),
+              'weight' => 2,
+            ),
+            array(
+              'gauss' => array(
+                'lastModified' => array(
+                  'scale' => '90d',
+                  'offset' => '10d',
+                  'decay' => 0.8,
+                ),
+              ),
+              'weight' => 2,
+            ),
+            array(
+              'linear' => array(
+                'dateCreated' => array(
+                  'scale' => '180d',
+                  'offset' => '90d',
+                  'decay' => 0.8,
+                ),
+              ),
+              'weight' => 1,
+            ),
+          ),
+        ),
       ),
     );
-
-
-    if (!$query->getParameter('query')) {
-      $spec['sort'] = array(
-        array('dateCreated' => 'desc'),
-      );
-    }
 
     $offset = (int)$query->getParameter('offset', 0);
     $limit =  (int)$query->getParameter('limit', 101);
