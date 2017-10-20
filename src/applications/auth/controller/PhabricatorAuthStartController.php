@@ -137,7 +137,6 @@ final class PhabricatorAuthStartController
     }
 
     $out = array();
-    $out[] = $not_buttons;
     if ($are_buttons) {
       require_celerity_resource('auth-css');
 
@@ -154,7 +153,21 @@ final class PhabricatorAuthStartController
       // always have two columns. This makes it easier to get the alignments
       // looking reasonable.
       if (count($are_buttons) == 1) {
-        $are_buttons[] = null;
+        $are_buttons[] =
+          id(new PHUIButtonView())
+          ->setTag('button')
+          ->setIcon('fa-sign-in')
+          ->setText('Developer Log in')
+          ->setSubtext('Wikitech Account (LDAP)')
+          ->addClass('big')
+          ->addClass('button-grey')
+          ->addSigil('jx-toggle-class')
+          ->setMetaData(array(
+            'map' => array(
+              'phabricator-login-forms' => 'auth-login-forms-hidden',
+            ),
+            'state' => 1,
+          ));
       }
 
       $button_columns = id(new AphrontMultiColumnView())
@@ -171,6 +184,14 @@ final class PhabricatorAuthStartController
         ),
         $button_columns);
     }
+
+    $out[] = phutil_tag(
+      'div',
+      array(
+        'id' => 'phabricator-login-forms',
+        'class' => 'auth-login-forms-hidden',
+      ),
+      $not_buttons);
 
     $handlers = PhabricatorAuthLoginHandler::getAllHandlers();
 
