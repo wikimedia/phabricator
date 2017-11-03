@@ -324,6 +324,9 @@ abstract class PhabricatorApplicationSearchEngine extends Phobject {
 
     $result = $head + $body + $tail;
 
+    // Force the fulltext "query" field to the top unconditionally.
+    $result = array_select_keys($result, array('query')) + $result;
+
     foreach ($this->getHiddenFields() as $hidden_key) {
       unset($result[$hidden_key]);
     }
@@ -356,7 +359,7 @@ abstract class PhabricatorApplicationSearchEngine extends Phobject {
    *   );
    *
    * Any unspecified fields (including custom fields and fields added
-   * automatically by infrastruture) will be put in the middle.
+   * automatically by infrastructure) will be put in the middle.
    *
    * @return list<string> Default ordering for field keys.
    */

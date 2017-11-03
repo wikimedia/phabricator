@@ -741,7 +741,7 @@ final class DifferentialDiff
       $this->delete();
 
       foreach ($this->loadChangesets() as $changeset) {
-        $changeset->delete();
+        $engine->destroyObject($changeset);
       }
 
       $properties = id(new DifferentialDiffProperty())->loadAllWhere(

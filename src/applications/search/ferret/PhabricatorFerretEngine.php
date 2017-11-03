@@ -88,22 +88,43 @@ abstract class PhabricatorFerretEngine extends Phobject {
   }
 
   private function getNgramsFromString($value, $as_term) {
+    $value = phutil_utf8_strtolower($value);
     $tokens = $this->tokenizeString($value);
 
-    $ngrams = array();
+    // First, extract unique tokens from the string. This reduces the number
+    // of `phutil_utf8v()` calls we need to make if we are indexing a large
+    // corpus with redundant terms.
+    $unique_tokens = array();
     foreach ($tokens as $token) {
-      $token = phutil_utf8_strtolower($token);
-
       if ($as_term) {
         $token = ' '.$token.' ';
       }
 
+      $unique_tokens[$token] = true;
+    }
+
+    $ngrams = array();
+    foreach ($unique_tokens as $token => $ignored) {
       $token_v = phutil_utf8v($token);
-      $len = (count($token_v) - 2);
-      for ($ii = 0; $ii < $len; $ii++) {
-        $ngram = array_slice($token_v, $ii, 3);
-        $ngram = implode('', $ngram);
+      $length = count($token_v);
+
+      // NOTE: We're being somewhat clever here to micro-optimize performance,
+      // especially for very long strings. See PHI87.
+
+      $token_l = array();
+      for ($ii = 0; $ii < $length; $ii++) {
+        $token_l[$ii] = strlen($token_v[$ii]);
+      }
+
+      $ngram_count = $length - 2;
+      $cursor = 0;
+      for ($ii = 0; $ii < $ngram_count; $ii++) {
+        $ngram_l = $token_l[$ii] + $token_l[$ii + 1] + $token_l[$ii + 2];
+
+        $ngram = substr($token, $cursor, $ngram_l);
         $ngrams[$ngram] = $ngram;
+
+        $cursor += $token_l[$ii];
       }
     }
 
@@ -270,6 +291,37 @@ abstract class PhabricatorFerretEngine extends Phobject {
       ),
       'key_object' => array(
         'columns' => array('documentID'),
+      ),
+    );
+  }
+
+  public function getCommonNgramsTableName() {
+    $application = $this->getApplicationName();
+    $scope = $this->getScopeName();
+
+    return "{$application}_{$scope}_fngrams_common";
+  }
+
+  public function getCommonNgramsSchemaColumns() {
+    return array(
+      'id' => 'auto',
+      'ngram' => 'char3',
+      'needsCollection' => 'bool',
+    );
+  }
+
+  public function getCommonNgramsSchemaKeys() {
+    return array(
+      'PRIMARY' => array(
+        'columns' => array('id'),
+        'unique' => true,
+      ),
+      'key_ngram' => array(
+        'columns' => array('ngram'),
+        'unique' => true,
+      ),
+      'key_collect' => array(
+        'columns' => array('needsCollection'),
       ),
     );
   }

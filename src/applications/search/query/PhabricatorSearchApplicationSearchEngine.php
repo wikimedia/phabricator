@@ -263,7 +263,7 @@ final class PhabricatorSearchApplicationSearchEngine
       foreach ($results as $phid => $handle) {
         $view = id(new PhabricatorSearchResultView())
           ->setHandle($handle)
-          ->setQuery($query)
+          ->setTokens($fulltext_tokens)
           ->setObject(idx($objects, $phid))
           ->render();
 
