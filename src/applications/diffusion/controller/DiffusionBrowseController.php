@@ -971,6 +971,24 @@ final class DiffusionBrowseController extends DiffusionController {
 
     $handles = $viewer->loadHandles($phids);
 
+    $author_phids = array();
+    $author_map = array();
+    foreach ($blame_commits as $commit) {
+      $commit_identifier = $commit->getCommitIdentifier();
+
+      $author_phid = '';
+      if (isset($revision_map[$commit_identifier])) {
+        $revision_id = $revision_map[$commit_identifier];
+        $revision = $revisions[$revision_id];
+        $author_phid = $revision->getAuthorPHID();
+      } else {
+        $author_phid = $commit->getAuthorPHID();
+      }
+
+      $author_map[$commit_identifier] = $author_phid;
+      $author_phids[$author_phid] = $author_phid;
+    }
+
     $colors = array();
     if ($blame_commits) {
       $epochs = array();
@@ -1115,6 +1133,7 @@ final class DiffusionBrowseController extends DiffusionController {
     // blame outputs.
     $commit_links = $this->renderCommitLinks($blame_commits, $handles);
     $revision_links = $this->renderRevisionLinks($revisions, $handles);
+    $author_links = $this->renderAuthorLinks($author_map, $handles);
 
     if ($this->coverage) {
       require_celerity_resource('differential-changeset-view-css');
@@ -1128,6 +1147,10 @@ final class DiffusionBrowseController extends DiffusionController {
           ),
         ));
     }
+
+    $skip_text = pht('Skip Past This Commit');
+    $skip_icon = id(new PHUIIconView())
+      ->setIcon('fa-caret-square-o-left');
 
     foreach ($display as $line_index => $line) {
       $row = array();
@@ -1143,15 +1166,15 @@ final class DiffusionBrowseController extends DiffusionController {
 
       $revision_link = null;
       $commit_link = null;
+      $author_link = null;
       $before_link = null;
-      $commit_date = null;
 
-      $style = 'border-right: 3px solid '.$line['color'].';';
+      $style = 'background: '.$line['color'].';';
 
       if ($identifier && !$line['duplicate']) {
         if (isset($commit_links[$identifier])) {
-          $commit_link = $commit_links[$identifier]['link'];
-          $commit_date = $commit_links[$identifier]['date'];
+          $commit_link = $commit_links[$identifier];
+          $author_link = $author_links[$author_map[$identifier]];
         }
 
         if (isset($revision_map[$identifier])) {
@@ -1162,10 +1185,6 @@ final class DiffusionBrowseController extends DiffusionController {
         }
 
         $skip_href = $line_href.'?before='.$identifier.'&view=blame';
-        $skip_text = pht('Skip Past This Commit');
-        $icon = id(new PHUIIconView())
-          ->setIcon('fa-caret-square-o-left');
-
         $before_link = javelin_tag(
           'a',
           array(
@@ -1177,7 +1196,7 @@ final class DiffusionBrowseController extends DiffusionController {
               'size'    => 300,
             ),
           ),
-          $icon);
+          $skip_icon);
       }
 
       if ($show_blame) {
@@ -1188,41 +1207,34 @@ final class DiffusionBrowseController extends DiffusionController {
           ),
           $before_link);
 
-        $row[] = phutil_tag(
-          'th',
-          array(
-            'class' => 'diffusion-rev-link',
-          ),
-          $commit_link);
-
-        if ($revision_map) {
-          $row[] = phutil_tag(
-            'th',
-            array(
-              'class' => 'diffusion-blame-revision',
-            ),
-            $revision_link);
+        $object_links = array();
+        $object_links[] = $author_link;
+        $object_links[] = $commit_link;
+        if ($revision_link) {
+          $object_links[] = phutil_tag('span', array(), '/');
+          $object_links[] = $revision_link;
         }
 
         $row[] = phutil_tag(
           'th',
           array(
-            'class' => 'diffusion-blame-date',
+            'class' => 'diffusion-rev-link',
           ),
-          $commit_date);
+          $object_links);
       }
 
       $line_link = phutil_tag(
         'a',
         array(
           'href' => $line_href,
+          'style' => $style,
         ),
         $line_number);
 
       $row[] = javelin_tag(
         'th',
         array(
-          'class' => 'diffusion-line-link ',
+          'class' => 'diffusion-line-link',
           'sigil' => 'phabricator-source-line',
           'style' => $style,
         ),
@@ -1538,6 +1550,33 @@ final class DiffusionBrowseController extends DiffusionController {
     return head($parents);
   }
 
+  private function renderRevisionTooltip(
+    DifferentialRevision $revision,
+    $handles) {
+    $viewer = $this->getRequest()->getUser();
+
+    $date = phabricator_date($revision->getDateModified(), $viewer);
+    $id = $revision->getID();
+    $title = $revision->getTitle();
+    $header = "D{$id} {$title}";
+
+    $author = $handles[$revision->getAuthorPHID()]->getName();
+
+    return "{$header}\n{$date} \xC2\xB7 {$author}";
+  }
+
+  private function renderCommitTooltip(
+    PhabricatorRepositoryCommit $commit,
+    $author) {
+
+    $viewer = $this->getRequest()->getUser();
+
+    $date = phabricator_date($commit->getEpoch(), $viewer);
+    $summary = trim($commit->getSummary());
+
+    return "{$summary}\n{$date} \xC2\xB7 {$author}";
+  }
+
   protected function markupText($text) {
     $engine = PhabricatorMarkupEngine::newDiffusionMarkupEngine();
     $engine->setConfig('viewer', $this->getRequest()->getUser());
@@ -1758,6 +1797,9 @@ final class DiffusionBrowseController extends DiffusionController {
         ->setViewer($viewer)
         ->withRepository($repository)
         ->withIdentifiers($identifiers)
+        // TODO: We only fetch this to improve author display behavior, but
+        // shouldn't really need to?
+        ->needCommitData(true)
         ->execute();
       $commits = mpull($commits, null, 'getCommitIdentifier');
     } else {
@@ -1767,29 +1809,59 @@ final class DiffusionBrowseController extends DiffusionController {
     return array($identifiers, $commits);
   }
 
+  private function renderAuthorLinks(array $authors, $handles) {
+    $links = array();
+
+    foreach ($authors as $phid) {
+      if (!strlen($phid)) {
+        // This means we couldn't identify an author for the commit or the
+        // revision. We just render a blank for alignment.
+        $style = null;
+        $href = null;
+      } else {
+        $src = $handles[$phid]->getImageURI();
+        $style = 'background-image: url('.$src.');';
+        $href = $handles[$phid]->getURI();
+      }
+
+      $links[$phid] = javelin_tag(
+        $href ? 'a' : 'span',
+        array(
+          'class' => 'diffusion-author-link',
+          'style' => $style,
+          'href' => $href,
+          'sigil' => 'has-tooltip',
+          'meta' => array(
+            'tip' => $handles[$phid]->getName(),
+            'align' => 'E',
+          ),
+        ));
+    }
+
+    return $links;
+  }
+
   private function renderCommitLinks(array $commits, $handles) {
     $links = array();
-    $viewer = $this->getViewer();
     foreach ($commits as $identifier => $commit) {
-      $date = phabricator_date($commit->getEpoch(), $viewer);
-      $summary = trim($commit->getSummary());
+      $tooltip = $this->renderCommitTooltip(
+        $commit,
+        $commit->renderAuthorShortName($handles));
 
-      $commit_link = phutil_tag(
+      $commit_link = javelin_tag(
         'a',
         array(
           'href' => $commit->getURI(),
+          'sigil' => 'has-tooltip',
+          'meta'  => array(
+            'tip'   => $tooltip,
+            'align' => 'E',
+            'size'  => 600,
+          ),
         ),
-        $summary);
+        $commit->getLocalName());
 
-      $commit_date = phutil_tag(
-        'a',
-        array(
-          'href' => $commit->getURI(),
-        ),
-        $date);
-
-      $links[$identifier]['link'] = $commit_link;
-      $links[$identifier]['date'] = $commit_date;
+      $links[$identifier] = $commit_link;
     }
 
     return $links;
@@ -1800,10 +1872,19 @@ final class DiffusionBrowseController extends DiffusionController {
 
     foreach ($revisions as $revision) {
       $revision_id = $revision->getID();
-      $revision_link = phutil_tag(
+
+      $tooltip = $this->renderRevisionTooltip($revision, $handles);
+
+      $revision_link = javelin_tag(
         'a',
         array(
           'href' => '/'.$revision->getMonogram(),
+          'sigil' => 'has-tooltip',
+          'meta'  => array(
+            'tip'   => $tooltip,
+            'align' => 'E',
+            'size'  => 600,
+          ),
         ),
         $revision->getMonogram());
 
