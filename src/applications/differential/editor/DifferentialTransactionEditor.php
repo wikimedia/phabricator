@@ -10,6 +10,7 @@ final class DifferentialTransactionEditor
   private $hasReviewTransaction = false;
   private $affectedPaths;
   private $firstBroadcast = false;
+  private $wasDraft = false;
 
   public function getEditorApplicationClass() {
     return 'PhabricatorDifferentialApplication';
@@ -165,6 +166,8 @@ final class DifferentialTransactionEditor
           break;
       }
     }
+
+    $this->wasDraft = $object->isDraft();
 
     return parent::expandTransactions($object, $xactions);
   }
@@ -1581,18 +1584,11 @@ final class DifferentialTransactionEditor
           $this->setActingAsPHID($author_phid);
         }
 
-        // Mark this as the first broadcast we're sending about the revision
-        // so mail can generate specially.
-        $this->firstBroadcast = true;
-
         $xaction = $object->getApplicationTransactionTemplate()
           ->setAuthorPHID($author_phid)
           ->setTransactionType(
             DifferentialRevisionRequestReviewTransaction::TRANSACTIONTYPE)
-          ->setOldValue(false)
           ->setNewValue(true);
-
-        $xaction = $this->populateTransaction($object, $xaction);
 
         // If we're creating this revision and immediately moving it out of
         // the draft state, mark this as a create transaction so it gets
@@ -1602,22 +1598,36 @@ final class DifferentialTransactionEditor
           $xaction->setIsCreateTransaction(true);
         }
 
-        $object->openTransaction();
-          $object
-            ->setStatus(DifferentialRevisionStatus::NEEDS_REVIEW)
-            ->save();
-
-          $xaction->save();
-        $object->saveTransaction();
-
-        $xactions[] = $xaction;
+        // Queue this transaction and apply it separately after the current
+        // batch of transactions finishes so that Herald can fire on the new
+        // revision state. See T13027 for discussion.
+        $this->queueTransaction($xaction);
       }
-    } else {
-      // If this revision is being created into some state other than "Draft",
-      // this is the first broadcast and should include sections like "SUMMARY"
-      // and "TEST PLAN".
-      if ($this->getIsNewObject()) {
+    }
+
+    // If the revision is new or was a draft, and is no longer a draft, we
+    // might be sending the first email about it.
+
+    // This might mean it was created directly into a non-draft state, or
+    // it just automatically undrafted after builds finished, or a user
+    // explicitly promoted it out of the draft state with an action like
+    // "Request Review".
+
+    // If we haven't sent any email about it yet, mark this email as the first
+    // email so the mail gets enriched with "SUMMARY" and "TEST PLAN".
+
+    $is_new = $this->getIsNewObject();
+    $was_draft = $this->wasDraft;
+
+    if (!$object->isDraft() && ($was_draft || $is_new)) {
+      if (!$object->getHasBroadcast()) {
+        // Mark this as the first broadcast we're sending about the revision
+        // so mail can generate specially.
         $this->firstBroadcast = true;
+
+        $object
+          ->setHasBroadcast(true)
+          ->save();
       }
     }
 
