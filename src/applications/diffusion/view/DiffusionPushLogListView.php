@@ -50,7 +50,7 @@ final class DiffusionPushLogListView extends AphrontView {
       $remote_address = '-';
       if (isset($editable_repos[$log->getRepositoryPHID()])) {
         $remote_address = $log->getPushEvent()->getRemoteAddress();
-        if (!$viewer->isAdmin()) {
+        if (!$viewer->getIsAdmin()) {
           // obfuscate all but the first segment of address (for non-admins)
           if (strpos($remote_address, ':') !== false) {
             $octets = explode(':', $remote_address);
