@@ -26,6 +26,7 @@ final class DiffusionPushEventGarbageCollector
       $this->getGarbageEpoch());
 
     if ($phids_to_delete) {
+      $phids_to_delete = array_values(ipull($phids_to_delete, 'PHID'));
       $log_table = new PhabricatorRepositoryPushLog();
       $log_conn_w = $log_table->establishConnection('w');
 
