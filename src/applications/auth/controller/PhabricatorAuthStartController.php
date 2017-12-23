@@ -119,7 +119,7 @@ final class PhabricatorAuthStartController
     }
 
     $invite = $this->loadInvite();
-
+    $ldap_button = false;
     $not_buttons = array();
     $are_buttons = array();
     $providers = msort($providers, 'getLoginOrder');
@@ -133,6 +133,22 @@ final class PhabricatorAuthStartController
         $are_buttons[] = $form;
       } else {
         $not_buttons[] = $form;
+      }
+      if ($provider instanceof PhabricatorLDAPAuthProvider) {
+        $ldap_button = id(new PHUIButtonView())
+          ->setTag('button')
+          ->setIcon('fa-sign-in')
+          ->setText('Developer Log in')
+          ->setSubtext('Wikitech Account (LDAP)')
+          ->addClass('big')
+          ->addClass('button-grey')
+          ->addSigil('jx-toggle-class')
+          ->setMetaData(array(
+            'map' => array(
+              'phabricator-login-forms' => 'auth-login-forms-hidden',
+            ),
+            'state' => 1,
+          ));
       }
     }
 
@@ -149,25 +165,15 @@ final class PhabricatorAuthStartController
           $button);
       }
 
+      if ($ldap_button) {
+        $are_buttons[] = $ldap_button;
+      }
+
       // If we only have one button, add a second pretend button so that we
       // always have two columns. This makes it easier to get the alignments
       // looking reasonable.
       if (count($are_buttons) == 1) {
-        $are_buttons[] =
-          id(new PHUIButtonView())
-          ->setTag('button')
-          ->setIcon('fa-sign-in')
-          ->setText('Developer Log in')
-          ->setSubtext('Wikitech Account (LDAP)')
-          ->addClass('big')
-          ->addClass('button-grey')
-          ->addSigil('jx-toggle-class')
-          ->setMetaData(array(
-            'map' => array(
-              'phabricator-login-forms' => 'auth-login-forms-hidden',
-            ),
-            'state' => 1,
-          ));
+        $are_buttons[] = null;
       }
 
       $button_columns = id(new AphrontMultiColumnView())
@@ -185,13 +191,17 @@ final class PhabricatorAuthStartController
         $button_columns);
     }
 
-    $out[] = phutil_tag(
-      'div',
-      array(
-        'id' => 'phabricator-login-forms',
-        'class' => 'auth-login-forms-hidden',
-      ),
-      $not_buttons);
+    if ($ldap_button) {
+      $out[] = phutil_tag(
+        'div',
+        array(
+          'id' => 'phabricator-login-forms',
+          'class' => 'auth-login-forms-hidden',
+        ),
+        $not_buttons);
+    } else {
+       $out[] = $not_buttons;
+    }
 
     $handlers = PhabricatorAuthLoginHandler::getAllHandlers();
 
