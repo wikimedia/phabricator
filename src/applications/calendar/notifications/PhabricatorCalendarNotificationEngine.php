@@ -100,10 +100,11 @@ final class PhabricatorCalendarNotificationEngine
         }
         $notifiable_phids[] = $invitee->getInviteePHID();
       }
-      if (!$notifiable_phids) {
+      if ($notifiable_phids) {
+        $attendee_map[$key] = array_fuse($notifiable_phids);
+      } else {
         unset($events[$key]);
       }
-      $attendee_map[$key] = array_fuse($notifiable_phids);
     }
 
     $all_attendees = array();
