@@ -75,7 +75,7 @@ final class PhabricatorTranslationSetting
       // translation out of the "limited" group. The major goal is just to
       // keep locales with very few strings out of the main group, so users
       // aren't surprised if a locale has no upstream translations available.
-      if ($size > 512 || $is_english) {
+      if ($size > 50 || $is_english) {
         $type = 'normal';
       } else {
         $type = 'limited';
