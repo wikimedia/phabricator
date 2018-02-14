@@ -35,6 +35,7 @@ abstract class PhabricatorCustomField extends Phobject {
   const ROLE_HERALD                   = 'herald';
   const ROLE_EDITENGINE = 'EditEngine';
   const ROLE_HERALDACTION = 'herald.action';
+  const ROLE_EXPORT = 'export';
 
 
 /* -(  Building Applications with Custom Fields  )--------------------------- */
@@ -299,6 +300,8 @@ abstract class PhabricatorCustomField extends Phobject {
       case self::ROLE_EDITENGINE:
         return $this->shouldAppearInEditView() ||
                $this->shouldAppearInEditEngine();
+      case self::ROLE_EXPORT:
+        return $this->shouldAppearInDataExport();
       case self::ROLE_DEFAULT:
         return true;
       default:
@@ -1122,6 +1125,11 @@ abstract class PhabricatorCustomField extends Phobject {
       $field->setCustomFieldConduitParameterType($conduit_type);
     }
 
+    $bulk_type = $this->getBulkParameterType();
+    if ($bulk_type) {
+      $field->setCustomFieldBulkParameterType($bulk_type);
+    }
+
     return $field;
   }
 
@@ -1136,14 +1144,36 @@ abstract class PhabricatorCustomField extends Phobject {
       $conduit_only = false;
     }
 
+    $bulk_label = $this->getBulkEditLabel();
+
     return $this->newEditField()
       ->setKey($this->getFieldKey())
       ->setEditTypeKey($this->getModernFieldKey())
       ->setLabel($this->getFieldName())
+      ->setBulkEditLabel($bulk_label)
       ->setDescription($this->getFieldDescription())
       ->setTransactionType($this->getApplicationTransactionType())
       ->setIsConduitOnly($conduit_only)
       ->setValue($this->getNewValueForApplicationTransactions());
+  }
+
+  protected function getBulkEditLabel() {
+    if ($this->proxy) {
+      return $this->proxy->getBulkEditLabel();
+    }
+
+    return pht('Set "%s" to', $this->getFieldName());
+  }
+
+  public function getBulkParameterType() {
+    return $this->newBulkParameterType();
+  }
+
+  protected function newBulkParameterType() {
+    if ($this->proxy) {
+      return $this->proxy->newBulkParameterType();
+    }
+    return null;
   }
 
   protected function getHTTPParameterType() {
@@ -1335,6 +1365,46 @@ abstract class PhabricatorCustomField extends Phobject {
       return $this->proxy->updateAbstractDocument($document);
     }
     return $document;
+  }
+
+
+/* -(  Data Export  )-------------------------------------------------------- */
+
+
+  public function shouldAppearInDataExport() {
+    if ($this->proxy) {
+      return $this->proxy->shouldAppearInDataExport();
+    }
+
+    try {
+      $this->newExportFieldType();
+      return true;
+    } catch (PhabricatorCustomFieldImplementationIncompleteException $ex) {
+      return false;
+    }
+  }
+
+  public function newExportField() {
+    if ($this->proxy) {
+      return $this->proxy->newExportField();
+    }
+
+    return $this->newExportFieldType()
+      ->setLabel($this->getFieldName());
+  }
+
+  public function newExportData() {
+    if ($this->proxy) {
+      return $this->proxy->newExportData();
+    }
+    throw new PhabricatorCustomFieldImplementationIncompleteException($this);
+  }
+
+  protected function newExportFieldType() {
+    if ($this->proxy) {
+      return $this->proxy->newExportFieldType();
+    }
+    throw new PhabricatorCustomFieldImplementationIncompleteException($this);
   }
 
 

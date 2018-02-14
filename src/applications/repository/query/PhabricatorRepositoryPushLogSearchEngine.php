@@ -11,63 +11,52 @@ final class PhabricatorRepositoryPushLogSearchEngine
     return 'PhabricatorDiffusionApplication';
   }
 
-  public function buildSavedQueryFromRequest(AphrontRequest $request) {
-    $saved = new PhabricatorSavedQuery();
-
-    $saved->setParameter(
-      'repositoryPHIDs',
-      $this->readPHIDsFromRequest(
-        $request,
-        'repositories',
-        array(
-          PhabricatorRepositoryRepositoryPHIDType::TYPECONST,
-        )));
-
-    $saved->setParameter(
-      'pusherPHIDs',
-      $this->readUsersFromRequest(
-        $request,
-        'pushers'));
-
-    return $saved;
+  public function newQuery() {
+    return new PhabricatorRepositoryPushLogQuery();
   }
 
-  public function buildQueryFromSavedQuery(PhabricatorSavedQuery $saved) {
-    $query = id(new PhabricatorRepositoryPushLogQuery());
+  protected function buildQueryFromParameters(array $map) {
+    $query = $this->newQuery();
 
-    $repository_phids = $saved->getParameter('repositoryPHIDs');
-    if ($repository_phids) {
-      $query->withRepositoryPHIDs($repository_phids);
+    if ($map['repositoryPHIDs']) {
+      $query->withRepositoryPHIDs($map['repositoryPHIDs']);
     }
 
-    $pusher_phids = $saved->getParameter('pusherPHIDs');
-    if ($pusher_phids) {
-      $query->withPusherPHIDs($pusher_phids);
+    if ($map['pusherPHIDs']) {
+      $query->withPusherPHIDs($map['pusherPHIDs']);
+    }
+
+    if ($map['createdStart'] || $map['createdEnd']) {
+      $query->withEpochBetween(
+        $map['createdStart'],
+        $map['createdEnd']);
     }
 
     return $query;
   }
 
-  public function buildSearchForm(
-    AphrontFormView $form,
-    PhabricatorSavedQuery $saved_query) {
-
-    $repository_phids = $saved_query->getParameter('repositoryPHIDs', array());
-    $pusher_phids = $saved_query->getParameter('pusherPHIDs', array());
-
-    $form
-      ->appendControl(
-        id(new AphrontFormTokenizerControl())
-          ->setDatasource(new DiffusionRepositoryDatasource())
-          ->setName('repositories')
-          ->setLabel(pht('Repositories'))
-          ->setValue($repository_phids))
-      ->appendControl(
-        id(new AphrontFormTokenizerControl())
-          ->setDatasource(new PhabricatorPeopleDatasource())
-          ->setName('pushers')
-          ->setLabel(pht('Pushers'))
-          ->setValue($pusher_phids));
+  protected function buildCustomSearchFields() {
+    return array(
+      id(new PhabricatorSearchDatasourceField())
+        ->setDatasource(new DiffusionRepositoryDatasource())
+        ->setKey('repositoryPHIDs')
+        ->setAliases(array('repository', 'repositories', 'repositoryPHID'))
+        ->setLabel(pht('Repositories'))
+        ->setDescription(
+          pht('Search for pull logs for specific repositories.')),
+      id(new PhabricatorUsersSearchField())
+        ->setKey('pusherPHIDs')
+        ->setAliases(array('pusher', 'pushers', 'pusherPHID'))
+        ->setLabel(pht('Pushers'))
+        ->setDescription(
+          pht('Search for pull logs by specific users.')),
+      id(new PhabricatorSearchDateField())
+        ->setLabel(pht('Created After'))
+        ->setKey('createdStart'),
+      id(new PhabricatorSearchDateField())
+        ->setLabel(pht('Created Before'))
+        ->setKey('createdEnd'),
+    );
   }
 
   protected function getURI($path) {
@@ -103,6 +92,148 @@ final class PhabricatorRepositoryPushLogSearchEngine
 
     return id(new PhabricatorApplicationSearchResultView())
       ->setTable($table);
+  }
+
+  protected function newExportFields() {
+    $viewer = $this->requireViewer();
+
+    $fields = array(
+      $fields[] = id(new PhabricatorIDExportField())
+        ->setKey('pushID')
+        ->setLabel(pht('Push ID')),
+      $fields[] = id(new PhabricatorStringExportField())
+        ->setKey('protocol')
+        ->setLabel(pht('Protocol')),
+      $fields[] = id(new PhabricatorPHIDExportField())
+        ->setKey('repositoryPHID')
+        ->setLabel(pht('Repository PHID')),
+      $fields[] = id(new PhabricatorStringExportField())
+        ->setKey('repository')
+        ->setLabel(pht('Repository')),
+      $fields[] = id(new PhabricatorPHIDExportField())
+        ->setKey('pusherPHID')
+        ->setLabel(pht('Pusher PHID')),
+      $fields[] = id(new PhabricatorStringExportField())
+        ->setKey('pusher')
+        ->setLabel(pht('Pusher')),
+      $fields[] = id(new PhabricatorPHIDExportField())
+        ->setKey('devicePHID')
+        ->setLabel(pht('Device PHID')),
+      $fields[] = id(new PhabricatorStringExportField())
+        ->setKey('device')
+        ->setLabel(pht('Device')),
+      $fields[] = id(new PhabricatorStringExportField())
+        ->setKey('type')
+        ->setLabel(pht('Ref Type')),
+      $fields[] = id(new PhabricatorStringExportField())
+        ->setKey('name')
+        ->setLabel(pht('Ref Name')),
+      $fields[] = id(new PhabricatorStringExportField())
+        ->setKey('old')
+        ->setLabel(pht('Ref Old')),
+      $fields[] = id(new PhabricatorStringExportField())
+        ->setKey('new')
+        ->setLabel(pht('Ref New')),
+      $fields[] = id(new PhabricatorIntExportField())
+        ->setKey('flags')
+        ->setLabel(pht('Flags')),
+      $fields[] = id(new PhabricatorStringListExportField())
+        ->setKey('flagNames')
+        ->setLabel(pht('Flag Names')),
+      $fields[] = id(new PhabricatorIntExportField())
+        ->setKey('result')
+        ->setLabel(pht('Result')),
+      $fields[] = id(new PhabricatorStringExportField())
+        ->setKey('resultName')
+        ->setLabel(pht('Result Name')),
+    );
+
+    if ($viewer->getIsAdmin()) {
+      $fields[] = id(new PhabricatorStringExportField())
+        ->setKey('remoteAddress')
+        ->setLabel(pht('Remote Address'));
+    }
+
+    return $fields;
+  }
+
+  protected function newExportData(array $logs) {
+    $viewer = $this->requireViewer();
+
+    $phids = array();
+    foreach ($logs as $log) {
+      $phids[] = $log->getPusherPHID();
+      $phids[] = $log->getDevicePHID();
+      $phids[] = $log->getPushEvent()->getRepositoryPHID();
+    }
+    $handles = $viewer->loadHandles($phids);
+
+    $flag_map = PhabricatorRepositoryPushLog::getFlagDisplayNames();
+    $reject_map = PhabricatorRepositoryPushLog::getRejectCodeDisplayNames();
+
+    $export = array();
+    foreach ($logs as $log) {
+      $event = $log->getPushEvent();
+
+      $repository_phid = $event->getRepositoryPHID();
+      if ($repository_phid) {
+        $repository_name = $handles[$repository_phid]->getName();
+      } else {
+        $repository_name = null;
+      }
+
+      $pusher_phid = $log->getPusherPHID();
+      if ($pusher_phid) {
+        $pusher_name = $handles[$pusher_phid]->getName();
+      } else {
+        $pusher_name = null;
+      }
+
+      $device_phid = $log->getDevicePHID();
+      if ($device_phid) {
+        $device_name = $handles[$device_phid]->getName();
+      } else {
+        $device_name = null;
+      }
+
+      $flags = $log->getChangeFlags();
+      $flag_names = array();
+      foreach ($flag_map as $flag_key => $flag_name) {
+        if (($flags & $flag_key) === $flag_key) {
+          $flag_names[] = $flag_name;
+        }
+      }
+
+      $result = $event->getRejectCode();
+      $result_name = idx($reject_map, $result, pht('Unknown ("%s")', $result));
+
+      $map = array(
+        'pushID' => $event->getID(),
+        'protocol' => $event->getRemoteProtocol(),
+        'repositoryPHID' => $repository_phid,
+        'repository' => $repository_name,
+        'pusherPHID' => $pusher_phid,
+        'pusher' => $pusher_name,
+        'devicePHID' => $device_phid,
+        'device' => $device_name,
+        'type' => $log->getRefType(),
+        'name' => $log->getRefName(),
+        'old' => $log->getRefOld(),
+        'new' => $log->getRefNew(),
+        'flags' => $flags,
+        'flagNames' => $flag_names,
+        'result' => $result,
+        'resultName' => $result_name,
+      );
+
+      if ($viewer->getIsAdmin()) {
+        $map['remoteAddress'] = $event->getRemoteAddress();
+      }
+
+      $export[] = $map;
+    }
+
+    return $export;
   }
 
 }

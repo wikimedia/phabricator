@@ -158,6 +158,14 @@ abstract class PhabricatorApplicationTransaction
     return (bool)$this->getMetadataValue('core.default', false);
   }
 
+  public function setIsSilentTransaction($silent) {
+    return $this->setMetadataValue('core.silent', $silent);
+  }
+
+  public function getIsSilentTransaction() {
+    return (bool)$this->getMetadataValue('core.silent', false);
+  }
+
   public function attachComment(
     PhabricatorApplicationTransactionComment $comment) {
     $this->comment = $comment;
@@ -294,8 +302,8 @@ abstract class PhabricatorApplicationTransaction
         $phids[] = $new;
         break;
       case PhabricatorTransactions::TYPE_EDGE:
-        $phids[] = ipull($old, 'dst');
-        $phids[] = ipull($new, 'dst');
+        $record = PhabricatorEdgeChangeRecord::newFromTransaction($this);
+        $phids[] = $record->getChangedPHIDs();
         break;
       case PhabricatorTransactions::TYPE_COLUMNS:
         foreach ($new as $move) {
@@ -450,6 +458,12 @@ abstract class PhabricatorApplicationTransaction
       case PhabricatorTransactions::TYPE_JOIN_POLICY:
         return 'fa-lock';
       case PhabricatorTransactions::TYPE_EDGE:
+        switch ($this->getMetadataValue('edge:type')) {
+          case DiffusionCommitRevertedByCommitEdgeType::EDGECONST:
+            return 'fa-undo';
+          case DiffusionCommitRevertsCommitEdgeType::EDGECONST:
+            return 'fa-ambulance';
+        }
         return 'fa-link';
       case PhabricatorTransactions::TYPE_BUILDABLE:
         return 'fa-wrench';
@@ -486,6 +500,14 @@ abstract class PhabricatorApplicationTransaction
         $comment = $this->getComment();
         if ($comment && $comment->getIsRemoved()) {
           return 'black';
+        }
+        break;
+      case PhabricatorTransactions::TYPE_EDGE:
+        switch ($this->getMetadataValue('edge:type')) {
+          case DiffusionCommitRevertedByCommitEdgeType::EDGECONST:
+            return 'pink';
+          case DiffusionCommitRevertsCommitEdgeType::EDGECONST:
+            return 'sky';
         }
         break;
       case PhabricatorTransactions::TYPE_BUILDABLE:
@@ -621,12 +643,13 @@ abstract class PhabricatorApplicationTransaction
           case PhabricatorObjectMentionsObjectEdgeType::EDGECONST:
           case ManiphestTaskHasDuplicateTaskEdgeType::EDGECONST:
           case ManiphestTaskIsDuplicateOfTaskEdgeType::EDGECONST:
+          case PhabricatorMutedEdgeType::EDGECONST:
+          case PhabricatorMutedByEdgeType::EDGECONST:
             return true;
             break;
           case PhabricatorObjectMentionedByObjectEdgeType::EDGECONST:
-            $new = ipull($this->getNewValue(), 'dst');
-            $old = ipull($this->getOldValue(), 'dst');
-            $add = array_diff($new, $old);
+            $record = PhabricatorEdgeChangeRecord::newFromTransaction($this);
+            $add = $record->getAddedPHIDs();
             $add_value = reset($add);
             $add_handle = $this->getHandle($add_value);
             if ($add_handle->getPolicyFiltered()) {
@@ -925,10 +948,10 @@ abstract class PhabricatorApplicationTransaction
         }
         break;
       case PhabricatorTransactions::TYPE_EDGE:
-        $new = ipull($new, 'dst');
-        $old = ipull($old, 'dst');
-        $add = array_diff($new, $old);
-        $rem = array_diff($old, $new);
+        $record = PhabricatorEdgeChangeRecord::newFromTransaction($this);
+        $add = $record->getAddedPHIDs();
+        $rem = $record->getRemovedPHIDs();
+
         $type = $this->getMetadata('edge:type');
         $type = head($type);
 
@@ -1164,10 +1187,10 @@ abstract class PhabricatorApplicationTransaction
             $this->renderHandleLink($new));
         }
       case PhabricatorTransactions::TYPE_EDGE:
-        $new = ipull($new, 'dst');
-        $old = ipull($old, 'dst');
-        $add = array_diff($new, $old);
-        $rem = array_diff($old, $new);
+        $record = PhabricatorEdgeChangeRecord::newFromTransaction($this);
+        $add = $record->getAddedPHIDs();
+        $rem = $record->getRemovedPHIDs();
+
         $type = $this->getMetadata('edge:type');
         $type = head($type);
 
@@ -1513,6 +1536,12 @@ abstract class PhabricatorApplicationTransaction
       // Don't group transactions which happened more than 2 minutes apart.
       $apart = abs($xaction->getDateCreated() - $this->getDateCreated());
       if ($apart > (60 * 2)) {
+        return false;
+      }
+
+      // Don't group silent and nonsilent transactions together.
+      $is_silent = $this->getIsSilentTransaction();
+      if ($is_silent != $xaction->getIsSilentTransaction()) {
         return false;
       }
     }
