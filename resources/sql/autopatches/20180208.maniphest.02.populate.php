@@ -4,6 +4,9 @@ $table = new ManiphestTask();
 $conn = $table->establishConnection('w');
 $viewer = PhabricatorUser::getOmnipotentUser();
 
+return; //disable this migration so that it won't run automatically
+// we will run it manually after the upgrade.
+
 foreach (new LiskMigrationIterator($table) as $task) {
   if ($task->getClosedEpoch()) {
     // Task already has a closed date.
