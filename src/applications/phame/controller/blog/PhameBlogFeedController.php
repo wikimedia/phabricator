@@ -37,6 +37,7 @@ final class PhameBlogFeedController extends PhameBlogController {
       ));
 
     $updated = $blog->getDateModified();
+
     if ($posts) {
       $updated = max($updated, max(mpull($posts, 'getDateModified')));
     }
@@ -71,7 +72,13 @@ final class PhameBlogFeedController extends PhameBlogController {
         '<author><name>%s</name></author>',
         $bloggers[$post->getBloggerPHID()]->getFullName());
 
-      $content[] = phutil_tag(
+
+        $content[] = phutil_tag(
+        'published',
+        array(),
+        date('c', $post->getDatePublished()));
+
+        $content[] = phutil_tag(
         'updated',
         array(),
         date('c', $post->getDateModified()));
