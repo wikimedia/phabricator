@@ -90,10 +90,10 @@ final class ProjectBoardTaskCard extends Phobject {
       ->setDisabled($task->isClosed())
       ->addAction(
         id(new PHUIListItemView())
-        ->setName(pht('Edit'))
-        ->setIcon('fa-pencil')
-        ->addSigil('edit-project-card')
-        ->setHref('/maniphest/task/edit/'.$task->getID().'/'))
+          ->setName(pht('Edit'))
+          ->setIcon('fa-pencil')
+          ->addSigil('edit-project-card')
+          ->setHref('/maniphest/task/edit/'.$task->getID().'/'))
       ->setBarColor($bar_color);
 
     if ($owner) {
@@ -120,7 +120,7 @@ final class ProjectBoardTaskCard extends Phobject {
 
     $subtype = $task->newSubtypeObject();
     if ($subtype && $subtype->hasTagView()) {
-      $subtype_tag = $subtype->newTagView()
+      $subtype_tag = $subtype->newTagView($this->getViewer())
         ->setSlimShady(true);
       $card->addAttribute($subtype_tag);
     }

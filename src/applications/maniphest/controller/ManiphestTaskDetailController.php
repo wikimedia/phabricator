@@ -244,7 +244,7 @@ final class ManiphestTaskDetailController extends ManiphestController {
 
     $subtype = $task->newSubtypeObject();
     if ($subtype && $subtype->hasTagView()) {
-      $subtype_tag = $subtype->newTagView();
+      $subtype_tag = $subtype->newTagView($this->getViewer());
       $view->addTag($subtype_tag);
     }
 

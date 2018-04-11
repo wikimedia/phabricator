@@ -114,7 +114,7 @@ final class ManiphestTaskListView extends ManiphestView {
 
       $subtype = $task->newSubtypeObject();
       if ($subtype && $subtype->hasTagView()) {
-        $subtype_tag = $subtype->newTagView()
+        $subtype_tag = $subtype->newTagView($this->getViewer())
           ->setSlimShady(true);
         $item->addAttribute($subtype_tag);
       }

@@ -141,8 +141,8 @@ final class AphrontTableView extends AphrontView {
     $column_widths = $this->columnWidths;
 
     $headers = $this->headers;
-    $short_headers = $this->shortHeaders;
-    $sort_values = $this->sortValues;
+    $short_headers = $this->shortHeaders ? $this->shortHeaders : array();
+    $sort_values = $this->sortValues ? $this->sortValues : array();
     if ($headers) {
       while (count($headers) > count($visibility)) {
         $visibility[] = true;
