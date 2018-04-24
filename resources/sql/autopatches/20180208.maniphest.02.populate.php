@@ -4,8 +4,16 @@ $table = new ManiphestTask();
 $conn = $table->establishConnection('w');
 $viewer = PhabricatorUser::getOmnipotentUser();
 
-return; //disable this migration so that it won't run automatically
-// we will run it manually after the upgrade.
+queryfx(
+  $conn,
+  'ALTER TABLE %T ADD closedEpoch INT UNSIGNED;',
+  $table->getTableName()
+);
+queryfx(
+  $conn,
+  'ALTER TABLE %T ADD ADD closerPHID VARBINARY(64);',
+  $table->getTableName()
+);
 
 foreach (new LiskMigrationIterator($table) as $task) {
   if ($task->getClosedEpoch()) {
