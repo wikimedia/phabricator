@@ -100,6 +100,9 @@ final class DiffusionLowLevelGitRefQuery extends DiffusionLowLevelQuery {
         // and that remote has its own remotes. We don't care about their
         // state and they may be out of date, so ignore them.
         continue;
+      } else if (preg_match('(^refs/changes/(.*)/(.*)/meta)', $refname)) {
+        // ignore gerrit's notedb commits
+        continue;
       } else {
         $ref_parts = explode('/', $refname, 3);
         $ref_prefix = count($ref_parts > 2)

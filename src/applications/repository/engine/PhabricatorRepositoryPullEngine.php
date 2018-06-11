@@ -419,6 +419,11 @@ final class PhabricatorRepositoryPullEngine
         continue;
       }
 
+      // If the remote ref is a notedb ref, ignore it
+      if (preg_match('(^refs/changes/(.*)/(.*)/meta)', $name)) {
+        continue;
+      }
+
       $map[$name] = $hash;
     }
 
