@@ -21,6 +21,11 @@ abstract class PhabricatorWorkerManagementWorkflow
         'param' => 'int',
         'help' => pht('Limit to tasks with at least this many failures.'),
       ),
+      array(
+        'name' => 'limit',
+        'param' => 'int',
+        'help' => pht('Limit the total number of tasks to act on.'),
+      ),
     );
   }
 
@@ -28,6 +33,7 @@ abstract class PhabricatorWorkerManagementWorkflow
     $ids = $args->getArg('id');
     $class = $args->getArg('class');
     $min_failures = $args->getArg('min-failure-count');
+    $limit = $args->getArg('limit');
 
     if (!$ids && !$class && !$min_failures) {
       throw new PhutilArgumentUsageException(
@@ -53,6 +59,11 @@ abstract class PhabricatorWorkerManagementWorkflow
         $min_failures, null);
       $archive_query = $archive_query->withFailureCountBetween(
         $min_failures, null);
+    }
+
+    if ($limit) {
+      $active_query->setLimit($limit);
+      $archive_query->setLimit($limit);
     }
 
     $active_tasks = $active_query->execute();
