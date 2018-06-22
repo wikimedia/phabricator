@@ -6,10 +6,6 @@ final class PhabricatorDiffusionApplication extends PhabricatorApplication {
     return pht('Diffusion');
   }
 
-  public function getMenuName() {
-    return pht('Repositories');
-  }
-
   public function getShortDescription() {
     return pht('Host and Browse Repositories');
   }
@@ -39,12 +35,6 @@ final class PhabricatorDiffusionApplication extends PhabricatorApplication {
     );
   }
 
-  public function getFactObjectsForAnalysis() {
-    return array(
-      new PhabricatorRepositoryCommit(),
-    );
-  }
-
   public function getRemarkupRules() {
     return array(
       new DiffusionCommitRemarkupRule(),
@@ -63,6 +53,10 @@ final class PhabricatorDiffusionApplication extends PhabricatorApplication {
         'history/(?P<dblob>.*)' => 'DiffusionHistoryController',
         'graph/(?P<dblob>.*)' => 'DiffusionGraphController',
         'browse/(?P<dblob>.*)' => 'DiffusionBrowseController',
+        'document/(?P<dblob>.*)'
+          => 'DiffusionDocumentController',
+        'blame/(?P<dblob>.*)'
+          => 'DiffusionBlameController',
         'lastmodified/(?P<dblob>.*)' => 'DiffusionLastModifiedController',
         'diff/' => 'DiffusionDiffController',
         'tags/(?P<dblob>.*)' => 'DiffusionTagListController',
@@ -129,6 +123,15 @@ final class PhabricatorDiffusionApplication extends PhabricatorApplication {
         ),
         '(?P<repositoryCallsign>[A-Z]+)' => $repository_routes,
         '(?P<repositoryID>[1-9]\d*)' => $repository_routes,
+
+        'identity/' => array(
+          $this->getQueryRoutePattern() =>
+            'DiffusionIdentityListController',
+          $this->getEditRoutePattern('edit/') =>
+            'DiffusionIdentityEditController',
+          'view/(?P<id>[^/]+)/' =>
+            'DiffusionIdentityViewController',
+        ),
 
         'inline/' => array(
           'edit/(?P<phid>[^/]+)/' => 'DiffusionInlineCommentController',

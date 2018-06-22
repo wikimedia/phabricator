@@ -687,3 +687,36 @@ ul.phui-oi-list-view .phui-oi-selectable
   .phui-oi-frame {
   border-color: {$blueborder};
 }
+
+.differential-revision-size {
+  padding: 0 4px;
+  border-radius: 4px;
+  background: {$lightgreybackground};
+  cursor: pointer;
+}
+
+.differential-revision-size .phui-icon-view {
+  margin: 0 1px 0 1px;
+  font-size: 7px;
+  position: relative;
+  top: -2px;
+  color: {$lightbluetext};
+}
+
+.differential-revision-large {
+  background: {$sh-orangebackground};
+}
+
+/* NOTE: These are intentionally using nonstandard colors, see T13127. */
+
+.differential-revision-large .phui-icon-view {
+  color: #e5ae7e;
+}
+
+.differential-revision-small {
+  background: #f2f7ff;
+}
+
+.differential-revision-small .phui-icon-view {
+  color: #6699ba;
+}

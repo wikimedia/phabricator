@@ -48,6 +48,7 @@ abstract class PhabricatorApplicationTransactionEditor
   private $mentionedPHIDs;
   private $continueOnNoEffect;
   private $continueOnMissingFields;
+  private $raiseWarnings;
   private $parentMessageID;
   private $heraldAdapter;
   private $heraldTranscript;
@@ -82,6 +83,7 @@ abstract class PhabricatorApplicationTransactionEditor
   private $webhookMap = array();
 
   private $transactionQueue = array();
+  private $sendHistory = false;
 
   const STORAGE_ENCODING_BINARY = 'binary';
 
@@ -273,6 +275,15 @@ abstract class PhabricatorApplicationTransactionEditor
     return $this->applicationEmail;
   }
 
+  public function setRaiseWarnings($raise_warnings) {
+    $this->raiseWarnings = $raise_warnings;
+    return $this;
+  }
+
+  public function getRaiseWarnings() {
+    return $this->raiseWarnings;
+  }
+
   public function getTransactionTypesForObject($object) {
     $old = $this->object;
     try {
@@ -290,6 +301,7 @@ abstract class PhabricatorApplicationTransactionEditor
     $types = array();
 
     $types[] = PhabricatorTransactions::TYPE_CREATE;
+    $types[] = PhabricatorTransactions::TYPE_HISTORY;
 
     if ($this->object instanceof PhabricatorEditEngineSubtypeInterface) {
       $types[] = PhabricatorTransactions::TYPE_SUBTYPE;
@@ -301,10 +313,6 @@ abstract class PhabricatorApplicationTransactionEditor
 
     if ($this->object instanceof PhabricatorCustomFieldInterface) {
       $types[] = PhabricatorTransactions::TYPE_CUSTOMFIELD;
-    }
-
-    if ($this->object instanceof HarbormasterBuildableInterface) {
-      $types[] = PhabricatorTransactions::TYPE_BUILDABLE;
     }
 
     if ($this->object instanceof PhabricatorTokenReceiverInterface) {
@@ -371,6 +379,7 @@ abstract class PhabricatorApplicationTransactionEditor
 
     switch ($type) {
       case PhabricatorTransactions::TYPE_CREATE:
+      case PhabricatorTransactions::TYPE_HISTORY:
         return null;
       case PhabricatorTransactions::TYPE_SUBTYPE:
         return $object->getEditEngineSubtype();
@@ -459,10 +468,10 @@ abstract class PhabricatorApplicationTransactionEditor
       case PhabricatorTransactions::TYPE_VIEW_POLICY:
       case PhabricatorTransactions::TYPE_EDIT_POLICY:
       case PhabricatorTransactions::TYPE_JOIN_POLICY:
-      case PhabricatorTransactions::TYPE_BUILDABLE:
       case PhabricatorTransactions::TYPE_TOKEN:
       case PhabricatorTransactions::TYPE_INLINESTATE:
       case PhabricatorTransactions::TYPE_SUBTYPE:
+      case PhabricatorTransactions::TYPE_HISTORY:
         return $xaction->getNewValue();
       case PhabricatorTransactions::TYPE_SPACE:
         $space_phid = $xaction->getNewValue();
@@ -515,6 +524,7 @@ abstract class PhabricatorApplicationTransactionEditor
 
     switch ($xaction->getTransactionType()) {
       case PhabricatorTransactions::TYPE_CREATE:
+      case PhabricatorTransactions::TYPE_HISTORY:
         return true;
       case PhabricatorTransactions::TYPE_CUSTOMFIELD:
         $field = $this->getCustomFieldForTransaction($object, $xaction);
@@ -599,8 +609,8 @@ abstract class PhabricatorApplicationTransactionEditor
         $field = $this->getCustomFieldForTransaction($object, $xaction);
         return $field->applyApplicationTransactionInternalEffects($xaction);
       case PhabricatorTransactions::TYPE_CREATE:
+      case PhabricatorTransactions::TYPE_HISTORY:
       case PhabricatorTransactions::TYPE_SUBTYPE:
-      case PhabricatorTransactions::TYPE_BUILDABLE:
       case PhabricatorTransactions::TYPE_TOKEN:
       case PhabricatorTransactions::TYPE_VIEW_POLICY:
       case PhabricatorTransactions::TYPE_EDIT_POLICY:
@@ -661,9 +671,9 @@ abstract class PhabricatorApplicationTransactionEditor
         $field = $this->getCustomFieldForTransaction($object, $xaction);
         return $field->applyApplicationTransactionExternalEffects($xaction);
       case PhabricatorTransactions::TYPE_CREATE:
+      case PhabricatorTransactions::TYPE_HISTORY:
       case PhabricatorTransactions::TYPE_SUBTYPE:
       case PhabricatorTransactions::TYPE_EDGE:
-      case PhabricatorTransactions::TYPE_BUILDABLE:
       case PhabricatorTransactions::TYPE_TOKEN:
       case PhabricatorTransactions::TYPE_VIEW_POLICY:
       case PhabricatorTransactions::TYPE_EDIT_POLICY:
@@ -797,6 +807,9 @@ abstract class PhabricatorApplicationTransactionEditor
       case PhabricatorTransactions::TYPE_SPACE:
         $this->scrambleFileSecrets($object);
         break;
+      case PhabricatorTransactions::TYPE_HISTORY:
+        $this->sendHistory = true;
+        break;
     }
   }
 
@@ -919,28 +932,31 @@ abstract class PhabricatorApplicationTransactionEditor
         throw new PhabricatorApplicationTransactionValidationException($errors);
       }
 
+      if ($this->raiseWarnings) {
+        $warnings = array();
+        foreach ($xactions as $xaction) {
+          if ($this->hasWarnings($object, $xaction)) {
+            $warnings[] = $xaction;
+          }
+        }
+        if ($warnings) {
+          throw new PhabricatorApplicationTransactionWarningException(
+            $warnings);
+        }
+      }
+
       $this->willApplyTransactions($object, $xactions);
 
       if ($object->getID()) {
         $this->buildOldRecipientLists($object, $xactions);
 
-        foreach ($xactions as $xaction) {
+        $object->openTransaction();
+        $transaction_open = true;
 
-          // If any of the transactions require a read lock, hold one and
-          // reload the object. We need to do this fairly early so that the
-          // call to `adjustTransactionValues()` (which populates old values)
-          // is based on the synchronized state of the object, which may differ
-          // from the state when it was originally loaded.
+        $object->beginReadLocking();
+        $read_locking = true;
 
-          if ($this->shouldReadLock($object, $xaction)) {
-            $object->openTransaction();
-            $object->beginReadLocking();
-            $transaction_open = true;
-            $read_locking = true;
-            $object->reload();
-            break;
-          }
-        }
+        $object->reload();
       }
 
       if ($this->shouldApplyInitialEffects($object, $xactions)) {
@@ -951,66 +967,57 @@ abstract class PhabricatorApplicationTransactionEditor
       }
     }
 
-    if ($this->shouldApplyInitialEffects($object, $xactions)) {
-      $this->applyInitialEffects($object, $xactions);
-    }
-
-    foreach ($xactions as $xaction) {
-      $this->adjustTransactionValues($object, $xaction);
-    }
-
     try {
-      $xactions = $this->filterTransactions($object, $xactions);
-    } catch (Exception $ex) {
-      if ($read_locking) {
-        $object->endReadLocking();
+      if ($this->shouldApplyInitialEffects($object, $xactions)) {
+        $this->applyInitialEffects($object, $xactions);
       }
-      if ($transaction_open) {
-        $object->killTransaction();
-      }
-      throw $ex;
-    }
 
-    // TODO: Once everything is on EditEngine, just use getIsNewObject() to
-    // figure this out instead.
-    $mark_as_create = false;
-    $create_type = PhabricatorTransactions::TYPE_CREATE;
-    foreach ($xactions as $xaction) {
-      if ($xaction->getTransactionType() == $create_type) {
-        $mark_as_create = true;
-      }
-    }
-
-    if ($mark_as_create) {
       foreach ($xactions as $xaction) {
-        $xaction->setIsCreateTransaction(true);
+        $this->adjustTransactionValues($object, $xaction);
       }
-    }
 
-    // Now that we've merged, filtered, and combined transactions, check for
-    // required capabilities.
-    foreach ($xactions as $xaction) {
-      $this->requireCapabilities($object, $xaction);
-    }
+      $xactions = $this->filterTransactions($object, $xactions);
 
-    $xactions = $this->sortTransactions($xactions);
-    $file_phids = $this->extractFilePHIDs($object, $xactions);
+      // TODO: Once everything is on EditEngine, just use getIsNewObject() to
+      // figure this out instead.
+      $mark_as_create = false;
+      $create_type = PhabricatorTransactions::TYPE_CREATE;
+      foreach ($xactions as $xaction) {
+        if ($xaction->getTransactionType() == $create_type) {
+          $mark_as_create = true;
+        }
+      }
 
-    if ($is_preview) {
-      $this->loadHandles($xactions);
-      return $xactions;
-    }
+      if ($mark_as_create) {
+        foreach ($xactions as $xaction) {
+          $xaction->setIsCreateTransaction(true);
+        }
+      }
 
-    $comment_editor = id(new PhabricatorApplicationTransactionCommentEditor())
-      ->setActor($actor)
-      ->setActingAsPHID($this->getActingAsPHID())
-      ->setContentSource($this->getContentSource());
+      // Now that we've merged, filtered, and combined transactions, check for
+      // required capabilities.
+      foreach ($xactions as $xaction) {
+        $this->requireCapabilities($object, $xaction);
+      }
 
-    if (!$transaction_open) {
-      $object->openTransaction();
-    }
+      $xactions = $this->sortTransactions($xactions);
+      $file_phids = $this->extractFilePHIDs($object, $xactions);
 
-    try {
+      if ($is_preview) {
+        $this->loadHandles($xactions);
+        return $xactions;
+      }
+
+      $comment_editor = id(new PhabricatorApplicationTransactionCommentEditor())
+        ->setActor($actor)
+        ->setActingAsPHID($this->getActingAsPHID())
+        ->setContentSource($this->getContentSource());
+
+      if (!$transaction_open) {
+        $object->openTransaction();
+        $transaction_open = true;
+      }
+
       foreach ($xactions as $xaction) {
         $this->applyInternalEffects($object, $xaction);
       }
@@ -1070,14 +1077,27 @@ abstract class PhabricatorApplicationTransactionEditor
       }
 
       $xactions = $this->applyFinalEffects($object, $xactions);
+
       if ($read_locking) {
         $object->endReadLocking();
         $read_locking = false;
       }
 
-      $object->saveTransaction();
+      if ($transaction_open) {
+        $object->saveTransaction();
+        $transaction_open = false;
+      }
     } catch (Exception $ex) {
-      $object->killTransaction();
+      if ($read_locking) {
+        $object->endReadLocking();
+        $read_locking = false;
+      }
+
+      if ($transaction_open) {
+        $object->killTransaction();
+        $transaction_open = false;
+      }
+
       throw $ex;
     }
 
@@ -1103,6 +1123,11 @@ abstract class PhabricatorApplicationTransactionEditor
       // We are the Herald editor, so stop work here and return the updated
       // transactions.
       return $xactions;
+    } else if ($this->getIsInverseEdgeEditor()) {
+      // Do not run Herald if we're just recording that this object was
+      // mentioned elsewhere. This tends to create Herald side effects which
+      // feel arbitrary, and can really slow down edits which mention a large
+      // number of other objects. See T13114.
     } else if ($this->shouldApplyHeraldRules($object, $xactions)) {
       // We are not the Herald editor, so try to apply Herald rules.
       $herald_xactions = $this->applyHeraldRules($object, $xactions);
@@ -1302,6 +1327,13 @@ abstract class PhabricatorApplicationTransactionEditor
       $this->publishFeedStory($object, $xactions, $mailed);
     }
 
+    if ($this->sendHistory) {
+      $history_mail = $this->buildHistoryMail($object);
+      if ($history_mail) {
+        $messages[] = $history_mail;
+      }
+    }
+
     // NOTE: This actually sends the mail. We do this last to reduce the chance
     // that we send some mail, hit an exception, then send the mail again when
     // retrying.
@@ -1317,46 +1349,6 @@ abstract class PhabricatorApplicationTransactionEditor
   protected function didApplyTransactions($object, array $xactions) {
     // Hook for subclasses.
     return $xactions;
-  }
-
-
-  /**
-   * Determine if the editor should hold a read lock on the object while
-   * applying a transaction.
-   *
-   * If the editor does not hold a lock, two editors may read an object at the
-   * same time, then apply their changes without any synchronization. For most
-   * transactions, this does not matter much. However, it is important for some
-   * transactions. For example, if an object has a transaction count on it, both
-   * editors may read the object with `count = 23`, then independently update it
-   * and save the object with `count = 24` twice. This will produce the wrong
-   * state: the object really has 25 transactions, but the count is only 24.
-   *
-   * Generally, transactions fall into one of four buckets:
-   *
-   *   - Append operations: Actions like adding a comment to an object purely
-   *     add information to its state, and do not depend on the current object
-   *     state in any way. These transactions never need to hold locks.
-   *   - Overwrite operations: Actions like changing the title or description
-   *     of an object replace the current value with a new value, so the end
-   *     state is consistent without a lock. We currently do not lock these
-   *     transactions, although we may in the future.
-   *   - Edge operations: Edge and subscription operations have internal
-   *     synchronization which limits the damage race conditions can cause.
-   *     We do not currently lock these transactions, although we may in the
-   *     future.
-   *   - Update operations: Actions like incrementing a count on an object.
-   *     These operations generally should use locks, unless it is not
-   *     important that the state remain consistent in the presence of races.
-   *
-   * @param   PhabricatorLiskDAO  Object being updated.
-   * @param   PhabricatorApplicationTransaction Transaction being applied.
-   * @return  bool                True to synchronize the edit with a lock.
-   */
-  protected function shouldReadLock(
-    PhabricatorLiskDAO $object,
-    PhabricatorApplicationTransaction $xaction) {
-    return false;
   }
 
   private function loadHandles(array $xactions) {
@@ -2582,6 +2574,25 @@ abstract class PhabricatorApplicationTransactionEditor
       $unexpandable = array();
     }
 
+    $messages = $this->buildMailWithRecipients(
+      $object,
+      $xactions,
+      $email_to,
+      $email_cc,
+      $unexpandable);
+
+    $this->runHeraldMailRules($messages);
+
+    return $messages;
+  }
+
+  private function buildMailWithRecipients(
+    PhabricatorLiskDAO $object,
+    array $xactions,
+    array $email_to,
+    array $email_cc,
+    array $unexpandable) {
+
     $targets = $this->buildReplyHandler($object)
       ->setUnexpandablePHIDs($unexpandable)
       ->getMailTargets($email_to, $email_cc);
@@ -2627,8 +2638,6 @@ abstract class PhabricatorApplicationTransactionEditor
         $messages[] = $mail;
       }
     }
-
-    $this->runHeraldMailRules($messages);
 
     return $messages;
   }
@@ -2926,11 +2935,13 @@ abstract class PhabricatorApplicationTransactionEditor
     PhabricatorLiskDAO $object,
     array $xactions) {
 
-    $body = new PhabricatorMetaMTAMailBody();
-    $body->setViewer($this->requireActor());
+    $body = id(new PhabricatorMetaMTAMailBody())
+      ->setViewer($this->requireActor())
+      ->setContextObject($object);
 
     $this->addHeadersAndCommentsToMailBody($body, $xactions);
     $this->addCustomFieldsToMailBody($body, $object, $xactions);
+
     return $body;
   }
 
@@ -2958,33 +2969,61 @@ abstract class PhabricatorApplicationTransactionEditor
     $object_label = null,
     $object_href = null) {
 
+    // First, remove transactions which shouldn't be rendered in mail.
+    foreach ($xactions as $key => $xaction) {
+      if ($xaction->shouldHideForMail($xactions)) {
+        unset($xactions[$key]);
+      }
+    }
+
     $headers = array();
     $headers_html = array();
     $comments = array();
     $details = array();
 
+    $seen_comment = false;
     foreach ($xactions as $xaction) {
-      if ($xaction->shouldHideForMail($xactions)) {
-        continue;
-      }
 
-      $header = $xaction->getTitleForMail();
-      if ($header !== null) {
-        $headers[] = $header;
-      }
+      // Most mail has zero or one comments. In these cases, we render the
+      // "alice added a comment." transaction in the header, like a normal
+      // transaction.
 
-      $header_html = $xaction->getTitleForHTMLMail();
-      if ($header_html !== null) {
-        $headers_html[] = $header_html;
-      }
+      // Some mail, like Differential undraft mail or "!history" mail, may
+      // have two or more comments. In these cases, we'll put the first
+      // "alice added a comment." transaction in the header normally, but
+      // move the other transactions down so they provide context above the
+      // actual comment.
 
       $comment = $xaction->getBodyForMail();
       if ($comment !== null) {
-        $comments[] = $comment;
+        $is_comment = true;
+        $comments[] = array(
+          'xaction' => $xaction,
+          'comment' => $comment,
+          'initial' => !$seen_comment,
+        );
+      } else {
+        $is_comment = false;
+      }
+
+      if (!$is_comment || !$seen_comment) {
+        $header = $xaction->getTitleForMail();
+        if ($header !== null) {
+          $headers[] = $header;
+        }
+
+        $header_html = $xaction->getTitleForHTMLMail();
+        if ($header_html !== null) {
+          $headers_html[] = $header_html;
+        }
       }
 
       if ($xaction->hasChangeDetailsForMail()) {
         $details[] = $xaction;
+      }
+
+      if ($is_comment) {
+        $seen_comment = true;
       }
     }
 
@@ -3018,8 +3057,7 @@ abstract class PhabricatorApplicationTransactionEditor
         $object_label);
     }
 
-    $xactions_style = array(
-    );
+    $xactions_style = array();
 
     $header_action = phutil_tag(
       'td',
@@ -3046,7 +3084,25 @@ abstract class PhabricatorApplicationTransactionEditor
 
     $body->addRawHTMLSection($headers_html);
 
-    foreach ($comments as $comment) {
+    foreach ($comments as $spec) {
+      $xaction = $spec['xaction'];
+      $comment = $spec['comment'];
+      $is_initial = $spec['initial'];
+
+      // If this is not the first comment in the mail, add the header showing
+      // who wrote the comment immediately above the comment.
+      if (!$is_initial) {
+        $header = $xaction->getTitleForMail();
+        if ($header !== null) {
+          $body->addRawPlaintextSection($header);
+        }
+
+        $header_html = $xaction->getTitleForHTMLMail();
+        if ($header_html !== null) {
+          $body->addRawHTMLSection($header_html);
+        }
+      }
+
       $body->addRemarkupSection(null, $comment);
     }
 
@@ -3220,6 +3276,11 @@ abstract class PhabricatorApplicationTransactionEditor
     $story_type = $this->getFeedStoryType();
     $story_data = $this->getFeedStoryData($object, $xactions);
 
+    $unexpandable_phids = $this->mailUnexpandablePHIDs;
+    if (!is_array($unexpandable_phids)) {
+      $unexpandable_phids = array();
+    }
+
     id(new PhabricatorFeedStoryPublisher())
       ->setStoryType($story_type)
       ->setStoryData($story_data)
@@ -3228,6 +3289,7 @@ abstract class PhabricatorApplicationTransactionEditor
       ->setRelatedPHIDs($related_phids)
       ->setPrimaryObjectPHID($object->getPHID())
       ->setSubscribedPHIDs($subscribed_phids)
+      ->setUnexpandablePHIDs($unexpandable_phids)
       ->setMailRecipientPHIDs($mailed_phids)
       ->setMailTags($this->getMailTags($object, $xactions))
       ->publish();
@@ -3308,10 +3370,32 @@ abstract class PhabricatorApplicationTransactionEditor
     $this->setHeraldTranscript($xscript);
 
     if ($adapter instanceof HarbormasterBuildableAdapterInterface) {
+      $buildable_phid = $adapter->getHarbormasterBuildablePHID();
+
       HarbormasterBuildable::applyBuildPlans(
-        $adapter->getHarbormasterBuildablePHID(),
+        $buildable_phid,
         $adapter->getHarbormasterContainerPHID(),
         $adapter->getQueuedHarbormasterBuildRequests());
+
+      // Whether we queued any builds or not, any automatic buildable for this
+      // object is now done preparing builds and can transition into a
+      // completed status.
+      $buildables = id(new HarbormasterBuildableQuery())
+        ->setViewer(PhabricatorUser::getOmnipotentUser())
+        ->withManualBuildables(false)
+        ->withBuildablePHIDs(array($buildable_phid))
+        ->execute();
+      foreach ($buildables as $buildable) {
+        // If this buildable has already moved beyond preparation, we don't
+        // need to nudge it again.
+        if (!$buildable->isPreparing()) {
+          continue;
+        }
+        $buildable->sendMessage(
+          $this->getActor(),
+          HarbormasterMessageType::BUILDABLE_BUILD,
+          true);
+      }
     }
 
     $this->mustEncrypt = $adapter->getMustEncryptReasons();
@@ -3666,6 +3750,7 @@ abstract class PhabricatorApplicationTransactionEditor
       'mailMutedPHIDs',
       'webhookMap',
       'silent',
+      'sendHistory',
     );
   }
 
@@ -4297,6 +4382,58 @@ abstract class PhabricatorApplicationTransactionEditor
 
       $request->queueCall();
     }
+  }
+
+  private function hasWarnings($object, $xaction) {
+    // TODO: For the moment, this is a very un-modular hack to support
+    // exactly one type of warning (mentioning users on a draft revision)
+    // that we want to show. See PHI433.
+
+    if (!($object instanceof DifferentialRevision)) {
+      return false;
+    }
+
+    if (!$object->isDraft()) {
+      return false;
+    }
+
+    $type = $xaction->getTransactionType();
+    if ($type != PhabricatorTransactions::TYPE_SUBSCRIBERS) {
+      return false;
+    }
+
+    // NOTE: This will currently warn even if you're only removing
+    // subscribers.
+
+    return true;
+  }
+
+  private function buildHistoryMail(PhabricatorLiskDAO $object) {
+    $viewer = $this->requireActor();
+    $recipient_phid = $this->getActingAsPHID();
+
+    // Load every transaction so we can build a mail message with a complete
+    // history for the object.
+    $query = PhabricatorApplicationTransactionQuery::newQueryForObject($object);
+    $xactions = $query
+      ->setViewer($viewer)
+      ->withObjectPHIDs(array($object->getPHID()))
+      ->execute();
+    $xactions = array_reverse($xactions);
+
+    $mail_messages = $this->buildMailWithRecipients(
+      $object,
+      $xactions,
+      array($recipient_phid),
+      array(),
+      array());
+    $mail = head($mail_messages);
+
+    // Since the user explicitly requested "!history", force delivery of this
+    // message regardless of their other mail settings.
+    $mail->setForceDelivery(true);
+
+    return $mail;
   }
 
 }

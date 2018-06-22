@@ -431,10 +431,13 @@ final class DiffusionServeController extends DiffusionController {
 
     $uri = $repository->getAlmanacServiceURI(
       $viewer,
-      $is_cluster_request,
       array(
-        'http',
-        'https',
+        'neverProxy' => $is_cluster_request,
+        'protocols' => array(
+          'http',
+          'https',
+        ),
+        'writable' => !$this->isReadOnlyRequest($repository),
       ));
     if ($uri) {
       $future = $this->getRequest()->newClusterProxyFuture($uri);
@@ -1046,7 +1049,7 @@ final class DiffusionServeController extends DiffusionController {
           // <https://github.com/github/git-lfs/issues/1088>
           $no_authorization = 'Basic '.base64_encode('none');
 
-          $get_uri = $file->getCDNURI();
+          $get_uri = $file->getCDNURI('data');
           $actions['download'] = array(
             'href' => $get_uri,
             'header' => array(

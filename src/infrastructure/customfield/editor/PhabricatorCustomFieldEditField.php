@@ -7,6 +7,7 @@ final class PhabricatorCustomFieldEditField
   private $httpParameterType;
   private $conduitParameterType;
   private $bulkParameterType;
+  private $commentAction;
 
   public function setCustomField(PhabricatorCustomField $custom_field) {
     $this->customField = $custom_field;
@@ -54,6 +55,16 @@ final class PhabricatorCustomFieldEditField
     return $this->bulkParameterType;
   }
 
+  public function setCustomFieldCommentAction(
+    PhabricatorEditEngineCommentAction $comment_action) {
+    $this->commentAction = $comment_action;
+    return $this;
+  }
+
+  public function getCustomFieldCommentAction() {
+    return $this->commentAction;
+  }
+
   protected function buildControl() {
     if ($this->getIsConduitOnly()) {
       return null;
@@ -84,6 +95,19 @@ final class PhabricatorCustomFieldEditField
     return $clone->getNewValueForApplicationTransactions();
   }
 
+  protected function getValueForCommentAction($value) {
+    $field = $this->getCustomField();
+    $clone = clone $field;
+    $clone->setValueFromApplicationTransactions($value);
+
+    // TODO: This is somewhat bogus because only StandardCustomFields
+    // implement a getFieldValue() method -- not all CustomFields. Today,
+    // only StandardCustomFields can ever actually generate a comment action
+    // so we never reach this method with other field types.
+
+    return $clone->getFieldValue();
+  }
+
   protected function getValueExistsInSubmit(AphrontRequest $request, $key) {
     return true;
   }
@@ -112,6 +136,16 @@ final class PhabricatorCustomFieldEditField
 
     if ($type) {
       return clone $type;
+    }
+
+    return null;
+  }
+
+  protected function newCommentAction() {
+    $action = $this->getCustomFieldCommentAction();
+
+    if ($action) {
+      return clone $action;
     }
 
     return null;

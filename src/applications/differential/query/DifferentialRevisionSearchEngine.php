@@ -165,7 +165,7 @@ final class DifferentialRevisionSearchEngine
 
     $viewer = $this->requireViewer();
     $template = id(new DifferentialRevisionListView())
-      ->setUser($viewer)
+      ->setViewer($viewer)
       ->setNoBox($this->isPanelContext());
 
     $bucket = $this->getResultBucket($query);
@@ -193,28 +193,16 @@ final class DifferentialRevisionSearchEngine
       }
     } else {
       $views[] = id(clone $template)
-        ->setRevisions($revisions)
-        ->setHandles(array());
+        ->setRevisions($revisions);
     }
 
     if (!$views) {
       $views[] = id(new DifferentialRevisionListView())
-        ->setUser($viewer)
+        ->setViewer($viewer)
         ->setNoDataString(pht('No revisions found.'));
     }
 
-    $phids = array_mergev(mpull($views, 'getRequiredHandlePHIDs'));
-    if ($phids) {
-      $handles = id(new PhabricatorHandleQuery())
-        ->setViewer($viewer)
-        ->withPHIDs($phids)
-        ->execute();
-    } else {
-      $handles = array();
-    }
-
     foreach ($views as $view) {
-      $view->setHandles($handles);
       $view->setUnlandedDependencies($unlanded);
     }
 

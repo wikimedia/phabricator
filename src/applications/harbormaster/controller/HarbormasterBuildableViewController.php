@@ -3,6 +3,10 @@
 final class HarbormasterBuildableViewController
   extends HarbormasterController {
 
+  public function shouldAllowPublic() {
+    return true;
+  }
+
   public function handleRequest(AphrontRequest $request) {
     $viewer = $this->getViewer();
 
@@ -36,6 +40,10 @@ final class HarbormasterBuildableViewController
       ->setHeader($title)
       ->setUser($viewer)
       ->setPolicyObject($buildable)
+      ->setStatus(
+        $buildable->getStatusIcon(),
+        $buildable->getStatusColor(),
+        $buildable->getStatusDisplayName())
       ->setHeaderIcon('fa-recycle');
 
     $timeline = $this->buildTransactionTimeline(
@@ -345,7 +353,5 @@ final class HarbormasterBuildableViewController
 
     return array($lint, $unit);
   }
-
-
 
 }

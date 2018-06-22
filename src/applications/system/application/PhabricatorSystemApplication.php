@@ -26,7 +26,7 @@ final class PhabricatorSystemApplication extends PhabricatorApplication {
       '/readonly/' => array(
         '(?P<reason>[^/]+)/' => 'PhabricatorSystemReadOnlyController',
       ),
-      '/favicon.ico' => 'PhabricatorSystemFaviconController',
+      '/object/(?P<name>[^/]+)/' => 'PhabricatorSystemObjectController',
     );
   }
 
