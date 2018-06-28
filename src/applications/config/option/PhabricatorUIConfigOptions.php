@@ -67,7 +67,7 @@ EOJSON;
       $this->newOption('ui.favicons', 'wild', array())
         ->setSummary(pht('Customize favicons.'))
         ->setDescription(pht('Customize favicons.'))
-        ->setLocked(true),
+        ->setLocked(false),
       $this->newOption('ui.footer-items', $footer_type, array())
         ->setSummary(
           pht(
