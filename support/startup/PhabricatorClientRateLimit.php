@@ -26,7 +26,7 @@ final class PhabricatorClientRateLimit
   }
 
   protected function getPenaltyScore() {
-    return 1;
+    return 2;
   }
 
   protected function getDisconnectScore(array $request_state) {
@@ -35,7 +35,7 @@ final class PhabricatorClientRateLimit
     // If the user was logged in, let them make more requests.
     if (isset($request_state['viewer'])) {
       $viewer = $request_state['viewer'];
-      if ($viewer->isOmnipotent()) {
+      if ($viewer->isOmnipotent() || $viewer->getIsSystemAgent()) {
         // If the viewer was omnipotent, this was an intracluster request or
         // some other kind of special request, so don't give it any points
         // toward rate limiting.
