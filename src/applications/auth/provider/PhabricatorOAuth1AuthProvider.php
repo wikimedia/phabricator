@@ -114,8 +114,16 @@ abstract class PhabricatorOAuth1AuthProvider
 
       return array($account, $response);
     }
-
+    $this->willLoadOrCreateAccount($account_id, $adapter);
     return array($this->loadOrCreateAccount($account_id), $response);
+  }
+
+  /** called right before an account is loaded or created. This hook can be
+   * overridden in a subclass to check the account before a login is permitted.
+   */
+  protected function willLoadOrCreateAccount($account_id, $adapter) {
+    // override in a subclass
+    return;
   }
 
   public function processEditForm(
