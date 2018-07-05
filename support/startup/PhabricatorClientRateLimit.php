@@ -26,13 +26,20 @@ final class PhabricatorClientRateLimit
   }
 
   protected function getPenaltyScore() {
-    return 2;
+    return 1;
   }
 
   protected function getDisconnectScore(array $request_state) {
     $score = 1;
 
-    // If the user was logged in, let them make more requests.
+
+    $key = $this->getClientKey();
+    $whitelist = array('87.138.110.76', '198.73.209.241');
+    // whitelisted ips get unlimited requests
+    if (in_array($key, $whitelist)) {
+      $score = 0;
+    }
+
     if (isset($request_state['viewer'])) {
       $viewer = $request_state['viewer'];
       if ($viewer->isOmnipotent() || $viewer->getIsSystemAgent()) {
@@ -44,10 +51,9 @@ final class PhabricatorClientRateLimit
         // If the viewer was logged in, give them fewer points than if they
         // were logged out, since this traffic is much more likely to be
         // legitimate.
-        $score = 0.25;
+        $score = $score / 4;
       }
     }
-
     return $score;
   }
 
