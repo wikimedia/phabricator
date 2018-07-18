@@ -15,6 +15,9 @@ final class PhabricatorClientRateLimit
 
   protected function shouldRejectConnection($score) {
     $limit = $this->getLimit();
+    if ($limit == 0) {
+      return false;
+    }
 
     // Reject connections if the average score across all buckets exceeds the
     // limit.

@@ -14,7 +14,8 @@ final class PhabricatorClientConnectionLimit
   protected function shouldRejectConnection($score) {
     // Reject connections if the cumulative score across all buckets exceeds
     // the limit.
-    return ($score > $this->getLimit());
+    $limit = $this->getLimit();
+    return ($limit > 0 && $score > $limit);
   }
 
   protected function getConnectScore() {
