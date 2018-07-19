@@ -395,23 +395,19 @@ class PhabricatorElasticFulltextStorageEngine
           $properties[$rel] = array(
             'type'  => 'string',
             'index' => 'not_analyzed',
-            'include_in_all' => false,
           );
           $properties[$rel.'_ts'] = array(
             'type'  => 'date',
-            'include_in_all' => false,
           );
         }
       } else {
         foreach ($relationships as $rel) {
           $properties[$rel] = array(
             'type'  => 'keyword',
-            'include_in_all' => false,
             'doc_values' => false,
           );
           $properties[$rel.'_ts'] = array(
             'type'  => 'date',
-            'include_in_all' => false,
           );
         }
       }
