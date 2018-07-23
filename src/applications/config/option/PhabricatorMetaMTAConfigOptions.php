@@ -257,7 +257,7 @@ EODOC
         ))
       ->setSummary(
         pht(
-        'Controll whether Phabricator allows the suppression of email from '.
+        'Controls whether Phabricator allows the suppression of email from '.
         '"maintenance" users.'
         ))
       ->setDescription(pht('Suppress mail from maintenance users.')),
