@@ -36,6 +36,12 @@ final class PhabricatorProjectProfileMenuEngine
       ->setBuiltinKey(PhabricatorProject::ITEM_WORKBOARD)
       ->setMenuItemKey(PhabricatorProjectWorkboardProfileMenuItem::MENUITEMKEY);
 
+    if (class_exists('ProjectOpenTasksProfileMenuItem')) {
+      $items[] = $this->newItem()
+        ->setBuiltinKey(ProjectOpenTasksProfileMenuItem::MENUITEMKEY)
+        ->setMenuItemKey(ProjectOpenTasksProfileMenuItem::MENUITEMKEY);
+    }
+
     $items[] = $this->newItem()
       ->setBuiltinKey(PhabricatorProject::ITEM_MEMBERS)
       ->setMenuItemKey(PhabricatorProjectMembersProfileMenuItem::MENUITEMKEY);
@@ -50,7 +56,6 @@ final class PhabricatorProjectProfileMenuEngine
         ->setBuiltinKey(PhabricatorMilestoneNavProfileMenuItem::MENUITEMKEY)
         ->setMenuItemKey(PhabricatorMilestoneNavProfileMenuItem::MENUITEMKEY);
     }
-
 
     $items[] = $this->newItem()
       ->setBuiltinKey(PhabricatorProject::ITEM_MANAGE)
