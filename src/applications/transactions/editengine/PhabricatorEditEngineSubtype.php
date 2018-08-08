@@ -208,4 +208,8 @@ class PhabricatorEditEngineSubtype
     return $map;
   }
 
+  public function __tostring() {
+    return $this->getKey();
+  }
+
 }

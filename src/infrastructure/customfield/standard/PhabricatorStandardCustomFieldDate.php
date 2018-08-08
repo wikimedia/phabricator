@@ -226,6 +226,32 @@ final class PhabricatorStandardCustomFieldDate
     }
   }
 
+  public function shouldAppearInHerald() {
+    return true;
+  }
+
+  public function getHeraldFieldConditions() {
+    return array(
+      HeraldAdapter::CONDITION_EXISTS,
+      HeraldAdapter::CONDITION_NOT_EXISTS,
+    );
+  }
+
+  public function getHeraldFieldStandardType() {
+    return HeraldField::STANDARD_TEXT;
+  }
+
+  protected function getHTTPParameterType() {
+    return new AphrontStringHTTPParameterType();
+  }
+
+  public function getConduitEditParameterType() {
+    return new ConduitStringParameterType();
+  }
+
+  protected function newExportFieldType() {
+    return new PhabricatorStringExportField();
+  }
 
   public function shouldAppearInConduitTransactions() {
     // TODO: Dates are complicated and we don't yet support handling them from
