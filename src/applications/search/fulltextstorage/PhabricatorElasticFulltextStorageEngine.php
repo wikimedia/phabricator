@@ -26,6 +26,11 @@ class PhabricatorElasticFulltextStorageEngine
       '_timestamp' : 'lastModified';
   }
 
+  public function getDocTypeField() {
+    return $this->version < 6 ?
+      '_type' : 'docType';
+  }
+
   public function getTextFieldType() {
     return $this->version >= 5
       ? 'text' : 'string';
@@ -150,6 +155,15 @@ class PhabricatorElasticFulltextStorageEngine
 
     }
 
+    $doc_types = $query->getParameter('type');
+    if ($doc_types) {
+      $q->addMustClause(array(
+        'terms' => array(
+          $this->getDocTypeField() => $doc_types,
+        ),
+      ));
+    }
+
     $exclude = $query->getParameter('exclude');
     if ($exclude) {
       $q->addFilterClause(array(
@@ -248,16 +262,7 @@ class PhabricatorElasticFulltextStorageEngine
   }
 
   public function executeSearch(PhabricatorSavedQuery $query) {
-    $types = $query->getParameter('types');
-    if (!$types) {
-      $types = array_keys(
-        PhabricatorSearchApplicationSearchEngine::getIndexableDocumentTypes());
-    }
-
-    // Don't use '/_search' for the case that there is something
-    // else in the index (for example if 'phabricator' is only an alias to
-    // some bigger index). Use '/$types/_search' instead.
-    $uri = '/'.implode(',', $types).'/_search';
+    $uri = '/_search';
 
     $spec = $this->buildSpec($query);
     $exceptions = array();
@@ -360,64 +365,60 @@ class PhabricatorElasticFulltextStorageEngine
     $fields = $this->getTypeConstants('PhabricatorSearchDocumentFieldType');
     $relationships = $this->getTypeConstants('PhabricatorSearchRelationship');
 
-    $doc_types = array_keys(
-      PhabricatorSearchApplicationSearchEngine::getIndexableDocumentTypes());
-
     $text_type = $this->getTextFieldType();
 
-    foreach ($doc_types as $type) {
-      $properties = array();
-      foreach ($fields as $field) {
-        // Use the custom analyzer for the corpus of text
-        $properties[$field] = array(
-          'type'                  => $text_type,
-          'fields' => array(
-            'raw' => array(
-              'type'                  => $text_type,
-              'analyzer'              => 'english_exact',
-              'search_analyzer'       => 'english',
-              'search_quote_analyzer' => 'english_exact',
-            ),
-            'keywords' => array(
-              'type'                  => $text_type,
-              'analyzer'              => 'letter_stop',
-            ),
-            'stems' => array(
-              'type'                  => $text_type,
-              'analyzer'              => 'english_stem',
-            ),
+    $properties = array();
+    foreach ($fields as $field) {
+      // Use the custom analyzer for the corpus of text
+      $properties[$field] = array(
+        'type'                  => $text_type,
+        'fields' => array(
+          'raw' => array(
+            'type'                  => $text_type,
+            'analyzer'              => 'english_exact',
+            'search_analyzer'       => 'english',
+            'search_quote_analyzer' => 'english_exact',
           ),
+          'keywords' => array(
+            'type'                  => $text_type,
+            'analyzer'              => 'letter_stop',
+          ),
+          'stems' => array(
+            'type'                  => $text_type,
+            'analyzer'              => 'english_stem',
+          ),
+        ),
+      );
+    }
+
+    if ($this->version < 5) {
+      foreach ($relationships as $rel) {
+        $properties[$rel] = array(
+          'type'  => 'string',
+          'index' => 'not_analyzed',
+        );
+        $properties[$rel.'_ts'] = array(
+          'type'  => 'date',
         );
       }
-
-      if ($this->version < 5) {
-        foreach ($relationships as $rel) {
-          $properties[$rel] = array(
-            'type'  => 'string',
-            'index' => 'not_analyzed',
-          );
-          $properties[$rel.'_ts'] = array(
-            'type'  => 'date',
-          );
-        }
-      } else {
-        foreach ($relationships as $rel) {
-          $properties[$rel] = array(
-            'type'  => 'keyword',
-            'doc_values' => false,
-          );
-          $properties[$rel.'_ts'] = array(
-            'type'  => 'date',
-          );
-        }
+    } else {
+      foreach ($relationships as $rel) {
+        $properties[$rel] = array(
+          'type'  => 'keyword',
+          'doc_values' => false,
+        );
+        $properties[$rel.'_ts'] = array(
+          'type'  => 'date',
+        );
       }
-
-      // Ensure we have dateCreated since the default query requires it
-      $properties['dateCreated']['type'] = 'date';
-      $properties['lastModified']['type'] = 'date';
-
-      $data['mappings'][$type]['properties'] = $properties;
     }
+
+    // Ensure we have dateCreated since the default query requires it
+    $properties['dateCreated']['type'] = 'date';
+    $properties['lastModified']['type'] = 'date';
+    $properties['docType']['type'] = 'keyword';
+    $data['mappings']['_doc']['properties'] = $properties;
+
     return $data;
   }
 
