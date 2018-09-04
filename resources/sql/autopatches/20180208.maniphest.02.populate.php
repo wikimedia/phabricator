@@ -11,7 +11,7 @@ queryfx(
 );
 queryfx(
   $conn,
-  'ALTER TABLE %T ADD ADD closerPHID VARBINARY(64);',
+  'ALTER TABLE %T ADD closerPHID VARBINARY(64);',
   $table->getTableName()
 );
 
