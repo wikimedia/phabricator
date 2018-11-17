@@ -532,7 +532,7 @@ properly, and submit values. */
 }
 
 .aphront-form-preview-hidden {
-  opacity: 0.5;
+  display: none; /** wmf customization see T209743 **/
 }
 
 .aphront-form-error .phui-icon-view {
