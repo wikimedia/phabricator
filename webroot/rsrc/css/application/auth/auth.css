@@ -59,3 +59,12 @@
 .auth-login-forms-hidden {
   display: none;
 }
+
+.auth-custom-message {
+  margin: 32px auto 64px;
+  max-width: 548px;
+  background: #fff;
+  padding: 16px;
+  border: 1px solid {$lightblueborder};
+  border-radius: 4px;
+}

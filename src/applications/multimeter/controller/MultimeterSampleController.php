@@ -300,13 +300,14 @@ final class MultimeterSampleController extends MultimeterController {
 
     $group = implode('.', $group);
     if (!strlen($group)) {
-      $group = null;
+      $uri->removeQueryParam('group');
+    } else {
+      $uri->replaceQueryParam('group', $group);
     }
-    $uri->setQueryParam('group', $group);
 
     if ($wipe) {
       foreach ($this->getColumnMap() as $key => $column) {
-        $uri->setQueryParam($key, null);
+        $uri->removeQueryParam($key);
       }
     }
 
@@ -317,7 +318,7 @@ final class MultimeterSampleController extends MultimeterController {
     $value = (array)$value;
 
     $uri = clone $this->getRequest()->getRequestURI();
-    $uri->setQueryParam($key, implode(',', $value));
+    $uri->replaceQueryParam($key, implode(',', $value));
 
     return phutil_tag(
       'a',
