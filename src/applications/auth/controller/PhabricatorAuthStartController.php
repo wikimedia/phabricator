@@ -208,23 +208,6 @@ final class PhabricatorAuthStartController
         $out[] = $not_buttons;
     }
 
-    $handlers = PhabricatorAuthLoginHandler::getAllHandlers();
-
-    $delegating_controller = $this->getDelegatingController();
-
-    $header = array();
-    foreach ($handlers as $handler) {
-      $handler = clone $handler;
-
-      $handler->setRequest($request);
-
-      if ($delegating_controller) {
-        $handler->setDelegatingController($delegating_controller);
-      }
-
-      $header[] = $handler->getAuthLoginHeaderContent();
-    }
-
     $invite_message = null;
     if ($invite) {
       $invite_message = $this->renderInviteHeader($invite);
