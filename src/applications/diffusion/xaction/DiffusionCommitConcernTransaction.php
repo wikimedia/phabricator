@@ -7,7 +7,7 @@ final class DiffusionCommitConcernTransaction
   const ACTIONKEY = 'concern';
 
   protected function getCommitActionLabel() {
-    return pht("Raise Concern \xE2\x9C\x98");
+    return pht('Raise Concern');
   }
 
   protected function getCommitActionDescription() {
@@ -33,8 +33,7 @@ final class DiffusionCommitConcernTransaction
   public function applyInternalEffects($object, $value) {
     // NOTE: We force the commit directly into "Concern Raised" so that we
     // override a possible "Needs Verification" state.
-    $object->setAuditStatus(
-      PhabricatorAuditCommitStatusConstants::CONCERN_RAISED);
+    $object->setAuditStatus(DiffusionCommitAuditStatus::CONCERN_RAISED);
   }
 
   public function applyExternalEffects($object, $value) {
@@ -54,10 +53,8 @@ final class DiffusionCommitConcernTransaction
 
     // Even if you've already raised a concern, you can raise again as long
     // as the author requested you verify.
-    $state_verify = PhabricatorAuditCommitStatusConstants::NEEDS_VERIFICATION;
-
     if ($this->isViewerFullyRejected($object, $viewer)) {
-      if ($object->getAuditStatus() != $state_verify) {
+      if (!$object->isAuditStatusNeedsVerification()) {
         throw new Exception(
           pht(
             'You can not raise a concern with this commit because you have '.
@@ -77,6 +74,14 @@ final class DiffusionCommitConcernTransaction
       '%s raised a concern with %s.',
       $this->renderAuthor(),
       $this->renderObject());
+  }
+
+  public function getTransactionTypeForConduit($xaction) {
+    return 'concern';
+  }
+
+  public function getFieldValuesForConduit($object, $data) {
+    return array();
   }
 
 }

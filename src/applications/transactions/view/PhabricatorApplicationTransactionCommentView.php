@@ -23,6 +23,7 @@ class PhabricatorApplicationTransactionCommentView extends AphrontView {
   private $fullWidth;
   private $infoView;
   private $editEngineLock;
+  private $noBorder;
 
   private $currentVersion;
   private $versionedDraft;
@@ -230,7 +231,7 @@ class PhabricatorApplicationTransactionCommentView extends AphrontView {
       'div',
       array(
         'style' => 'background-image: url('.$image_uri.')',
-        'class' => 'phui-comment-image',
+        'class' => 'phui-comment-image visual-only',
       ));
     $wedge = phutil_tag(
       'div',
@@ -245,6 +246,13 @@ class PhabricatorApplicationTransactionCommentView extends AphrontView {
       ->setFlush(true)
       ->addClass('phui-comment-form-view')
       ->addSigil('phui-comment-form')
+      ->appendChild(
+        phutil_tag(
+          'h3',
+          array(
+            'class' => 'aural-only',
+          ),
+          pht('Add Comment')))
       ->appendChild($image)
       ->appendChild($badge_view)
       ->appendChild($wedge)
@@ -319,14 +327,18 @@ class PhabricatorApplicationTransactionCommentView extends AphrontView {
 
       foreach ($comment_actions as $key => $comment_action) {
         $key = $comment_action->getKey();
+        $label = $comment_action->getLabel();
+
         $action_map[$key] = array(
           'key' => $key,
-          'label' => $comment_action->getLabel(),
+          'label' => $label,
           'type' => $comment_action->getPHUIXControlType(),
           'spec' => $comment_action->getPHUIXControlSpecification(),
           'initialValue' => $comment_action->getInitialValue(),
           'groupKey' => $comment_action->getGroupKey(),
           'conflictKey' => $comment_action->getConflictKey(),
+          'auralLabel' => pht('Remove Action: %s', $label),
+          'buttonText' => $comment_action->getSubmitButtonText(),
         );
 
         $type_map[$key] = $comment_action;
@@ -379,6 +391,13 @@ class PhabricatorApplicationTransactionCommentView extends AphrontView {
       $form->appendChild($invisi_bar);
       $form->addClass('phui-comment-has-actions');
 
+      $timeline = $this->transactionTimeline;
+
+      $view_data = array();
+      if ($timeline) {
+        $view_data = $timeline->getViewData();
+      }
+
       Javelin::initBehavior(
         'comment-actions',
         array(
@@ -392,6 +411,8 @@ class PhabricatorApplicationTransactionCommentView extends AphrontView {
           'showPreview' => $this->getShowPreview(),
           'actionURI' => $this->getAction(),
           'drafts' => $draft_keys,
+          'defaultButtonText' => $this->getSubmitButtonName(),
+          'viewData' => $view_data,
         ));
     }
 
@@ -414,6 +435,7 @@ class PhabricatorApplicationTransactionCommentView extends AphrontView {
         id(new AphrontFormSubmitControl())
           ->addClass('phui-comment-fullwidth-control')
           ->addClass('phui-comment-submit-control')
+          ->addSigil('submit-transactions')
           ->setValue($this->getSubmitButtonName()));
 
     return $form;

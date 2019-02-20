@@ -9,6 +9,7 @@ final class DrydockRepositoryOperationQuery extends DrydockQuery {
   private $operationStates;
   private $operationTypes;
   private $isDismissed;
+  private $authorPHIDs;
 
   public function withIDs(array $ids) {
     $this->ids = $ids;
@@ -45,6 +46,11 @@ final class DrydockRepositoryOperationQuery extends DrydockQuery {
     return $this;
   }
 
+  public function withAuthorPHIDs(array $phids) {
+    $this->authorPHIDs = $phids;
+    return $this;
+  }
+
   public function newResultObject() {
     return new DrydockRepositoryOperation();
   }
@@ -56,6 +62,8 @@ final class DrydockRepositoryOperationQuery extends DrydockQuery {
   protected function willFilterPage(array $operations) {
     $implementations = DrydockRepositoryOperationType::getAllOperationTypes();
 
+    $viewer = $this->getViewer();
+
     foreach ($operations as $key => $operation) {
       $impl = idx($implementations, $operation->getOperationType());
       if (!$impl) {
@@ -63,7 +71,10 @@ final class DrydockRepositoryOperationQuery extends DrydockQuery {
         unset($operations[$key]);
         continue;
       }
-      $impl = clone $impl;
+      $impl = id(clone $impl)
+        ->setViewer($viewer)
+        ->setOperation($operation);
+
       $operation->attachImplementation($impl);
     }
 
@@ -163,6 +174,13 @@ final class DrydockRepositoryOperationQuery extends DrydockQuery {
         $conn,
         'isDismissed = %d',
         (int)$this->isDismissed);
+    }
+
+    if ($this->authorPHIDs !== null) {
+      $where[] = qsprintf(
+        $conn,
+        'authorPHID IN (%Ls)',
+        $this->authorPHIDs);
     }
 
     return $where;

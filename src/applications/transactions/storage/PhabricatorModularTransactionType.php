@@ -23,15 +23,15 @@ abstract class PhabricatorModularTransactionType
     return array();
   }
 
-  public function willApplyTransactions($object, array $xactions) {
-    return;
-  }
-
   public function applyInternalEffects($object, $value) {
     return;
   }
 
   public function applyExternalEffects($object, $value) {
+    return;
+  }
+
+  public function didCommitTransaction($object, $value) {
     return;
   }
 
@@ -53,6 +53,10 @@ abstract class PhabricatorModularTransactionType
 
   public function shouldHideForMail() {
     return false;
+  }
+
+  public function shouldHideForNotifications() {
+    return null;
   }
 
   public function getIcon() {
@@ -193,6 +197,35 @@ abstract class PhabricatorModularTransactionType
 
   final protected function renderNewHandle() {
     return $this->renderHandle($this->getNewValue());
+  }
+
+  final protected function renderOldPolicy() {
+    return $this->renderPolicy($this->getOldValue(), 'old');
+  }
+
+  final protected function renderNewPolicy() {
+    return $this->renderPolicy($this->getNewValue(), 'new');
+  }
+
+  final protected function renderPolicy($phid, $mode) {
+    $viewer = $this->getViewer();
+    $handles = $viewer->loadHandles(array($phid));
+
+    $policy = PhabricatorPolicy::newFromPolicyAndHandle(
+      $phid,
+      $handles[$phid]);
+
+    if ($this->isTextMode()) {
+      return $this->renderValue($policy->getFullName());
+    }
+
+    $storage = $this->getStorage();
+    if ($policy->getType() == PhabricatorPolicyType::TYPE_CUSTOM) {
+      $policy->setHref('/transactions/'.$mode.'/'.$storage->getPHID().'/');
+      $policy->setWorkflow(true);
+    }
+
+    return $this->renderValue($policy->renderDescription());
   }
 
   final protected function renderHandleList(array $phids) {
@@ -354,6 +387,42 @@ abstract class PhabricatorModularTransactionType
 
   public function getFieldValuesForConduit($xaction, $data) {
     return array();
+  }
+
+  protected function requireApplicationCapability($capability) {
+    $application_class = $this->getEditor()->getEditorApplicationClass();
+    $application = newv($application_class, array());
+
+    PhabricatorPolicyFilter::requireCapability(
+      $this->getActor(),
+      $application,
+      $capability);
+  }
+
+  /**
+   * Get a list of capabilities the actor must have on the object to apply
+   * a transaction to it.
+   *
+   * Usually, you should use this to reduce capability requirements when a
+   * transaction (like leaving a Conpherence thread) can be applied without
+   * having edit permission on the object. You can override this method to
+   * remove the CAN_EDIT requirement, or to replace it with a different
+   * requirement.
+   *
+   * If you are increasing capability requirements and need to add an
+   * additional capability or policy requirement above and beyond CAN_EDIT, it
+   * is usually better implemented as a validation check.
+   *
+   * @param object Object being edited.
+   * @param PhabricatorApplicationTransaction Transaction being applied.
+   * @return null|const|list<const> A capability constant (or list of
+   *    capability constants) which the actor must have on the object. You can
+   *    return `null` as a shorthand for "no capabilities are required".
+   */
+  public function getRequiredCapabilities(
+    $object,
+    PhabricatorApplicationTransaction $xaction) {
+    return PhabricatorPolicyCapability::CAN_EDIT;
   }
 
 }

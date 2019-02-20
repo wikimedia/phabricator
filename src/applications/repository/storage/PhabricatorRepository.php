@@ -239,20 +239,6 @@ final class PhabricatorRepository extends PhabricatorRepositoryDAO
     return idx($this->details, $key, $default);
   }
 
-  public function getHumanReadableDetail($key, $default = null) {
-    $value = $this->getDetail($key, $default);
-
-    switch ($key) {
-      case 'branch-filter':
-      case 'close-commits-filter':
-        $value = array_keys($value);
-        $value = implode(', ', $value);
-        break;
-    }
-
-    return $value;
-  }
-
   public function setDetail($key, $value) {
     $this->details[$key] = $value;
     return $this;
@@ -1205,6 +1191,26 @@ final class PhabricatorRepository extends PhabricatorRepositoryDAO
     return null;
   }
 
+  public function getAutocloseOnlyRules() {
+    return array_keys($this->getDetail('close-commits-filter', array()));
+  }
+
+  public function setAutocloseOnlyRules(array $rules) {
+    $rules = array_fill_keys($rules, true);
+    $this->setDetail('close-commits-filter', $rules);
+    return $this;
+  }
+
+  public function getTrackOnlyRules() {
+    return array_keys($this->getDetail('branch-filter', array()));
+  }
+
+  public function setTrackOnlyRules(array $rules) {
+    $rules = array_fill_keys($rules, true);
+    $this->setDetail('branch-filter', $rules);
+    return $this;
+  }
+
 
 /* -(  Repository URI Management  )------------------------------------------ */
 
@@ -1899,6 +1905,51 @@ final class PhabricatorRepository extends PhabricatorRepositoryDAO
 
 
   /**
+   * Time limit for cloning or copying this repository.
+   *
+   * This limit is used to timeout operations like `git clone` or `git fetch`
+   * when doing intracluster synchronization, building working copies, etc.
+   *
+   * @return int Maximum number of seconds to spend copying this repository.
+   */
+  public function getCopyTimeLimit() {
+    return $this->getDetail('limit.copy');
+  }
+
+  public function setCopyTimeLimit($limit) {
+    return $this->setDetail('limit.copy', $limit);
+  }
+
+  public function getDefaultCopyTimeLimit() {
+    return phutil_units('15 minutes in seconds');
+  }
+
+  public function getEffectiveCopyTimeLimit() {
+    $limit = $this->getCopyTimeLimit();
+    if ($limit) {
+      return $limit;
+    }
+
+    return $this->getDefaultCopyTimeLimit();
+  }
+
+  public function getFilesizeLimit() {
+    return $this->getDetail('limit.filesize');
+  }
+
+  public function setFilesizeLimit($limit) {
+    return $this->setDetail('limit.filesize', $limit);
+  }
+
+  public function getTouchLimit() {
+    return $this->getDetail('limit.touch');
+  }
+
+  public function setTouchLimit($limit) {
+    return $this->setDetail('limit.touch', $limit);
+  }
+
+  /**
    * Retrieve the service URI for the device hosting this repository.
    *
    * See @{method:newConduitClient} for a general discussion of interacting
@@ -2019,10 +2070,70 @@ final class PhabricatorRepository extends PhabricatorRepositoryDAO
       }
     }
 
-    shuffle($results);
+    if ($writable) {
+      $results = $this->sortWritableAlmanacServiceURIs($results);
+    } else {
+      shuffle($results);
+    }
 
     $result = head($results);
     return $result['uri'];
+  }
+
+  private function sortWritableAlmanacServiceURIs(array $results) {
+    // See T13109 for discussion of how this method routes requests.
+
+    // In the absence of other rules, we'll send traffic to devices randomly.
+    // We also want to select randomly among nodes which are equally good
+    // candidates to receive the write, and accomplish that by shuffling the
+    // list up front.
+    shuffle($results);
+
+    $order = array();
+
+    // If some device is currently holding the write lock, send all requests
+    // to that device. We're trying to queue writes on a single device so they
+    // do not need to wait for read synchronization after earlier writes
+    // complete.
+    $writer = PhabricatorRepositoryWorkingCopyVersion::loadWriter(
+      $this->getPHID());
+    if ($writer) {
+      $device_phid = $writer->getWriteProperty('devicePHID');
+      foreach ($results as $key => $result) {
+        if ($result['devicePHID'] === $device_phid) {
+          $order[] = $key;
+        }
+      }
+    }
+
+    // If no device is currently holding the write lock, try to send requests
+    // to a device which is already up to date and will not need to synchronize
+    // before it can accept the write.
+    $versions = PhabricatorRepositoryWorkingCopyVersion::loadVersions(
+      $this->getPHID());
+    if ($versions) {
+      $max_version = (int)max(mpull($versions, 'getRepositoryVersion'));
+
+      $max_devices = array();
+      foreach ($versions as $version) {
+        if ($version->getRepositoryVersion() == $max_version) {
+          $max_devices[] = $version->getDevicePHID();
+        }
+      }
+      $max_devices = array_fuse($max_devices);
+
+      foreach ($results as $key => $result) {
+        if (isset($max_devices[$result['devicePHID']])) {
+          $order[] = $key;
+        }
+      }
+    }
+
+    // Reorder the results, putting any we've selected as preferred targets for
+    // the write at the head of the list.
+    $results = array_select_keys($results, $order) + $results;
+
+    return $results;
   }
 
   public function supportsSynchronization() {
@@ -2045,7 +2156,7 @@ final class PhabricatorRepository extends PhabricatorRepositoryDAO
     $parts = array(
       "repo({$repository_phid})",
       "serv({$service_phid})",
-      'v2',
+      'v3',
     );
 
     return implode('.', $parts);
@@ -2072,12 +2183,14 @@ final class PhabricatorRepository extends PhabricatorRepositoryDAO
       $uri = $this->getClusterRepositoryURIFromBinding($binding);
       $protocol = $uri->getProtocol();
       $device_name = $iface->getDevice()->getName();
+      $device_phid = $iface->getDevice()->getPHID();
 
       $uris[] = array(
         'protocol' => $protocol,
         'uri' => (string)$uri,
         'device' => $device_name,
         'writable' => (bool)$binding->getAlmanacPropertyValue('writable'),
+        'devicePHID' => $device_phid,
       );
     }
 
@@ -2509,19 +2622,8 @@ final class PhabricatorRepository extends PhabricatorRepositoryDAO
     return new PhabricatorRepositoryEditor();
   }
 
-  public function getApplicationTransactionObject() {
-    return $this;
-  }
-
   public function getApplicationTransactionTemplate() {
     return new PhabricatorRepositoryTransaction();
-  }
-
-  public function willRenderTimeline(
-    PhabricatorApplicationTransactionView $timeline,
-    AphrontRequest $request) {
-
-    return $timeline;
   }
 
 
@@ -2675,6 +2777,13 @@ final class PhabricatorRepository extends PhabricatorRepositoryDAO
         ->setDescription(
           pht(
             'True if the repository is importing initial commits.')),
+      id(new PhabricatorConduitSearchFieldSpecification())
+        ->setKey('almanacServicePHID')
+        ->setType('phid?')
+        ->setDescription(
+          pht(
+            'The Almanac Service that hosts this repository, if the '.
+            'repository is clustered.')),
     );
   }
 
@@ -2686,6 +2795,7 @@ final class PhabricatorRepository extends PhabricatorRepositoryDAO
       'shortName' => $this->getRepositorySlug(),
       'status' => $this->getStatus(),
       'isImporting' => (bool)$this->isImporting(),
+      'almanacServicePHID' => $this->getAlmanacServicePHID(),
     );
   }
 

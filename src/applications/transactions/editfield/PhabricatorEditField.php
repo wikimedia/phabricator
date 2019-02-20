@@ -44,7 +44,7 @@ abstract class PhabricatorEditField extends Phobject {
   private $isDefaultable = true;
   private $isLockable = true;
   private $isCopyable = false;
-  private $isConduitOnly = false;
+  private $isFormField = true;
 
   private $conduitEditTypes;
   private $bulkEditTypes;
@@ -139,13 +139,13 @@ abstract class PhabricatorEditField extends Phobject {
     return $this->isReorderable;
   }
 
-  public function setIsConduitOnly($is_conduit_only) {
-    $this->isConduitOnly = $is_conduit_only;
+  public function setIsFormField($is_form_field) {
+    $this->isFormField = $is_form_field;
     return $this;
   }
 
-  public function getIsConduitOnly() {
-    return $this->isConduitOnly;
+  public function getIsFormField() {
+    return $this->isFormField;
   }
 
   public function setDescription($description) {
@@ -340,7 +340,7 @@ abstract class PhabricatorEditField extends Phobject {
   }
 
   protected function buildControl() {
-    if ($this->getIsConduitOnly()) {
+    if (!$this->getIsFormField()) {
       return null;
     }
 
@@ -641,7 +641,7 @@ abstract class PhabricatorEditField extends Phobject {
   }
 
   final public function getHTTPParameterType() {
-    if ($this->getIsConduitOnly()) {
+    if (!$this->getIsFormField()) {
       return null;
     }
 
@@ -844,7 +844,7 @@ abstract class PhabricatorEditField extends Phobject {
   }
 
   public function shouldGenerateTransactionsFromSubmit() {
-    if ($this->getIsConduitOnly()) {
+    if (!$this->getIsFormField()) {
       return false;
     }
 
@@ -857,7 +857,7 @@ abstract class PhabricatorEditField extends Phobject {
   }
 
   public function shouldReadValueFromRequest() {
-    if ($this->getIsConduitOnly()) {
+    if (!$this->getIsFormField()) {
       return false;
     }
 
@@ -873,7 +873,7 @@ abstract class PhabricatorEditField extends Phobject {
   }
 
   public function shouldReadValueFromSubmit() {
-    if ($this->getIsConduitOnly()) {
+    if (!$this->getIsFormField()) {
       return false;
     }
 
@@ -889,7 +889,7 @@ abstract class PhabricatorEditField extends Phobject {
   }
 
   public function shouldGenerateTransactionsFromComment() {
-    if ($this->getIsConduitOnly()) {
+    if (!$this->getCommentActionLabel()) {
       return false;
     }
 

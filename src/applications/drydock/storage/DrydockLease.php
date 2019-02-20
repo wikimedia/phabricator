@@ -1,7 +1,9 @@
 <?php
 
 final class DrydockLease extends DrydockDAO
-  implements PhabricatorPolicyInterface {
+  implements
+    PhabricatorPolicyInterface,
+    PhabricatorConduitResultInterface {
 
   protected $resourcePHID;
   protected $resourceType;
@@ -10,6 +12,8 @@ final class DrydockLease extends DrydockDAO
   protected $authorizingPHID;
   protected $attributes = array();
   protected $status = DrydockLeaseStatus::STATUS_PENDING;
+  protected $acquiredEpoch;
+  protected $activatedEpoch;
 
   private $resource = self::ATTACHABLE;
   private $unconsumedCommands = self::ATTACHABLE;
@@ -62,6 +66,22 @@ final class DrydockLease extends DrydockDAO
     $this->scheduleUpdate();
   }
 
+  public function setStatus($status) {
+    if ($status == DrydockLeaseStatus::STATUS_ACQUIRED) {
+      if (!$this->getAcquiredEpoch()) {
+        $this->setAcquiredEpoch(PhabricatorTime::getNow());
+      }
+    }
+
+    if ($status == DrydockLeaseStatus::STATUS_ACTIVE) {
+      if (!$this->getActivatedEpoch()) {
+        $this->setActivatedEpoch(PhabricatorTime::getNow());
+      }
+    }
+
+    return parent::setStatus($status);
+  }
+
   public function getLeaseName() {
     return pht('Lease %d', $this->getID());
   }
@@ -78,6 +98,8 @@ final class DrydockLease extends DrydockDAO
         'resourceType' => 'text128',
         'ownerPHID' => 'phid?',
         'resourcePHID' => 'phid?',
+        'acquiredEpoch' => 'epoch?',
+        'activatedEpoch' => 'epoch?',
       ),
       self::CONFIG_KEY_SCHEMA => array(
         'key_resource' => array(
@@ -85,6 +107,9 @@ final class DrydockLease extends DrydockDAO
         ),
         'key_status' => array(
           'columns' => array('status'),
+        ),
+        'key_owner' => array(
+          'columns' => array('ownerPHID'),
         ),
       ),
     ) + parent::getConfiguration();
@@ -513,6 +538,68 @@ final class DrydockLease extends DrydockDAO
 
   public function describeAutomaticCapability($capability) {
     return pht('Leases inherit policies from the resources they lease.');
+  }
+
+
+/* -(  PhabricatorConduitResultInterface  )---------------------------------- */
+
+
+  public function getFieldSpecificationsForConduit() {
+    return array(
+      id(new PhabricatorConduitSearchFieldSpecification())
+        ->setKey('resourcePHID')
+        ->setType('phid?')
+        ->setDescription(pht('PHID of the leased resource, if any.')),
+      id(new PhabricatorConduitSearchFieldSpecification())
+        ->setKey('resourceType')
+        ->setType('string')
+        ->setDescription(pht('Type of resource being leased.')),
+      id(new PhabricatorConduitSearchFieldSpecification())
+        ->setKey('until')
+        ->setType('int?')
+        ->setDescription(pht('Epoch at which this lease expires, if any.')),
+      id(new PhabricatorConduitSearchFieldSpecification())
+        ->setKey('ownerPHID')
+        ->setType('phid?')
+        ->setDescription(pht('The PHID of the object that owns this lease.')),
+      id(new PhabricatorConduitSearchFieldSpecification())
+        ->setKey('authorizingPHID')
+        ->setType('phid')
+        ->setDescription(pht(
+          'The PHID of the object that authorized this lease.')),
+      id(new PhabricatorConduitSearchFieldSpecification())
+        ->setKey('status')
+        ->setType('map<string, wild>')
+        ->setDescription(pht(
+          "The string constant and name of this lease's status.")),
+    );
+  }
+
+  public function getFieldValuesForConduit() {
+    $status = $this->getStatus();
+
+    $until = $this->getUntil();
+    if ($until) {
+      $until = (int)$until;
+    } else {
+      $until = null;
+    }
+
+    return array(
+      'resourcePHID' => $this->getResourcePHID(),
+      'resourceType' => $this->getResourceType(),
+      'until' => $until,
+      'ownerPHID' => $this->getOwnerPHID(),
+      'authorizingPHID' => $this->getAuthorizingPHID(),
+      'status' => array(
+        'value' => $status,
+        'name' => DrydockLeaseStatus::getNameForStatus($status),
+      ),
+    );
+  }
+
+  public function getConduitSearchAttachments() {
+    return array();
   }
 
 }

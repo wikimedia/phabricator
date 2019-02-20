@@ -133,17 +133,10 @@
 }
 
 .aphront-form-control-submit button,
-.aphront-form-control-submit a.button {
+.aphront-form-control-submit a.button,
+.aphront-form-control-submit input[type="submit"] {
   float: right;
   margin: 4px 0 0 8px;
-}
-
-.phui-form-control-multi-submit input,
-.phui-form-control-multi-submit button,
-.phui-form-control-multi-submit a {
-  float: right;
-  margin: 4px 0 0 8px;
-  width: auto;
 }
 
 .aphront-form-control-textarea textarea.aphront-textarea-very-short {
@@ -546,7 +539,8 @@ properly, and submit values. */
 }
 
 .phui-form-static-action {
-  padding: 4px;
+  height: 28px;
+  line-height: 28px;
   color: {$bluetext};
 }
 
@@ -561,4 +555,22 @@ properly, and submit values. */
 
 .phuix-form-checkbox-label {
   margin-left: 4px;
+}
+
+.phui-form-timer-icon {
+  width: 28px;
+  height: 28px;
+  padding: 4px;
+  font-size: 18px;
+  background: {$greybackground};
+  border-radius: 4px;
+  text-align: center;
+  vertical-align: middle;
+  text-shadow: 1px 1px rgba(0, 0, 0, 0.05);
+}
+
+.phui-form-timer-content {
+  padding: 4px 8px;
+  color: {$darkgreytext};
+  vertical-align: middle;
 }

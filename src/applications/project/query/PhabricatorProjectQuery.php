@@ -197,6 +197,11 @@ final class PhabricatorProjectQuery
         'column' => 'milestoneNumber',
         'type' => 'int',
       ),
+      'status' => array(
+        'table' => $this->getPrimaryTableAlias(),
+        'column' => 'status',
+        'type' => 'int',
+      ),
     );
   }
 
@@ -205,6 +210,7 @@ final class PhabricatorProjectQuery
     return array(
       'id' => $project->getID(),
       'name' => $project->getName(),
+      'status' => $project->getStatus(),
     );
   }
 
@@ -524,7 +530,7 @@ final class PhabricatorProjectQuery
           'name LIKE %>',
           $name_prefix);
       }
-      $where[] = '('.implode(' OR ', $parts).')';
+      $where[] = qsprintf($conn, '%LO', $parts);
     }
 
     if ($this->icons !== null) {
@@ -567,7 +573,7 @@ final class PhabricatorProjectQuery
           $ancestor_path['projectDepth']);
       }
 
-      $where[] = '('.implode(' OR ', $sql).')';
+      $where[] = qsprintf($conn, '%LO', $sql);
 
       $where[] = qsprintf(
         $conn,

@@ -45,6 +45,12 @@ final class DifferentialRevisionSearchEngine
       $query->withStatuses($map['statuses']);
     }
 
+    if ($map['createdStart'] || $map['createdEnd']) {
+      $query->withCreatedEpochBetween(
+        $map['createdStart'],
+        $map['createdEnd']);
+    }
+
     return $query;
   }
 
@@ -84,6 +90,16 @@ final class DifferentialRevisionSearchEngine
         ->setDatasource(new DifferentialRevisionStatusFunctionDatasource())
         ->setDescription(
           pht('Find revisions with particular statuses.')),
+      id(new PhabricatorSearchDateField())
+        ->setLabel(pht('Created After'))
+        ->setKey('createdStart')
+        ->setDescription(
+          pht('Find revisions created at or after a particular time.')),
+      id(new PhabricatorSearchDateField())
+        ->setLabel(pht('Created Before'))
+        ->setKey('createdEnd')
+        ->setDescription(
+          pht('Find revisions created at or before a particular time.')),
     );
   }
 
@@ -288,6 +304,79 @@ final class DifferentialRevisionSearchEngine
     }
 
     return $result;
+  }
+
+  protected function newExportFields() {
+    $fields = array(
+      id(new PhabricatorStringExportField())
+        ->setKey('monogram')
+        ->setLabel(pht('Monogram')),
+      id(new PhabricatorPHIDExportField())
+        ->setKey('authorPHID')
+        ->setLabel(pht('Author PHID')),
+      id(new PhabricatorStringExportField())
+        ->setKey('author')
+        ->setLabel(pht('Author')),
+      id(new PhabricatorStringExportField())
+        ->setKey('status')
+        ->setLabel(pht('Status')),
+      id(new PhabricatorStringExportField())
+        ->setKey('statusName')
+        ->setLabel(pht('Status Name')),
+      id(new PhabricatorURIExportField())
+        ->setKey('uri')
+        ->setLabel(pht('URI')),
+      id(new PhabricatorStringExportField())
+        ->setKey('title')
+        ->setLabel(pht('Title')),
+      id(new PhabricatorStringExportField())
+        ->setKey('summary')
+        ->setLabel(pht('Summary')),
+      id(new PhabricatorStringExportField())
+        ->setKey('testPlan')
+        ->setLabel(pht('Test Plan')),
+    );
+
+    return $fields;
+  }
+
+  protected function newExportData(array $revisions) {
+    $viewer = $this->requireViewer();
+
+    $phids = array();
+    foreach ($revisions as $revision) {
+      $phids[] = $revision->getAuthorPHID();
+    }
+    $handles = $viewer->loadHandles($phids);
+
+    $export = array();
+    foreach ($revisions as $revision) {
+
+      $author_phid = $revision->getAuthorPHID();
+      if ($author_phid) {
+        $author_name = $handles[$author_phid]->getName();
+      } else {
+        $author_name = null;
+      }
+
+      $status = $revision->getStatusObject();
+      $status_name = $status->getDisplayName();
+      $status_value = $status->getKey();
+
+      $export[] = array(
+        'monogram' => $revision->getMonogram(),
+        'authorPHID' => $author_phid,
+        'author' => $author_name,
+        'status' => $status_value,
+        'statusName' => $status_name,
+        'uri' => PhabricatorEnv::getProductionURI($revision->getURI()),
+        'title' => (string)$revision->getTitle(),
+        'summary' => (string)$revision->getSummary(),
+        'testPlan' => (string)$revision->getTestPlan(),
+      );
+    }
+
+    return $export;
   }
 
 }

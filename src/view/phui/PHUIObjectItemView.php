@@ -28,6 +28,7 @@ final class PHUIObjectItemView extends AphrontTagView {
   private $sideColumn;
   private $coverImage;
   private $description;
+  private $clickable;
 
   private $selectableName;
   private $selectableValue;
@@ -177,6 +178,15 @@ final class PHUIObjectItemView extends AphrontTagView {
     $this->isForbidden = $is_forbidden;
 
     return $this;
+  }
+
+  public function setClickable($clickable) {
+    $this->clickable = $clickable;
+    return $this;
+  }
+
+  public function getClickable() {
+    return $this->clickable;
   }
 
   public function setEpoch($epoch) {
@@ -332,6 +342,13 @@ final class PHUIObjectItemView extends AphrontTagView {
       $item_classes[] = 'phui-oi-with-image-icon';
     }
 
+    if ($this->getClickable()) {
+      Javelin::initBehavior('linked-container');
+
+      $item_classes[] = 'phui-oi-linked-container';
+      $sigils[] = 'linked-container';
+    }
+
     return array(
       'class' => $item_classes,
       'sigil' => $sigils,
@@ -443,15 +460,6 @@ final class PHUIObjectItemView extends AphrontTagView {
           ),
           $spec['label']);
 
-        if (isset($spec['attributes']['href'])) {
-          $icon_href = phutil_tag(
-            'a',
-            array('href' => $spec['attributes']['href']),
-            array($icon, $label));
-        } else {
-          $icon_href = array($icon, $label);
-        }
-
         $classes = array();
         $classes[] = 'phui-oi-icon';
         if (isset($spec['attributes']['class'])) {
@@ -463,7 +471,10 @@ final class PHUIObjectItemView extends AphrontTagView {
           array(
             'class' => implode(' ', $classes),
           ),
-          $icon_href);
+          array(
+            $icon,
+            $label,
+          ));
       }
 
       $icons[] = phutil_tag(
@@ -709,8 +720,9 @@ final class PHUIObjectItemView extends AphrontTagView {
     }
 
     /* Fixed width, right column container. */
+    $column3 = null;
     if ($this->sideColumn) {
-      $column2 = phutil_tag(
+      $column3 = phutil_tag(
         'div',
         array(
           'class' => 'phui-oi-col2 phui-oi-side-column',
@@ -731,6 +743,7 @@ final class PHUIObjectItemView extends AphrontTagView {
           $column0,
           $column1,
           $column2,
+          $column3,
         )));
 
     $box = phutil_tag(

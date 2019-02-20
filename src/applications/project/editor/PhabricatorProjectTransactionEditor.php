@@ -55,12 +55,12 @@ final class PhabricatorProjectTransactionEditor
         case PhabricatorProjectParentTransaction::TRANSACTIONTYPE:
         case PhabricatorProjectMilestoneTransaction::TRANSACTIONTYPE:
           if ($xaction->getNewValue() === null) {
-            continue;
+            continue 2;
           }
 
           if (!$parent_xaction) {
             $parent_xaction = $xaction;
-            continue;
+            continue 2;
           }
 
           $errors[] = new PhabricatorApplicationTransactionValidationError(
@@ -71,8 +71,7 @@ final class PhabricatorProjectTransactionEditor
               'project or milestone project. A project can not be both a '.
               'subproject and a milestone.'),
             $xaction);
-          break;
-          break;
+          break 2;
       }
     }
 
@@ -113,64 +112,6 @@ final class PhabricatorProjectTransactionEditor
     }
 
     return $errors;
-  }
-
-  protected function requireCapabilities(
-    PhabricatorLiskDAO $object,
-    PhabricatorApplicationTransaction $xaction) {
-
-    switch ($xaction->getTransactionType()) {
-      case PhabricatorProjectLockTransaction::TRANSACTIONTYPE:
-        PhabricatorPolicyFilter::requireCapability(
-          $this->requireActor(),
-          newv($this->getEditorApplicationClass(), array()),
-          ProjectCanLockProjectsCapability::CAPABILITY);
-        return;
-      case PhabricatorTransactions::TYPE_EDGE:
-        switch ($xaction->getMetadataValue('edge:type')) {
-          case PhabricatorProjectProjectHasMemberEdgeType::EDGECONST:
-            $old = $xaction->getOldValue();
-            $new = $xaction->getNewValue();
-
-            $add = array_keys(array_diff_key($new, $old));
-            $rem = array_keys(array_diff_key($old, $new));
-
-            $actor_phid = $this->requireActor()->getPHID();
-
-            $is_join = (($add === array($actor_phid)) && !$rem);
-            $is_leave = (($rem === array($actor_phid)) && !$add);
-
-            if ($is_join) {
-              // You need CAN_JOIN to join a project.
-              PhabricatorPolicyFilter::requireCapability(
-                $this->requireActor(),
-                $object,
-                PhabricatorPolicyCapability::CAN_JOIN);
-            } else if ($is_leave) {
-              // You usually don't need any capabilities to leave a project.
-              if ($object->getIsMembershipLocked()) {
-                // you must be able to edit though to leave locked projects
-                PhabricatorPolicyFilter::requireCapability(
-                  $this->requireActor(),
-                  $object,
-                  PhabricatorPolicyCapability::CAN_EDIT);
-              }
-            } else {
-              if (!$this->getIsNewObject()) {
-                // You need CAN_EDIT to change members other than yourself.
-                // (PHI193) Just skip this check if we're creating a project.
-                PhabricatorPolicyFilter::requireCapability(
-                  $this->requireActor(),
-                  $object,
-                  PhabricatorPolicyCapability::CAN_EDIT);
-              }
-            }
-            return;
-        }
-        break;
-    }
-
-    return parent::requireCapabilities($object, $xaction);
   }
 
   protected function willPublish(PhabricatorLiskDAO $object, array $xactions) {

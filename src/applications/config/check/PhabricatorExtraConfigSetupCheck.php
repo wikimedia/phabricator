@@ -84,8 +84,6 @@ final class PhabricatorExtraConfigSetupCheck extends PhabricatorSetupCheck {
         $issue->addPhabricatorConfig($key);
       }
     }
-
-    $this->executeManiphestFieldChecks();
   }
 
   /**
@@ -195,12 +193,15 @@ final class PhabricatorExtraConfigSetupCheck extends PhabricatorSetupCheck {
       'in global settings.');
 
     $dashboard_reason = pht(
-        'This option has been removed, you can use Dashboards to provide '.
-        'homepage customization. See T11533 for more details.');
+      'This option has been removed, you can use Dashboards to provide '.
+      'homepage customization. See T11533 for more details.');
 
     $elastic_reason = pht(
-        'Elasticsearch is now configured with "%s".',
-        'cluster.search');
+      'Elasticsearch is now configured with "%s".',
+      'cluster.search');
+
+    $mailers_reason = pht(
+      'Inbound and outbound mail is now configured with "cluster.mailers".');
 
     $ancient_config += array(
       'phid.external-loaders' =>
@@ -356,74 +357,46 @@ final class PhabricatorExtraConfigSetupCheck extends PhabricatorSetupCheck {
       'search.elastic.host' => $elastic_reason,
       'search.elastic.namespace' => $elastic_reason,
 
+      'metamta.mail-adapter' => $mailers_reason,
+      'amazon-ses.access-key' => $mailers_reason,
+      'amazon-ses.secret-key' => $mailers_reason,
+      'amazon-ses.endpoint' => $mailers_reason,
+      'mailgun.domain' => $mailers_reason,
+      'mailgun.api-key' => $mailers_reason,
+      'phpmailer.mailer' => $mailers_reason,
+      'phpmailer.smtp-host' => $mailers_reason,
+      'phpmailer.smtp-port' => $mailers_reason,
+      'phpmailer.smtp-protocol' => $mailers_reason,
+      'phpmailer.smtp-user' => $mailers_reason,
+      'phpmailer.smtp-password' => $mailers_reason,
+      'phpmailer.smtp-encoding' => $mailers_reason,
+      'sendgrid.api-user' => $mailers_reason,
+      'sendgrid.api-key' => $mailers_reason,
+
+      'celerity.resource-hash' => pht(
+        'This option generally did not prove useful. Resource hash keys '.
+        'are now managed automatically.'),
+      'celerity.enable-deflate' => pht(
+        'Resource deflation is now managed automatically.'),
+      'celerity.minify' => pht(
+        'Resource minification is now managed automatically.'),
+
+      'metamta.domain' => pht(
+        'Mail thread IDs are now generated automatically.'),
+      'metamta.placeholder-to-recipient' => pht(
+        'Placeholder recipients are now generated automatically.'),
+
+      'metamta.mail-key' => pht(
+        'Mail object address hash keys are now generated automatically.'),
+
+      'phabricator.csrf-key' => pht(
+        'CSRF HMAC keys are now managed automatically.'),
+
+      'metamta.insecure-auth-with-reply-to' => pht(
+        'Authenticating users based on "Reply-To" is no longer supported.'),
     );
 
     return $ancient_config;
-  }
-
-  private function executeManiphestFieldChecks() {
-    $maniphest_appclass = 'PhabricatorManiphestApplication';
-    if (!PhabricatorApplication::isClassInstalled($maniphest_appclass)) {
-      return;
-    }
-
-    $capabilities = array(
-      ManiphestEditAssignCapability::CAPABILITY,
-      ManiphestEditPoliciesCapability::CAPABILITY,
-      ManiphestEditPriorityCapability::CAPABILITY,
-      ManiphestEditProjectsCapability::CAPABILITY,
-      ManiphestEditStatusCapability::CAPABILITY,
-    );
-
-    // Check for any of these capabilities set to anything other than
-    // "All Users".
-
-    $any_set = false;
-    $app = new PhabricatorManiphestApplication();
-    foreach ($capabilities as $capability) {
-      $setting = $app->getPolicy($capability);
-      if ($setting != PhabricatorPolicies::POLICY_USER) {
-        $any_set = true;
-        break;
-      }
-    }
-
-    if (!$any_set) {
-      return;
-    }
-
-    $issue_summary = pht(
-      'Maniphest is currently configured with deprecated policy settings '.
-      'which will be removed in a future version of Phabricator.');
-
-
-    $message = pht(
-      'Some policy settings in Maniphest are now deprecated and will be '.
-      'removed in a future version of Phabricator. You are currently using '.
-      'at least one of these settings.'.
-      "\n\n".
-      'The deprecated settings are "Can Assign Tasks", '.
-      '"Can Edit Task Policies", "Can Prioritize Tasks", '.
-      '"Can Edit Task Projects", and "Can Edit Task Status". You can '.
-      'find these settings in Applications, or follow the link below.'.
-      "\n\n".
-      'You can find discussion of this change (including rationale and '.
-      'recommendations on how to configure similar features) in the upstream, '.
-      'at the link below.'.
-      "\n\n".
-      'To resolve this issue, set all of these policies to "All Users" after '.
-      'making any necessary form customization changes.');
-
-    $more_href = 'https://secure.phabricator.com/T10003';
-    $edit_href = '/applications/view/PhabricatorManiphestApplication/';
-
-    $issue = $this->newIssue('maniphest.T10003-per-field-policies')
-      ->setShortName(pht('Deprecated Policies'))
-      ->setName(pht('Deprecated Maniphest Field Policies'))
-      ->setSummary($issue_summary)
-      ->setMessage($message)
-      ->addLink($more_href, pht('Learn More: Upstream Discussion'))
-      ->addLink($edit_href, pht('Edit These Settings'));
   }
 
 }

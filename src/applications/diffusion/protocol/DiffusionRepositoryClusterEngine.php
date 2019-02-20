@@ -170,12 +170,13 @@ final class DiffusionRepositoryClusterEngine extends Phobject {
           pht(
             'Acquired read lock immediately.'));
       }
-    } catch (Exception $ex) {
+    } catch (PhutilLockException $ex) {
       throw new PhutilProxyException(
         pht(
           'Failed to acquire read lock after waiting %s second(s). You '.
-          'may be able to retry later.',
-          new PhutilNumber($lock_wait)),
+          'may be able to retry later. (%s)',
+          new PhutilNumber($lock_wait),
+          $ex->getHint()),
         $ex);
     }
 
@@ -205,9 +206,12 @@ final class DiffusionRepositoryClusterEngine extends Phobject {
             }
           }
 
-          $this->synchronizeWorkingCopyFromDevices($fetchable);
+          $this->synchronizeWorkingCopyFromDevices(
+            $fetchable,
+            $this_version,
+            $max_version);
         } else {
-          $this->synchornizeWorkingCopyFromRemote();
+          $this->synchronizeWorkingCopyFromRemote();
         }
 
         PhabricatorRepositoryWorkingCopyVersion::updateVersion(
@@ -349,12 +353,13 @@ final class DiffusionRepositoryClusterEngine extends Phobject {
           pht(
             'Acquired write lock immediately.'));
       }
-    } catch (Exception $ex) {
+    } catch (PhutilLockException $ex) {
       throw new PhutilProxyException(
         pht(
           'Failed to acquire write lock after waiting %s second(s). You '.
-          'may be able to retry later.',
-          new PhutilNumber($lock_wait)),
+          'may be able to retry later. (%s)',
+          new PhutilNumber($lock_wait),
+          $ex->getHint()),
         $ex);
     }
 
@@ -405,8 +410,8 @@ final class DiffusionRepositoryClusterEngine extends Phobject {
 
     $log = $this->logger;
     if ($log) {
-      $log->writeClusterEngineLogProperty('readWait', $read_wait);
       $log->writeClusterEngineLogProperty('writeWait', $write_wait);
+      $log->writeClusterEngineLogProperty('readWait', $read_wait);
     }
   }
 
@@ -607,7 +612,7 @@ final class DiffusionRepositoryClusterEngine extends Phobject {
   /**
    * @task internal
    */
-  private function synchornizeWorkingCopyFromRemote() {
+  private function synchronizeWorkingCopyFromRemote() {
     $repository = $this->getRepository();
     $device = AlmanacKeys::getLiveDevice();
 
@@ -651,7 +656,11 @@ final class DiffusionRepositoryClusterEngine extends Phobject {
   /**
    * @task internal
    */
-  private function synchronizeWorkingCopyFromDevices(array $device_phids) {
+  private function synchronizeWorkingCopyFromDevices(
+    array $device_phids,
+    $local_version,
+    $remote_version) {
+
     $repository = $this->getRepository();
 
     $service = $repository->loadAlmanacService();
@@ -686,10 +695,16 @@ final class DiffusionRepositoryClusterEngine extends Phobject {
           'fetchable.'));
     }
 
+    // If we can synchronize from multiple sources, choose one at random.
+    shuffle($fetchable);
+
     $caught = null;
     foreach ($fetchable as $binding) {
       try {
-        $this->synchronizeWorkingCopyFromBinding($binding);
+        $this->synchronizeWorkingCopyFromBinding(
+          $binding,
+          $local_version,
+          $remote_version);
         $caught = null;
         break;
       } catch (Exception $ex) {
@@ -706,14 +721,17 @@ final class DiffusionRepositoryClusterEngine extends Phobject {
   /**
    * @task internal
    */
-  private function synchronizeWorkingCopyFromBinding($binding) {
+  private function synchronizeWorkingCopyFromBinding(
+    AlmanacBinding $binding,
+    $local_version,
+    $remote_version) {
+
     $repository = $this->getRepository();
     $device = AlmanacKeys::getLiveDevice();
 
     $this->logLine(
       pht(
-        'Synchronizing this device ("%s") from cluster leader ("%s") before '.
-        'read.',
+        'Synchronizing this device ("%s") from cluster leader ("%s").',
         $device->getName(),
         $binding->getDevice()->getName()));
 
@@ -741,17 +759,57 @@ final class DiffusionRepositoryClusterEngine extends Phobject {
 
     $future->setCWD($local_path);
 
+    $log = PhabricatorRepositorySyncEvent::initializeNewEvent()
+      ->setRepositoryPHID($repository->getPHID())
+      ->setEpoch(PhabricatorTime::getNow())
+      ->setDevicePHID($device->getPHID())
+      ->setFromDevicePHID($binding->getDevice()->getPHID())
+      ->setDeviceVersion($local_version)
+      ->setFromDeviceVersion($remote_version);
+
+    $sync_start = microtime(true);
+
     try {
       $future->resolvex();
     } catch (Exception $ex) {
+      $log->setSyncWait(phutil_microseconds_since($sync_start));
+
+      if ($ex instanceof CommandException) {
+        if ($future->getWasKilledByTimeout()) {
+          $result_type = PhabricatorRepositorySyncEvent::RESULT_TIMEOUT;
+        } else {
+          $result_type = PhabricatorRepositorySyncEvent::RESULT_ERROR;
+        }
+
+       $log
+         ->setResultCode($ex->getError())
+         ->setResultType($result_type)
+         ->setProperty('stdout', $ex->getStdout())
+         ->setProperty('stderr', $ex->getStderr());
+      } else {
+        $log
+          ->setResultCode(1)
+          ->setResultType(PhabricatorRepositorySyncEvent::RESULT_EXCEPTION)
+          ->setProperty('message', $ex->getMessage());
+      }
+
+      $log->save();
+
       $this->logLine(
         pht(
           'Synchronization of "%s" from leader "%s" failed: %s',
           $device->getName(),
           $binding->getDevice()->getName(),
           $ex->getMessage()));
+
       throw $ex;
     }
+
+    $log
+      ->setSyncWait(phutil_microseconds_since($sync_start))
+      ->setResultCode(0)
+      ->setResultType(PhabricatorRepositorySyncEvent::RESULT_SYNC)
+      ->save();
   }
 
 

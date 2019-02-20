@@ -30,6 +30,7 @@ final class PHUITimelineEventView extends AphrontView {
   private $badges = array();
   private $pinboardItems = array();
   private $isSilent;
+  private $isMFA;
 
   public function setAuthorPHID($author_phid) {
     $this->authorPHID = $author_phid;
@@ -185,6 +186,15 @@ final class PHUITimelineEventView extends AphrontView {
 
   public function getIsSilent() {
     return $this->isSilent;
+  }
+
+  public function setIsMFA($is_mfa) {
+    $this->isMFA = $is_mfa;
+    return $this;
+  }
+
+  public function getIsMFA() {
+    return $this->isMFA;
   }
 
   public function setReallyMajorEvent($me) {
@@ -392,7 +402,7 @@ final class PHUITimelineEventView extends AphrontView {
     $wedge = phutil_tag(
       'div',
       array(
-        'class' => 'phui-timeline-wedge phui-timeline-border',
+        'class' => 'phui-timeline-wedge',
         'style' => (nonempty($image_uri)) ? '' : 'display: none;',
       ),
       '');
@@ -404,7 +414,7 @@ final class PHUITimelineEventView extends AphrontView {
         ($this->userHandle->getURI()) ? 'a' : 'div',
         array(
           'style' => 'background-image: url('.$image_uri.')',
-          'class' => 'phui-timeline-image',
+          'class' => 'phui-timeline-image visual-only',
           'href' => $this->userHandle->getURI(),
         ),
         '');
@@ -451,7 +461,7 @@ final class PHUITimelineEventView extends AphrontView {
     $content = phutil_tag(
       'div',
       array(
-        'class' => 'phui-timeline-group phui-timeline-border',
+        'class' => 'phui-timeline-group',
       ),
       $content);
 
@@ -589,6 +599,14 @@ final class PHUITimelineEventView extends AphrontView {
         $extra[] = id(new PHUIIconView())
           ->setIcon('fa-bell-slash', 'red')
           ->setTooltip(pht('Silent Edit'));
+      }
+
+      // If this edit was applied while the actor was in high-security mode,
+      // provide a hint that it was extra authentic.
+      if ($this->getIsMFA()) {
+        $extra[] = id(new PHUIIconView())
+          ->setIcon('fa-vcard', 'pink')
+          ->setTooltip(pht('MFA Authenticated'));
       }
     }
 

@@ -19,7 +19,8 @@ final class ManiphestTask extends ManiphestDAO
     PhabricatorFerretInterface,
     DoorkeeperBridgedObjectInterface,
     PhabricatorEditEngineSubtypeInterface,
-    PhabricatorEditEngineLockableInterface {
+    PhabricatorEditEngineLockableInterface,
+    PhabricatorEditEngineMFAInterface {
 
   const MARKUP_FIELD_DESCRIPTION = 'markup:desc';
 
@@ -452,19 +453,8 @@ final class ManiphestTask extends ManiphestDAO
     return new ManiphestTransactionEditor();
   }
 
-  public function getApplicationTransactionObject() {
-    return $this;
-  }
-
   public function getApplicationTransactionTemplate() {
     return new ManiphestTransaction();
-  }
-
-  public function willRenderTimeline(
-    PhabricatorApplicationTransactionView $timeline,
-    AphrontRequest $request) {
-
-    return $timeline;
   }
 
 
@@ -573,7 +563,7 @@ final class ManiphestTask extends ManiphestDAO
   public function newSubtypeObject() {
     $subtype_key = $this->getEditEngineSubtype();
     $subtype_map = $this->newEditEngineSubtypeMap();
-    $subtype_obj = idx($subtype_map, $subtype_key);
+    $subtype_obj =  $subtype_map->getSubtype($subtype_key);
     return $subtype_obj->setObject($this);
   }
 
@@ -629,6 +619,14 @@ final class ManiphestTask extends ManiphestDAO
 
   public function newFerretEngine() {
     return new ManiphestTaskFerretEngine();
+  }
+
+
+/* -(  PhabricatorEditEngineMFAInterface  )---------------------------------- */
+
+
+  public function newEditEngineMFAEngine() {
+    return new ManiphestTaskMFAEngine();
   }
 
 }

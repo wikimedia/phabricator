@@ -65,6 +65,16 @@ final class PhabricatorRepositoryIdentity
       $this->getIdentityNameEncoding());
   }
 
+  public function getIdentityEmailAddress() {
+    $address = new PhutilEmailAddress($this->getIdentityName());
+    return $address->getAddress();
+  }
+
+  public function getIdentityDisplayName() {
+    $address = new PhutilEmailAddress($this->getIdentityName());
+    return $address->getDisplayName();
+  }
+
   public function getIdentityShortName() {
     // TODO
     return $this->getIdentityName();
@@ -76,6 +86,14 @@ final class PhabricatorRepositoryIdentity
 
   public function hasEffectiveUser() {
     return ($this->currentEffectiveUserPHID != null);
+  }
+
+  public function getIdentityDisplayPHID() {
+    if ($this->hasEffectiveUser()) {
+      return $this->getCurrentEffectiveUserPHID();
+    } else {
+      return $this->getPHID();
+    }
   }
 
   public function save() {
@@ -116,19 +134,8 @@ final class PhabricatorRepositoryIdentity
     return new DiffusionRepositoryIdentityEditor();
   }
 
-  public function getApplicationTransactionObject() {
-    return $this;
-  }
-
   public function getApplicationTransactionTemplate() {
     return new PhabricatorRepositoryIdentityTransaction();
-  }
-
-  public function willRenderTimeline(
-    PhabricatorApplicationTransactionView $timeline,
-    AphrontRequest $request) {
-
-    return $timeline;
   }
 
 }

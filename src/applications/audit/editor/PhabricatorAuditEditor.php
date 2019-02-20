@@ -59,10 +59,6 @@ final class PhabricatorAuditEditor
 
     $this->oldAuditStatus = $object->getAuditStatus();
 
-    $object->loadAndAttachAuditAuthority(
-      $this->getActor(),
-      $this->getActingAsPHID());
-
     return parent::expandTransactions($object, $xactions);
   }
 
@@ -206,12 +202,10 @@ final class PhabricatorAuditEditor
       $object->writeImportStatusFlag($import_status_flag);
     }
 
-    $partial_status = PhabricatorAuditCommitStatusConstants::PARTIALLY_AUDITED;
-
     // If the commit has changed state after this edit, add an informational
     // transaction about the state change.
     if ($old_status != $new_status) {
-      if ($new_status == $partial_status) {
+      if ($object->isAuditStatusPartiallyAudited()) {
         // This state isn't interesting enough to get a transaction. The
         // best way we could lead the user forward is something like "This
         // commit still requires additional audits." but that's redundant and
@@ -257,35 +251,16 @@ final class PhabricatorAuditEditor
         case PhabricatorTransactions::TYPE_COMMENT:
           $this->didExpandInlineState = true;
 
-          $actor_phid = $this->getActingAsPHID();
-          $actor_is_author = ($object->getAuthorPHID() == $actor_phid);
-          if (!$actor_is_author) {
-            break;
+          $query_template = id(new DiffusionDiffInlineCommentQuery())
+            ->withCommitPHIDs(array($object->getPHID()));
+
+          $state_xaction = $this->newInlineStateTransaction(
+            $object,
+            $query_template);
+
+          if ($state_xaction) {
+            $xactions[] = $state_xaction;
           }
-
-          $state_map = PhabricatorTransactions::getInlineStateMap();
-
-          $inlines = id(new DiffusionDiffInlineCommentQuery())
-            ->setViewer($this->getActor())
-            ->withCommitPHIDs(array($object->getPHID()))
-            ->withFixedStates(array_keys($state_map))
-            ->execute();
-
-          if (!$inlines) {
-            break;
-          }
-
-          $old_value = mpull($inlines, 'getFixedState', 'getPHID');
-          $new_value = array();
-          foreach ($old_value as $key => $state) {
-            $new_value[$key] = $state_map[$state];
-          }
-
-          $xactions[] = id(new PhabricatorAuditTransaction())
-            ->setTransactionType(PhabricatorTransactions::TYPE_INLINESTATE)
-            ->setIgnoreOnNoEffect(true)
-            ->setOldValue($old_value)
-            ->setNewValue($new_value);
           break;
       }
     }
@@ -636,7 +611,7 @@ final class PhabricatorAuditEditor
       $commit->getCommitIdentifier());
 
     $template->addAttachment(
-      new PhabricatorMetaMTAAttachment(
+      new PhabricatorMailAttachment(
         $raw_patch,
         $commit_name.'.patch',
         'text/x-patch; charset='.$encoding));

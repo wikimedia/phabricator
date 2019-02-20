@@ -1,7 +1,7 @@
 <?php
 
 final class PhrictionDocumentTitleTransaction
-  extends PhrictionDocumentTransactionType {
+  extends PhrictionDocumentVersionTransaction {
 
   const TRANSACTIONTYPE = 'title';
 
@@ -14,10 +14,10 @@ final class PhrictionDocumentTitleTransaction
 
   public function applyInternalEffects($object, $value) {
     $object->setStatus(PhrictionDocumentStatus::STATUS_EXISTS);
-  }
 
-  public function applyExternalEffects($object, $value) {
-    $this->getEditor()->getNewContent()->setTitle($value);
+    $content = $this->getNewDocumentContent($object);
+
+    $content->setTitle($value);
   }
 
   public function getActionStrength() {
@@ -89,6 +89,29 @@ final class PhrictionDocumentTitleTransaction
     if ($this->isEmptyTextTransaction($title, $xactions)) {
       $errors[] = $this->newRequiredError(
         pht('Documents must have a title.'));
+    }
+
+    if ($this->isNewObject()) {
+      // No ancestral slugs is "/". No ancestry checks apply when creating the
+      // root document.
+      $ancestral_slugs = PhabricatorSlug::getAncestry($object->getSlug());
+      if ($ancestral_slugs) {
+        // You must be able to view and edit the parent document to create a new
+        // child.
+        $parent_document = id(new PhrictionDocumentQuery())
+          ->setViewer($this->getActor())
+          ->withSlugs(array(last($ancestral_slugs)))
+          ->requireCapabilities(
+            array(
+              PhabricatorPolicyCapability::CAN_VIEW,
+              PhabricatorPolicyCapability::CAN_EDIT,
+            ))
+          ->executeOne();
+        if (!$parent_document) {
+          $errors[] = $this->newInvalidError(
+            pht('You can not create a document which does not have a parent.'));
+        }
+      }
     }
 
     return $errors;

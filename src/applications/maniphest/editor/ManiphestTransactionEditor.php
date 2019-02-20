@@ -279,51 +279,6 @@ final class ManiphestTransactionEditor
       ->setTask($object);
   }
 
-  protected function requireCapabilities(
-    PhabricatorLiskDAO $object,
-    PhabricatorApplicationTransaction $xaction) {
-
-    parent::requireCapabilities($object, $xaction);
-
-    $app_capability_map = array(
-      ManiphestTaskPriorityTransaction::TRANSACTIONTYPE =>
-        ManiphestEditPriorityCapability::CAPABILITY,
-      ManiphestTaskStatusTransaction::TRANSACTIONTYPE =>
-        ManiphestEditStatusCapability::CAPABILITY,
-      ManiphestTaskOwnerTransaction::TRANSACTIONTYPE =>
-        ManiphestEditAssignCapability::CAPABILITY,
-      PhabricatorTransactions::TYPE_EDIT_POLICY =>
-        ManiphestEditPoliciesCapability::CAPABILITY,
-      PhabricatorTransactions::TYPE_VIEW_POLICY =>
-        ManiphestEditPoliciesCapability::CAPABILITY,
-    );
-
-
-    $transaction_type = $xaction->getTransactionType();
-
-    $app_capability = null;
-    if ($transaction_type == PhabricatorTransactions::TYPE_EDGE) {
-      switch ($xaction->getMetadataValue('edge:type')) {
-        case PhabricatorProjectObjectHasProjectEdgeType::EDGECONST:
-          $app_capability = ManiphestEditProjectsCapability::CAPABILITY;
-          break;
-      }
-    } else {
-      $app_capability = idx($app_capability_map, $transaction_type);
-    }
-
-    if ($app_capability) {
-      $app = id(new PhabricatorApplicationQuery())
-        ->setViewer($this->getActor())
-        ->withClasses(array('PhabricatorManiphestApplication'))
-        ->executeOne();
-      PhabricatorPolicyFilter::requireCapability(
-        $this->getActor(),
-        $app,
-        $app_capability);
-    }
-  }
-
   protected function adjustObjectForPolicyChecks(
     PhabricatorLiskDAO $object,
     array $xactions) {
@@ -335,7 +290,7 @@ final class ManiphestTransactionEditor
           $copy->setOwnerPHID($xaction->getNewValue());
           break;
         default:
-          continue;
+          break;
       }
     }
 
@@ -516,27 +471,28 @@ final class ManiphestTransactionEditor
     // be worth evaluating is to use "CASE". Another approach is to disable
     // strict mode for this query.
 
-    $extra_columns = array(
-      'phid' => '""',
-      'authorPHID' => '""',
-      'status' => '""',
-      'priority' => 0,
-      'title' => '""',
-      'description' => '""',
-      'dateCreated' => 0,
-      'dateModified' => 0,
-      'mailKey' => '""',
-      'viewPolicy' => '""',
-      'editPolicy' => '""',
-      'ownerOrdering' => '""',
-      'spacePHID' => '""',
-      'bridgedObjectPHID' => '""',
-      'properties' => '""',
-      'points' => 0,
-      'subtype' => '""',
-    );
+    $default_str = qsprintf($conn, '%s', '');
+    $default_int = qsprintf($conn, '%d', 0);
 
-    $defaults = implode(', ', $extra_columns);
+    $extra_columns = array(
+      'phid' => $default_str,
+      'authorPHID' => $default_str,
+      'status' => $default_str,
+      'priority' => $default_int,
+      'title' => $default_str,
+      'description' => $default_str,
+      'dateCreated' => $default_int,
+      'dateModified' => $default_int,
+      'mailKey' => $default_str,
+      'viewPolicy' => $default_str,
+      'editPolicy' => $default_str,
+      'ownerOrdering' => $default_str,
+      'spacePHID' => $default_str,
+      'bridgedObjectPHID' => $default_str,
+      'properties' => $default_str,
+      'points' => $default_int,
+      'subtype' => $default_str,
+    );
 
     $sql = array();
     $offset = 0;
@@ -565,9 +521,9 @@ final class ManiphestTransactionEditor
 
       $sql[] = qsprintf(
         $conn,
-        '(%d, %Q, %f)',
+        '(%d, %LQ, %f)',
         $id,
-        $defaults,
+        $extra_columns,
         $subpriority);
 
       $offset++;
@@ -576,10 +532,10 @@ final class ManiphestTransactionEditor
     foreach (PhabricatorLiskDAO::chunkSQL($sql) as $chunk) {
       queryfx(
         $conn,
-        'INSERT INTO %T (id, %Q, subpriority) VALUES %Q
+        'INSERT INTO %T (id, %LC, subpriority) VALUES %LQ
           ON DUPLICATE KEY UPDATE subpriority = VALUES(subpriority)',
         $task->getTableName(),
-        implode(', ', array_keys($extra_columns)),
+        array_keys($extra_columns),
         $chunk);
     }
 
@@ -693,7 +649,7 @@ final class ManiphestTransactionEditor
         $old_value = $object->getOwnerPHID();
         $new_value = $xaction->getNewValue();
         if ($old_value === $new_value) {
-          continue;
+          break;
         }
 
         // When a task is reassigned, move the old owner to the subscriber

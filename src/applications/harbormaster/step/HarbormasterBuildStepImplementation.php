@@ -193,7 +193,7 @@ abstract class HarbormasterBuildStepImplementation extends Phobject {
    * @return string String with variables replaced safely into it.
    */
   protected function mergeVariables($function, $pattern, array $variables) {
-    $regexp = '@\\$\\{(?P<name>[a-z\\./-]+)\\}@';
+    $regexp = '@\\$\\{(?P<name>[a-z\\./_-]+)\\}@';
 
     $matches = null;
     preg_match_all($regexp, $pattern, $matches);
@@ -254,12 +254,32 @@ abstract class HarbormasterBuildStepImplementation extends Phobject {
     HarbormasterBuildTarget $target,
     array $futures) {
 
+    $did_close = false;
+    $wait_start = PhabricatorTime::getNow();
+
     $futures = new FutureIterator($futures);
     foreach ($futures->setUpdateInterval(5) as $key => $future) {
-      if ($future === null) {
-        $build->reload();
-        if ($this->shouldAbort($build, $target)) {
-          throw new HarbormasterBuildAbortedException();
+      if ($future !== null) {
+        continue;
+      }
+
+      $build->reload();
+      if ($this->shouldAbort($build, $target)) {
+        throw new HarbormasterBuildAbortedException();
+      }
+
+      // See PHI916. If we're waiting on a remote system for a while, clean
+      // up database connections to reduce the cost of having a large number
+      // of processes babysitting an `ssh ... ./run-huge-build.sh` process on
+      // a build host.
+      if (!$did_close) {
+        $now = PhabricatorTime::getNow();
+        $elapsed = ($now - $wait_start);
+        $idle_limit = 5;
+
+        if ($elapsed >= $idle_limit) {
+          LiskDAO::closeIdleConnections();
+          $did_close = true;
         }
       }
     }

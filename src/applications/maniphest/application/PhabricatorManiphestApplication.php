@@ -52,6 +52,7 @@ final class PhabricatorManiphestApplication extends PhabricatorApplication {
         'task/' => array(
           $this->getEditRoutePattern('edit/')
             => 'ManiphestTaskEditController',
+          'subtask/(?P<id>[1-9]\d*)/' => 'ManiphestTaskSubtaskController',
         ),
         'subpriority/' => 'ManiphestSubpriorityController',
       ),
@@ -85,11 +86,6 @@ final class PhabricatorManiphestApplication extends PhabricatorApplication {
         'template' => ManiphestTaskPHIDType::TYPECONST,
         'capability' => PhabricatorPolicyCapability::CAN_EDIT,
       ),
-      ManiphestEditStatusCapability::CAPABILITY => array(),
-      ManiphestEditAssignCapability::CAPABILITY => array(),
-      ManiphestEditPoliciesCapability::CAPABILITY => array(),
-      ManiphestEditPriorityCapability::CAPABILITY => array(),
-      ManiphestEditProjectsCapability::CAPABILITY => array(),
       ManiphestBulkEditCapability::CAPABILITY => array(),
     );
   }

@@ -73,6 +73,13 @@ final class PhabricatorSavedQuery extends PhabricatorSearchDAO
   public function getViewer() {
     return $this->viewer;
   }
+  
+  public function newCopy() {
+    return id(new self())
+      ->setParameters($this->getParameters())
+      ->setQueryKey(null)
+      ->setEngineClassName($this->getEngineClassName());
+  }
 
 
 /* -(  PhabricatorPolicyInterface  )----------------------------------------- */

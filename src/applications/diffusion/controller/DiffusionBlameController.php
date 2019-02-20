@@ -24,6 +24,10 @@ final class DiffusionBlameController extends DiffusionController {
         ->setViewer($viewer)
         ->withRepository($repository)
         ->withIdentifiers($identifiers)
+        ->needIdentities(true)
+        // See PHI1014. If identities haven't been built yet, we may need to
+        // fall back to raw commit data.
+        ->needCommitData(true)
         ->execute();
       $commits = mpull($commits, null, 'getCommitIdentifier');
     } else {
@@ -68,10 +72,7 @@ final class DiffusionBlameController extends DiffusionController {
 
     $handle_phids = array();
     foreach ($commits as $commit) {
-      $author_phid = $commit->getAuthorPHID();
-      if ($author_phid) {
-        $handle_phids[] = $author_phid;
-      }
+      $handle_phids[] = $commit->getAuthorDisplayPHID();
     }
 
     foreach ($revisions as $revision) {
@@ -117,11 +118,7 @@ final class DiffusionBlameController extends DiffusionController {
       $author_phid = null;
 
       if ($commit) {
-        $author_phid = $commit->getAuthorPHID();
-      }
-
-      if (!$author_phid && $revision) {
-        $author_phid = $revision->getAuthorPHID();
+        $author_phid = $commit->getAuthorDisplayPHID();
       }
 
       if (!$author_phid) {
@@ -139,6 +136,7 @@ final class DiffusionBlameController extends DiffusionController {
         $author_meta = array(
           'tip' => $handles[$author_phid]->getName(),
           'align' => 'E',
+          'size'  => 'auto',
         );
       }
 
