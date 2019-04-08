@@ -257,12 +257,19 @@ final class PhabricatorCalendarEventSearchEngine
     // the project named #events so we need to get the PHID for that project
     // and add it to the query. See https://phabricator.wikimedia.org/T157488
       $project_query = new PhabricatorProjectQuery();
-      $project = $project_query->setViewer(PhabricatorUser::getOmnipotentUser())
-                     ->withNames(array('events'))
-                     ->needMembers(false)
-                     ->executeOne();
-      if ($project) {
-        $query->setParameter('projectPHIDs', array($project->getPHID()));
+      $projects = $project_query->setViewer(PhabricatorUser::getOmnipotentUser())
+        ->withNames(array('events'))
+        ->withIcons(array('timeline'))
+        ->needMembers(false)
+        ->execute();
+
+      if ($projects) {
+        $projectPhids = array();
+        foreach($projects as $project)
+        {
+          $projectPhids[] = $project->getPHID();
+        }
+        $query->setParameter('projectPHIDs', $projectPhids);
       }
     }
 
