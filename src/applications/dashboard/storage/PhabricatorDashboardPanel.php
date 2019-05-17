@@ -8,10 +8,11 @@ final class PhabricatorDashboardPanel
   implements
     PhabricatorApplicationTransactionInterface,
     PhabricatorPolicyInterface,
-    PhabricatorCustomFieldInterface,
     PhabricatorFlaggableInterface,
     PhabricatorDestructibleInterface,
-    PhabricatorNgramsInterface {
+    PhabricatorFulltextInterface,
+    PhabricatorFerretInterface,
+    PhabricatorDashboardPanelContainerInterface {
 
   protected $name;
   protected $panelType;
@@ -20,8 +21,6 @@ final class PhabricatorDashboardPanel
   protected $authorPHID;
   protected $isArchived = 0;
   protected $properties = array();
-
-  private $customFields = self::ATTACHABLE;
 
   public static function initializeNewPanel(PhabricatorUser $actor) {
     return id(new PhabricatorDashboardPanel())
@@ -46,9 +45,8 @@ final class PhabricatorDashboardPanel
     ) + parent::getConfiguration();
   }
 
-  public function generatePHID() {
-    return PhabricatorPHID::generateNewPHID(
-      PhabricatorDashboardPanelPHIDType::TYPECONST);
+  public function getPHIDType() {
+    return PhabricatorDashboardPanelPHIDType::TYPECONST;
   }
 
   public function getProperty($key, $default = null) {
@@ -105,6 +103,19 @@ final class PhabricatorDashboardPanel
     return $impl;
   }
 
+  public function getEditEngineFields() {
+    return $this->requireImplementation()->getEditEngineFields($this);
+  }
+
+  public function newHeaderEditActions(
+    PhabricatorUser $viewer,
+    $context_phid) {
+    return $this->requireImplementation()->newHeaderEditActions(
+      $this,
+      $viewer,
+      $context_phid);
+  }
+
 
 /* -(  PhabricatorApplicationTransactionInterface  )------------------------- */
 
@@ -142,27 +153,6 @@ final class PhabricatorDashboardPanel
   }
 
 
-/* -(  PhabricatorCustomFieldInterface  )------------------------------------ */
-
-
-  public function getCustomFieldSpecificationForRole($role) {
-    return array();
-  }
-
-  public function getCustomFieldBaseClass() {
-    return 'PhabricatorDashboardPanelCustomField';
-  }
-
-  public function getCustomFields() {
-    return $this->assertAttached($this->customFields);
-  }
-
-  public function attachCustomFields(PhabricatorCustomFieldAttachment $fields) {
-    $this->customFields = $fields;
-    return $this;
-  }
-
-
 /* -(  PhabricatorDestructibleInterface  )----------------------------------- */
 
 
@@ -174,15 +164,22 @@ final class PhabricatorDashboardPanel
     $this->saveTransaction();
   }
 
+/* -(  PhabricatorDashboardPanelContainerInterface  )------------------------ */
 
-/* -(  PhabricatorNgramInterface  )------------------------------------------ */
+  public function getDashboardPanelContainerPanelPHIDs() {
+    return $this->requireImplementation()->getSubpanelPHIDs($this);
+  }
 
+/* -(  PhabricatorFulltextInterface  )--------------------------------------- */
 
-  public function newNgrams() {
-    return array(
-      id(new PhabricatorDashboardPanelNgrams())
-        ->setValue($this->getName()),
-    );
+  public function newFulltextEngine() {
+    return new PhabricatorDashboardPanelFulltextEngine();
+  }
+
+/* -(  PhabricatorFerretInterface  )----------------------------------------- */
+
+  public function newFerretEngine() {
+    return new PhabricatorDashboardPanelFerretEngine();
   }
 
 }

@@ -47,11 +47,13 @@ final class PhabricatorProjectColumnDetailController
     $properties = $this->buildPropertyView($column);
 
     $crumbs = $this->buildApplicationCrumbs();
-    $crumbs->addTextCrumb(pht('Workboard'), "/project/board/{$project_id}/");
+    $crumbs->addTextCrumb(pht('Workboard'), $project->getWorkboardURI());
     $crumbs->addTextCrumb(pht('Column: %s', $title));
     $crumbs->setBorder(true);
 
-    $nav = $this->getProfileMenu();
+    $nav = $this->newNavigation(
+      $project,
+      PhabricatorProject::ITEM_WORKBOARD);
     require_celerity_resource('project-view-css');
 
     $view = id(new PHUITwoColumnView())

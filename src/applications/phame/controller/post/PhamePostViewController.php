@@ -24,7 +24,7 @@ final class PhamePostViewController
 
     $hero = $this->buildPhamePostHeader($post);
 
-    if (!$is_external) {
+    if (!$is_external && $viewer->isLoggedIn()) {
       $actions = $this->renderActions($post);
       $header->setPolicyObject($post);
       $header->setActionList($actions);
@@ -136,7 +136,7 @@ final class PhamePostViewController
       ->withTransactionTypes(array(PhabricatorTransactions::TYPE_COMMENT)));
     $timeline->setQuoteRef($monogram);
 
-    if ($is_external) {
+    if ($is_external || !$viewer->isLoggedIn()) {
       $add_comment = null;
     } else {
       $add_comment = $this->buildCommentForm($post, $timeline);
@@ -304,6 +304,15 @@ final class PhamePostViewController
   private function loadAdjacentPosts(PhamePost $post) {
     $viewer = $this->getViewer();
 
+    $pager = id(new AphrontCursorPagerView())
+      ->setPageSize(1);
+
+    $prev_pager = id(clone $pager)
+      ->setAfterID($post->getID());
+
+    $next_pager = id(clone $pager)
+      ->setBeforeID($post->getID());
+
     $query = id(new PhamePostQuery())
       ->setViewer($viewer)
       ->withVisibility(array(PhameConstants::VISIBILITY_PUBLISHED))
@@ -311,12 +320,10 @@ final class PhamePostViewController
       ->setLimit(1);
 
     $prev = id(clone $query)
-      ->setAfterID($post->getID())
-      ->execute();
+      ->executeWithCursorPager($prev_pager);
 
     $next = id(clone $query)
-      ->setBeforeID($post->getID())
-      ->execute();
+      ->executeWithCursorPager($next_pager);
 
     return array(head($prev), head($next));
   }

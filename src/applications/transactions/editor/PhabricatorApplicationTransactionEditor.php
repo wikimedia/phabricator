@@ -72,7 +72,7 @@ abstract class PhabricatorApplicationTransactionEditor
   private $mailShouldSend = false;
   private $modularTypes;
   private $silent;
-  private $mustEncrypt;
+  private $mustEncrypt = array();
   private $stampTemplates = array();
   private $mailStamps = array();
   private $oldTo = array();
@@ -89,6 +89,11 @@ abstract class PhabricatorApplicationTransactionEditor
   private $request;
   private $cancelURI;
   private $extensions;
+
+  private $parentEditor;
+  private $subEditors = array();
+  private $publishableObject;
+  private $publishableTransactions;
 
   const STORAGE_ENCODING_BINARY = 'binary';
 
@@ -972,91 +977,20 @@ abstract class PhabricatorApplicationTransactionEditor
     PhabricatorLiskDAO $object,
     array $xactions) {
 
-    $this->object = $object;
-    $this->xactions = $xactions;
-    $this->isNewObject = ($object->getPHID() === null);
-
-    $this->validateEditParameters($object, $xactions);
-    $xactions = $this->newMFATransactions($object, $xactions);
-
-    $actor = $this->requireActor();
-
-    // NOTE: Some transaction expansion requires that the edited object be
-    // attached.
-    foreach ($xactions as $xaction) {
-      $xaction->attachObject($object);
-      $xaction->attachViewer($actor);
-    }
-
-    $xactions = $this->expandTransactions($object, $xactions);
-    $xactions = $this->expandSupportTransactions($object, $xactions);
-    $xactions = $this->combineTransactions($xactions);
-
-    foreach ($xactions as $xaction) {
-      $xaction = $this->populateTransaction($object, $xaction);
-    }
+    $is_new = ($object->getID() === null);
+    $this->isNewObject = $is_new;
 
     $is_preview = $this->getIsPreview();
     $read_locking = false;
     $transaction_open = false;
 
-    if (!$is_preview) {
-      $errors = array();
-      $type_map = mgroup($xactions, 'getTransactionType');
-      foreach ($this->getTransactionTypes() as $type) {
-        $type_xactions = idx($type_map, $type, array());
-        $errors[] = $this->validateTransaction($object, $type, $type_xactions);
-      }
-
-      $errors[] = $this->validateAllTransactions($object, $xactions);
-      $errors[] = $this->validateTransactionsWithExtensions($object, $xactions);
-      $errors = array_mergev($errors);
-
-      $continue_on_missing = $this->getContinueOnMissingFields();
-      foreach ($errors as $key => $error) {
-        if ($continue_on_missing && $error->getIsMissingFieldError()) {
-          unset($errors[$key]);
-        }
-      }
-
-      if ($errors) {
-        throw new PhabricatorApplicationTransactionValidationException($errors);
-      }
-
-      if ($this->raiseWarnings) {
-        $warnings = array();
-        foreach ($xactions as $xaction) {
-          if ($this->hasWarnings($object, $xaction)) {
-            $warnings[] = $xaction;
-          }
-        }
-        if ($warnings) {
-          throw new PhabricatorApplicationTransactionWarningException(
-            $warnings);
-        }
-      }
-    }
-
-    foreach ($xactions as $xaction) {
-      $this->adjustTransactionValues($object, $xaction);
-    }
-
-    // Now that we've merged and combined transactions, check for required
-    // capabilities. Note that we're doing this before filtering
-    // transactions: if you try to apply an edit which you do not have
-    // permission to apply, we want to give you a permissions error even
-    // if the edit would have no effect.
-    $this->applyCapabilityChecks($object, $xactions);
-
-    $xactions = $this->filterTransactions($object, $xactions);
+    // If we're attempting to apply transactions, lock and reload the object
+    // before we go anywhere. If we don't do this at the very beginning, we
+    // may be looking at an older version of the object when we populate and
+    // filter the transactions. See PHI1165 for an example.
 
     if (!$is_preview) {
-      $this->hasRequiredMFA = true;
-      if ($this->getShouldRequireMFA()) {
-        $this->requireMFA($object, $xactions);
-      }
-
-      if ($object->getID()) {
+      if (!$is_new) {
         $this->buildOldRecipientLists($object, $xactions);
 
         $object->openTransaction();
@@ -1067,16 +1001,102 @@ abstract class PhabricatorApplicationTransactionEditor
 
         $object->reload();
       }
-
-      if ($this->shouldApplyInitialEffects($object, $xactions)) {
-        if (!$transaction_open) {
-          $object->openTransaction();
-          $transaction_open = true;
-        }
-      }
     }
 
     try {
+      $this->object = $object;
+      $this->xactions = $xactions;
+
+      $this->validateEditParameters($object, $xactions);
+      $xactions = $this->newMFATransactions($object, $xactions);
+
+      $actor = $this->requireActor();
+
+      // NOTE: Some transaction expansion requires that the edited object be
+      // attached.
+      foreach ($xactions as $xaction) {
+        $xaction->attachObject($object);
+        $xaction->attachViewer($actor);
+      }
+
+      $xactions = $this->expandTransactions($object, $xactions);
+      $xactions = $this->expandSupportTransactions($object, $xactions);
+      $xactions = $this->combineTransactions($xactions);
+
+      foreach ($xactions as $xaction) {
+        $xaction = $this->populateTransaction($object, $xaction);
+      }
+
+      if (!$is_preview) {
+        $errors = array();
+        $type_map = mgroup($xactions, 'getTransactionType');
+        foreach ($this->getTransactionTypes() as $type) {
+          $type_xactions = idx($type_map, $type, array());
+          $errors[] = $this->validateTransaction(
+            $object,
+            $type,
+            $type_xactions);
+        }
+
+        $errors[] = $this->validateAllTransactions($object, $xactions);
+        $errors[] = $this->validateTransactionsWithExtensions(
+          $object,
+          $xactions);
+        $errors = array_mergev($errors);
+
+        $continue_on_missing = $this->getContinueOnMissingFields();
+        foreach ($errors as $key => $error) {
+          if ($continue_on_missing && $error->getIsMissingFieldError()) {
+            unset($errors[$key]);
+          }
+        }
+
+        if ($errors) {
+          throw new PhabricatorApplicationTransactionValidationException(
+            $errors);
+        }
+
+        if ($this->raiseWarnings) {
+          $warnings = array();
+          foreach ($xactions as $xaction) {
+            if ($this->hasWarnings($object, $xaction)) {
+              $warnings[] = $xaction;
+            }
+          }
+          if ($warnings) {
+            throw new PhabricatorApplicationTransactionWarningException(
+              $warnings);
+          }
+        }
+      }
+
+      foreach ($xactions as $xaction) {
+        $this->adjustTransactionValues($object, $xaction);
+      }
+
+      // Now that we've merged and combined transactions, check for required
+      // capabilities. Note that we're doing this before filtering
+      // transactions: if you try to apply an edit which you do not have
+      // permission to apply, we want to give you a permissions error even
+      // if the edit would have no effect.
+      $this->applyCapabilityChecks($object, $xactions);
+
+      $xactions = $this->filterTransactions($object, $xactions);
+
+      if (!$is_preview) {
+        $this->hasRequiredMFA = true;
+        if ($this->getShouldRequireMFA()) {
+          $this->requireMFA($object, $xactions);
+        }
+
+        if ($this->shouldApplyInitialEffects($object, $xactions)) {
+          if (!$transaction_open) {
+            $object->openTransaction();
+            $transaction_open = true;
+          }
+        }
+      }
+
       if ($this->shouldApplyInitialEffects($object, $xactions)) {
         $this->applyInitialEffects($object, $xactions);
       }
@@ -1108,7 +1128,8 @@ abstract class PhabricatorApplicationTransactionEditor
       $comment_editor = id(new PhabricatorApplicationTransactionCommentEditor())
         ->setActor($actor)
         ->setActingAsPHID($this->getActingAsPHID())
-        ->setContentSource($this->getContentSource());
+        ->setContentSource($this->getContentSource())
+        ->setIsNewComment(true);
 
       if (!$transaction_open) {
         $object->openTransaction();
@@ -1143,7 +1164,10 @@ abstract class PhabricatorApplicationTransactionEditor
 
       foreach ($xactions as $xaction) {
         if ($was_locked) {
-          $xaction->setIsLockOverrideTransaction(true);
+          $is_override = $this->isLockOverrideTransaction($xaction);
+          if ($is_override) {
+            $xaction->setIsLockOverrideTransaction(true);
+          }
         }
 
         $xaction->setObjectPHID($object->getPHID());
@@ -1272,10 +1296,9 @@ abstract class PhabricatorApplicationTransactionEditor
         $herald_source = PhabricatorContentSource::newForSource(
           PhabricatorHeraldContentSource::SOURCECONST);
 
-        $herald_editor = newv(get_class($this), array())
+        $herald_editor = $this->newEditorCopy()
           ->setContinueOnNoEffect(true)
           ->setContinueOnMissingFields(true)
-          ->setParentMessageID($this->getParentMessageID())
           ->setIsHeraldEditor(true)
           ->setActor($herald_actor)
           ->setActingAsPHID($herald_phid)
@@ -1329,6 +1352,38 @@ abstract class PhabricatorApplicationTransactionEditor
         $object->getPHID());
     }
     $this->heraldHeader = $herald_header;
+
+    // See PHI1134. If we're a subeditor, we don't publish information about
+    // the edit yet. Our parent editor still needs to finish applying
+    // transactions and execute Herald, which may change the information we
+    // publish.
+
+    // For example, Herald actions may change the parent object's title or
+    // visibility, or Herald may apply rules like "Must Encrypt" that affect
+    // email.
+
+    // Once the parent finishes work, it will queue its own publish step and
+    // then queue publish steps for its children.
+
+    $this->publishableObject = $object;
+    $this->publishableTransactions = $xactions;
+    if (!$this->parentEditor) {
+      $this->queuePublishing();
+    }
+
+    return $xactions;
+  }
+
+  final private function queuePublishing() {
+    $object = $this->publishableObject;
+    $xactions = $this->publishableTransactions;
+
+    if (!$object) {
+      throw new Exception(
+        pht(
+          'Editor method "queuePublishing()" was called, but no publishable '.
+          'object is present. This Editor is not ready to publish.'));
+    }
 
     // We're going to compute some of the data we'll use to publish these
     // transactions here, before queueing a worker.
@@ -1392,9 +1447,11 @@ abstract class PhabricatorApplicationTransactionEditor
         'priority' => PhabricatorWorker::PRIORITY_ALERTS,
       ));
 
-    $this->flushTransactionQueue($object);
+    foreach ($this->subEditors as $sub_editor) {
+      $sub_editor->queuePublishing();
+    }
 
-    return $xactions;
+    $this->flushTransactionQueue($object);
   }
 
   protected function didCatchDuplicateKeyException(
@@ -3818,6 +3875,11 @@ abstract class PhabricatorApplicationTransactionEditor
 
     $this->mustEncrypt = $adapter->getMustEncryptReasons();
 
+    // See PHI1134. Propagate "Must Encrypt" state to sub-editors.
+    foreach ($this->subEditors as $sub_editor) {
+      $sub_editor->mustEncrypt = $this->mustEncrypt;
+    }
+
     $apply_xactions = $this->didApplyHeraldRules($object, $adapter, $xscript);
     assert_instances_of($apply_xactions, 'PhabricatorApplicationTransaction');
 
@@ -4034,15 +4096,10 @@ abstract class PhabricatorApplicationTransactionEditor
         ->setOldValue($old_phids)
         ->setNewValue($new_phids);
 
-      $editor
+      $editor = $this->newSubEditor($editor)
         ->setContinueOnNoEffect(true)
         ->setContinueOnMissingFields(true)
-        ->setParentMessageID($this->getParentMessageID())
-        ->setIsInverseEdgeEditor(true)
-        ->setIsSilent($this->getIsSilent())
-        ->setActor($this->requireActor())
-        ->setActingAsPHID($this->getActingAsPHID())
-        ->setContentSource($this->getContentSource());
+        ->setIsInverseEdgeEditor(true);
 
       $editor->applyTransactions($node, array($template));
     }
@@ -4551,22 +4608,40 @@ abstract class PhabricatorApplicationTransactionEditor
     $xactions = $this->transactionQueue;
     $this->transactionQueue = array();
 
-    $editor = $this->newQueueEditor();
+    $editor = $this->newEditorCopy();
 
     return $editor->applyTransactions($object, $xactions);
   }
 
-  private function newQueueEditor() {
-    $editor = id(newv(get_class($this), array()))
+  final protected function newSubEditor(
+    PhabricatorApplicationTransactionEditor $template = null) {
+    $editor = $this->newEditorCopy($template);
+
+    $editor->parentEditor = $this;
+    $this->subEditors[] = $editor;
+
+    return $editor;
+  }
+
+  private function newEditorCopy(
+    PhabricatorApplicationTransactionEditor $template = null) {
+    if ($template === null) {
+      $template = newv(get_class($this), array());
+    }
+
+    $editor = id(clone $template)
       ->setActor($this->getActor())
       ->setContentSource($this->getContentSource())
       ->setContinueOnNoEffect($this->getContinueOnNoEffect())
       ->setContinueOnMissingFields($this->getContinueOnMissingFields())
+      ->setParentMessageID($this->getParentMessageID())
       ->setIsSilent($this->getIsSilent());
 
     if ($this->actingAsPHID !== null) {
       $editor->setActingAsPHID($this->actingAsPHID);
     }
+
+    $editor->mustEncrypt = $this->mustEncrypt;
 
     return $editor;
   }
@@ -5130,6 +5205,55 @@ abstract class PhabricatorApplicationTransactionEditor
     }
 
     return $xaction->getBodyForMail();
+  }
+
+  private function isLockOverrideTransaction(
+    PhabricatorApplicationTransaction $xaction) {
+
+    // See PHI1209. When an object is locked, certain types of transactions
+    // can still be applied without requiring a policy check, like subscribing
+    // or unsubscribing. We don't want these transactions to show the "Lock
+    // Override" icon in the transaction timeline.
+
+    // We could test if a transaction did no direct policy checks, but it may
+    // have done additional policy checks during validation, so this is not a
+    // reliable test (and could cause false negatives, where edits which did
+    // override a lock are not marked properly).
+
+    // For now, do this in a narrow way and just check against a hard-coded
+    // list of non-override transaction situations. Some day, this should
+    // likely be modularized.
+
+
+    // Inverse edge edits don't interact with locks.
+    if ($this->getIsInverseEdgeEditor()) {
+      return false;
+    }
+
+    // For now, all edits other than subscribes always override locks.
+    $type = $xaction->getTransactionType();
+    if ($type !== PhabricatorTransactions::TYPE_SUBSCRIBERS) {
+      return true;
+    }
+
+    // Subscribes override locks if they affect any users other than the
+    // acting user.
+
+    $acting_phid = $this->getActingAsPHID();
+
+    $old = array_fuse($xaction->getOldValue());
+    $new = array_fuse($xaction->getNewValue());
+    $add = array_diff_key($new, $old);
+    $rem = array_diff_key($old, $new);
+
+    $all = $add + $rem;
+    foreach ($all as $phid) {
+      if ($phid !== $acting_phid) {
+        return true;
+      }
+    }
+
+    return false;
   }
 
 

@@ -64,15 +64,16 @@ final class PhabricatorPeopleProfileViewController
           $calendar,
         ));
 
-    $nav = $this->getProfileMenu();
-    $nav->selectFilter(PhabricatorPeopleProfileMenuEngine::ITEM_PROFILE);
+    $navigation = $this->newNavigation(
+      $user,
+      PhabricatorPeopleProfileMenuEngine::ITEM_PROFILE);
 
     $crumbs = $this->buildApplicationCrumbs();
     $crumbs->setBorder(true);
 
     return $this->newPage()
       ->setTitle($user->getUsername())
-      ->setNavigation($nav)
+      ->setNavigation($navigation)
       ->setCrumbs($crumbs)
       ->setPageObjectPHIDs(
         array(
@@ -174,6 +175,12 @@ final class PhabricatorPeopleProfileViewController
     $class = 'PhabricatorCalendarApplication';
 
     if (!PhabricatorApplication::isClassInstalledForViewer($class, $viewer)) {
+      return null;
+    }
+
+    // Don't show calendar information for disabled users, since it's probably
+    // not useful or accurate and may be misleading.
+    if ($user->getIsDisabled()) {
       return null;
     }
 

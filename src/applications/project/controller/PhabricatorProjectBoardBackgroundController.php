@@ -52,10 +52,12 @@ final class PhabricatorProjectBoardBackgroundController
         ->setURI($view_uri);
     }
 
-    $nav = $this->getProfileMenu();
+    $nav = $this->newNavigation(
+      $board,
+      PhabricatorProject::ITEM_WORKBOARD);
 
     $crumbs = id($this->buildApplicationCrumbs())
-      ->addTextCrumb(pht('Workboard'), "/project/board/{$board_id}/")
+      ->addTextCrumb(pht('Workboard'), $board->getWorkboardURI())
       ->addTextCrumb(pht('Manage'), $manage_uri)
       ->addTextCrumb(pht('Background Color'));
 
