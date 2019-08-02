@@ -25,6 +25,9 @@ final class PhabricatorEditEngineSubtypeTransaction
   }
 
   public function validateTransactions($object, array $xactions) {
+    if (empty($xactions)) {
+      return array();
+    }
     $map = $object->getEngine()
       ->setViewer($this->getActor())
       ->newSubtypeMap();
