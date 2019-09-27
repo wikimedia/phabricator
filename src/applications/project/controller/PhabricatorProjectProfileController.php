@@ -53,7 +53,7 @@ final class PhabricatorProjectProfileController
 
     $subtype = $project->newSubtypeObject();
     if ($subtype && $subtype->hasTagView()) {
-      $subtype_tag = $subtype->newTagView();
+      $subtype_tag = $subtype->newTagView($this->getViewer());
       $header->addTag($subtype_tag);
     }
 
