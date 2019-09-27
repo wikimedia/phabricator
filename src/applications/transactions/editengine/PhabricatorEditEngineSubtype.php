@@ -16,13 +16,14 @@ class PhabricatorEditEngineSubtype
   private $childSubtypes = array();
   private $childIdentifiers = array();
   private $fieldConfiguration = array();
-  
+  private $mutations;
+
   private $object;
-  
+
   public function getObject() {
     return $this->object;
   }
-  
+
   public function setObject($object) {
     $this->object = $object;
     return $this;
@@ -89,6 +90,15 @@ class PhabricatorEditEngineSubtype
 
   public function getChildFormIdentifiers() {
     return $this->childIdentifiers;
+  }
+
+  public function setMutations($mutations) {
+    $this->mutations = $mutations;
+    return $this;
+  }
+
+  public function getMutations() {
+    return $this->mutations;
   }
 
   public function hasTagView() {
@@ -165,6 +175,7 @@ class PhabricatorEditEngineSubtype
           'icon' => 'optional string',
           'children' => 'optional map<string, wild>',
           'fields' => 'optional map<string, wild>',
+          'mutations' => 'optional list<string>',
         ));
 
       $key = $value['key'];
@@ -230,6 +241,28 @@ class PhabricatorEditEngineSubtype
           'with key "%s". This subtype is required and must be defined.',
           self::SUBTYPE_DEFAULT));
     }
+
+    foreach ($config as $value) {
+      $key = idx($value, 'key');
+
+      $mutations = idx($value, 'mutations');
+      if (!$mutations) {
+        continue;
+      }
+
+      foreach ($mutations as $mutation) {
+        if (!isset($map[$mutation])) {
+          throw new Exception(
+            pht(
+              'Subtype configuration is invalid: subtype with key "%s" '.
+              'specifies that it can mutate into subtype "%s", but that is '.
+              'not a valid subtype.',
+              $key,
+              $mutation));
+        }
+      }
+    }
+
   }
 
   public static function newSubtypeMap(array $config) {
@@ -291,6 +324,8 @@ class PhabricatorEditEngineSubtype
             $field_configuration);
         }
       }
+
+      $subtype->setMutations(idx($entry, 'mutations'));
 
       $map[$key] = $subtype;
     }

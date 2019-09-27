@@ -50,6 +50,7 @@ final class PhabricatorSearchDocumentQuery
       ->setParameter('limit', $this->getRawResultLimit());
 
     $result_set = PhabricatorSearchService::newResultSet($query, $this);
+    phlog($result_set);
     $phids = $result_set->getPHIDs();
 
     $this->fulltextResultSet = $result_set;
