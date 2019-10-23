@@ -89,7 +89,7 @@ final class ManiphestTaskGraph
 
       $subtype = $object->newSubtypeObject();
       if ($subtype && $subtype->hasTagView()) {
-        $subtype_tag = $subtype->newTagView()
+        $subtype_tag = $subtype->newTagView($viewer)
           ->setSlimShady(true);
       }
     } else {
