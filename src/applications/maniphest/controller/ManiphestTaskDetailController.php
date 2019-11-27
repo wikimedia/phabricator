@@ -391,13 +391,22 @@ final class ManiphestTaskDetailController extends ManiphestController {
                        ->executeOne();
 
       if ($wmf_nda && $wmf_nda->isUserMember($viewer->getPHID())) {
+        $mail_key = PhabricatorMetaMTAMailProperties::loadMailKey($task);
+
+        $hash = PhabricatorObjectMailReceiver::computeMailHash(
+          $mail_key,
+          $task->getPHID());
+        $task_identifier = 'T'.$task->getID();
+        $user_identifier = 'public';
+        $domain = PhabricatorEnv::getEnvConfig('metamta.reply-handler-domain');
+        $cc = $task_identifier.'+'.$user_identifier.'+'.$hash.'@'.$domain;
         $subject = '[T'.$task->getID().'] '.$task->getTitle();
         $view->addProperty(
           pht('From Email'),
           phutil_tag(
             'a',
             array(
-              'href' => 'mailto:'.$source.'?subject='.$subject,
+              'href' => 'mailto:'.$source.'?subject='.$subject.'&cc='.$cc,
             ),
             $source));
       }
