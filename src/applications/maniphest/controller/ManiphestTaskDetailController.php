@@ -402,7 +402,7 @@ final class ManiphestTaskDetailController extends ManiphestController {
         $task_identifier = 'T'.$task->getID();
         $user_identifier = 'public';
         $domain = PhabricatorEnv::getEnvConfig('metamta.reply-handler-domain');
-        $cc = $task_identifier.'+'.$user_identifier.'+'.$hash.'@'.$domain;
+        $cc = rawurlencode($task_identifier.'+'.$user_identifier.'+'.$hash.'@'.$domain);
         $subject = '[T'.$task->getID().'] '.$task->getTitle();
         $view->addProperty(
           pht('From Email'),
