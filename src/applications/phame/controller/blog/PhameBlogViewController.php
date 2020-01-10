@@ -116,6 +116,16 @@ final class PhameBlogViewController extends PhameLiveController {
           $about,
       ));
 
+    // WMF HACK: Add discovery for Atom feed
+    $page->addHeadItem(phutil_tag(
+        'link',
+        array(
+          'rel' => 'alternate',
+          'type' => 'application/atom+xml',
+          'href' => $blog->getFeedURI(),
+          'title' => $blog->getName(),
+        )));
+
     return $page;
   }
 
