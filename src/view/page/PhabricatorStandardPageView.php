@@ -22,6 +22,7 @@ final class PhabricatorStandardPageView extends PhabricatorBarePageView
   private $tabs;
   private $crumbs;
   private $navigation;
+  private $headItems = array(); // WMF HACK
 
   public function setShowFooter($show_footer) {
     $this->showFooter = $show_footer;
@@ -357,6 +358,10 @@ final class PhabricatorStandardPageView extends PhabricatorBarePageView
     $this->menuContent = $menu->render();
   }
 
+  // WMF HACK: For use by PhameBlogViewController
+  public function addHeadItem($html) {
+    $this->headItems[] = $html;
+  }
 
   protected function getHead() {
     $monospaced = null;
@@ -390,9 +395,11 @@ final class PhabricatorStandardPageView extends PhabricatorBarePageView
     }
 
     return hsprintf(
-      '%s%s%s',
+      '%s%s%s%s',
       parent::getHead(),
       $font_css,
+      // WMF HACK: For use by PhameBlogViewController
+      implode('', $this->headItems),
       $response->renderSingleResource('javelin-magical-init', 'phabricator'));
   }
 
