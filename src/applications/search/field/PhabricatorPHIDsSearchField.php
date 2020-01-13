@@ -12,7 +12,11 @@ final class PhabricatorPHIDsSearchField
   }
 
   protected function newControl() {
-    if (strlen($this->getValueForControl())) {
+
+    $viewer = $this->getViewer();
+    $expert = boolval();
+    if (strlen($this->getValueForControl())
+      || $this->getViewer()->getUserSetting('developer.expert-mode')) {
       return new AphrontFormTextControl();
     } else {
       return null;
