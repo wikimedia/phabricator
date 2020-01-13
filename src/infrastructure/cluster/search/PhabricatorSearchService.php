@@ -249,6 +249,9 @@ class PhabricatorSearchService
     return $result_set->getPHIDs();
   }
 
+  /**
+   * @return PhabricatorFulltextResultSet
+   */
   public static function newResultSet(PhabricatorSavedQuery $query) {
     $exceptions = array();
     // try all services until one succeeds
@@ -259,7 +262,11 @@ class PhabricatorSearchService
 
       try {
         $engine = $service->getEngine();
-        return $engine->executeSearch($query);
+        $phids = $engine->executeSearch($query);
+
+        return id(new PhabricatorFulltextResultSet())
+          ->setPHIDs($phids)
+          ->setFulltextTokens($engine->getFulltextTokens());
       } catch (PhutilSearchQueryCompilerSyntaxException $ex) {
         // If there's a query compilation error, return it directly to the
         // user: they issued a query with bad syntax.
