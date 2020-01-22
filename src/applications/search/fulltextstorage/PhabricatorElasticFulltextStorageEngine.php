@@ -114,7 +114,7 @@ class PhabricatorElasticFulltextStorageEngine
     $query_string = $query->getParameter('query');
     if (strlen($query_string)) {
       $fields = $this->getTypeConstants('PhabricatorSearchDocumentFieldType');
-
+      $query_string = str_replace('\\', '\\\\', $query_string);
       // Build a simple_query_string query over all fields that must match all
       // of the words in the search string.
       $q->addMustClause(array(
