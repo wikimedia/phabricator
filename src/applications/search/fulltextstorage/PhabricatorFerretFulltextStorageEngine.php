@@ -108,7 +108,11 @@ final class PhabricatorFerretFulltextStorageEngine
     $list = array_select_keys($list, array_keys($metadata)) + $list;
 
     $result_slice = array_slice($list, $offset, $limit, true);
-    return array_keys($result_slice);
+    $phids = array_keys($result_slice);
+
+    return id(new PhabricatorFulltextResultSet())
+      ->setPHIDs($phids)
+      ->setFulltextTokens($this->getFulltextTokens());
   }
 
   public function indexExists() {

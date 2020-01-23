@@ -262,11 +262,7 @@ class PhabricatorSearchService
 
       try {
         $engine = $service->getEngine();
-        $phids = $engine->executeSearch($query);
-
-        return id(new PhabricatorFulltextResultSet())
-          ->setPHIDs($phids)
-          ->setFulltextTokens($engine->getFulltextTokens());
+        return $engine->executeSearch($query);
       } catch (PhutilSearchQueryCompilerSyntaxException $ex) {
         // If there's a query compilation error, return it directly to the
         // user: they issued a query with bad syntax.
