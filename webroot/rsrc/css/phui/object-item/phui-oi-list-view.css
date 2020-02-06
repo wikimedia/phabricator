@@ -327,12 +327,12 @@ ul.phui-oi-list-view {
 
 .phui-oi-attributes {
   padding: 0 8px 6px;
-  line-height: 18px;
+  line-height: 19px;
   min-height: 21px;
 }
 
 .phui-oi-attribute {
-  display: inline-block;
+  display: inline;
   color: {$greytext};
   vertical-align: top;
   margin-right: 4px;
@@ -340,6 +340,7 @@ ul.phui-oi-list-view {
 
 .phui-oi-attribute-spacer {
   padding: 0 4px;
+  display: none;
 }
 
 
