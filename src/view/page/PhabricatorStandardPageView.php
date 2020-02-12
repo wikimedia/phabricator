@@ -399,7 +399,7 @@ final class PhabricatorStandardPageView extends PhabricatorBarePageView
       parent::getHead(),
       $font_css,
       // WMF HACK: For use by PhameBlogViewController
-      implode('', $this->headItems),
+      $this->headItems,
       $response->renderSingleResource('javelin-magical-init', 'phabricator'));
   }
 
