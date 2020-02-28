@@ -1954,6 +1954,10 @@ abstract class PhabricatorCursorPagedPolicyAwareQuery
       'ft_doc.epochModified AS %T',
       self::FULLTEXT_MODIFIED);
 
+    $select[] = qsprintf(
+      $conn, 'ft_rank.rawCorpus AS %T',
+      'rawCorpus');
+
     return $select;
   }
 

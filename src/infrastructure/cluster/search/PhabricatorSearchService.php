@@ -262,13 +262,17 @@ class PhabricatorSearchService
 
       try {
         $engine = $service->getEngine();
-        return $engine->executeSearch($query);
+        $unguarded = AphrontWriteGuard::beginScopedUnguardedWrites();
+        $result = $engine->executeSearch($query);
+        unset($unguarded);
+        return $result;
       } catch (PhutilSearchQueryCompilerSyntaxException $ex) {
         // If there's a query compilation error, return it directly to the
         // user: they issued a query with bad syntax.
         throw $ex;
       } catch (Exception $ex) {
         $exceptions[] = $ex;
+        phlog($ex);
       }
     }
     $msg = pht('All of the configured Fulltext Search services failed.');

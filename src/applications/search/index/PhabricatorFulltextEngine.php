@@ -22,6 +22,13 @@ abstract class PhabricatorFulltextEngine
     PhabricatorSearchAbstractDocument $document,
     $object);
 
+  public function buildEphemeralAbstractDocument() {
+    $object = $this->getObject();
+    $document = $this->newAbstractDocument($object);
+    $this->buildAbstractDocument($document, $object);
+    return $document;
+  }
+
   final public function buildFulltextIndexes() {
     $object = $this->getObject();
 

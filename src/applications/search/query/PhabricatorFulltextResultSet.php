@@ -5,6 +5,24 @@ final class PhabricatorFulltextResultSet extends Phobject {
   private $phids;
   private $fulltextHighlights;
   private $fulltextTokens;
+  private $bodies;
+
+  public function setBodies($bodies) {
+    $this->bodies = $bodies;
+    return $this;
+  }
+
+  public function getBodies() {
+    return $this->bodies;
+  }
+
+  public function getBodyForPHID($phid) {
+    if (!isset($this->bodies[$phid])) {
+      return null;
+    }
+    return $this->bodies[$phid];
+  }
+
 
   public function setPHIDs($phids) {
     $this->phids = $phids;

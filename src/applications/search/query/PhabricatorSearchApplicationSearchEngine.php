@@ -265,6 +265,7 @@ final class PhabricatorSearchApplicationSearchEngine
           ->setHandle($handle)
           ->setTokens($fulltext_tokens)
           ->setObject(idx($objects, $phid))
+          ->setBody($result_set->getBodyForPHID($phid))
           ->render();
 
         foreach($ext as $extension) {
