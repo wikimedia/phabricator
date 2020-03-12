@@ -14,9 +14,9 @@ final class PhabricatorPHIDsSearchField
   protected function newControl() {
 
     $viewer = $this->getViewer();
-    $expert = boolval();
-    if (strlen($this->getValueForControl())
-      || $this->getViewer()->getUserSetting('developer.expert-mode')) {
+    $expert = (bool) $this->getViewer()
+      ->getUserSetting('developer.expert-mode');
+    if (strlen($this->getValueForControl()) || $expert) {
       return new AphrontFormTextControl();
     } else {
       return null;
