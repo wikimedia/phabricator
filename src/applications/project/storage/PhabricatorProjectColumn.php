@@ -168,22 +168,7 @@ final class PhabricatorProjectColumn
   }
 
   public function getOrderingKey() {
-    $proxy = $this->getProxy();
-
-    // Normal columns and subproject columns go first, in a user-controlled
-    // order.
-
-    // All the milestone columns go last, in their sequential order.
-
-    if (!$proxy || !$proxy->isMilestone()) {
-      $group = 'A';
-      $sequence = $this->getSequence();
-    } else {
-      $group = 'B';
-      $sequence = $proxy->getMilestoneNumber();
-    }
-
-    return sprintf('%s%012d', $group, $sequence);
+    return $this->getSequence();
   }
 
   public function attachTrigger(PhabricatorProjectTrigger $trigger = null) {
