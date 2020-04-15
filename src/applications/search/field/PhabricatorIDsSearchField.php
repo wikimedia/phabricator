@@ -12,7 +12,11 @@ final class PhabricatorIDsSearchField
   }
 
   protected function newControl() {
-    if (strlen($this->getValueForControl())) {
+    $viewer = $this->getViewer();
+    $expert = (bool) $this->getViewer()
+      ->getUserSetting('developer.expert-mode');
+
+    if (strlen($this->getValueForControl())||$expert) {
       return new AphrontFormTextControl();
     } else {
       return null;
