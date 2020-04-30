@@ -7,6 +7,9 @@ final class PhabricatorProjectArchiveController
     $viewer = $request->getViewer();
     $id = $request->getURIData('id');
 
+    $this->requireApplicationCapability(
+      ProjectCreateProjectsCapability::CAPABILITY);
+
     $project = id(new PhabricatorProjectQuery())
       ->setViewer($viewer)
       ->withIDs(array($id))
@@ -14,7 +17,6 @@ final class PhabricatorProjectArchiveController
         array(
           PhabricatorPolicyCapability::CAN_VIEW,
           PhabricatorPolicyCapability::CAN_EDIT,
-          ProjectCreateProjectsCapability::CAPABILITY,
         ))
       ->executeOne();
     if (!$project) {
