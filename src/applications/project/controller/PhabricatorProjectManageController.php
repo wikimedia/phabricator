@@ -81,6 +81,11 @@ final class PhabricatorProjectManageController
       $project,
       PhabricatorPolicyCapability::CAN_EDIT);
 
+    $can_create = PhabricatorPolicyFilter::hasCapability(
+      $viewer,
+      $project,
+      ProjectCreateProjectsCapability::CAPABILITY);
+
     $curtain = $this->newCurtainView($project);
 
     $curtain->addAction(
@@ -113,7 +118,7 @@ final class PhabricatorProjectManageController
           ->setName(pht('Activate Project'))
           ->setIcon('fa-check')
           ->setHref($this->getApplicationURI("archive/{$id}/"))
-          ->setDisabled(!$can_edit)
+          ->setDisabled(!$can_create)
           ->setWorkflow(true));
     } else {
       $curtain->addAction(
@@ -121,7 +126,7 @@ final class PhabricatorProjectManageController
           ->setName(pht('Archive Project'))
           ->setIcon('fa-ban')
           ->setHref($this->getApplicationURI("archive/{$id}/"))
-          ->setDisabled(!$can_edit)
+          ->setDisabled(!$can_create)
           ->setWorkflow(true));
     }
 

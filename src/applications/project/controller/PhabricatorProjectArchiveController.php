@@ -14,6 +14,7 @@ final class PhabricatorProjectArchiveController
         array(
           PhabricatorPolicyCapability::CAN_VIEW,
           PhabricatorPolicyCapability::CAN_EDIT,
+          ProjectCreateProjectsCapability::CAPABILITY,
         ))
       ->executeOne();
     if (!$project) {
