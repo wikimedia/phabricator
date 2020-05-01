@@ -83,6 +83,11 @@ final class PhabricatorUserBlurbField
   }
 
   public function renderPropertyViewValue(array $handles) {
+    // WMF Hack: Don't display profile of disabled users. See T250946
+    if ($this->getObject()->getIsDisabled()) {
+      return pht('This account has been disabled.');
+    }
+
     $blurb = $this->getObject()->loadUserProfile()->getBlurb();
     if (!strlen($blurb)) {
       return null;
