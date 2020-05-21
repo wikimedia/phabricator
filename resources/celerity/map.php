@@ -186,6 +186,7 @@ return array(
     'rsrc/css/sprite-login.css' => 'c18dc580',
     'rsrc/css/sprite-tokens.css' => '648d5c2a',
     'rsrc/css/syntax/syntax-default.css' => '055fc231',
+    'rsrc/css/wikimedia/wikimedia-extensions.css' => 'd0fa15ca',
     'rsrc/externals/d3/d3.min.js' => '9d068042',
     'rsrc/externals/font/fontawesome/fontawesome-webfont.eot' => '23f8c698',
     'rsrc/externals/font/fontawesome/fontawesome-webfont.ttf' => '70983df0',
@@ -927,6 +928,7 @@ return array(
     'trigger-rule-type' => '4feea7d3',
     'typeahead-browse-css' => 'b7ed02d2',
     'unhandled-exception-css' => '9ecfc00d',
+    'wikimedia-extensions-css' => 'd0fa15ca',
   ),
   'requires' => array(
     '0116d3e8' => array(
