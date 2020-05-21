@@ -46,6 +46,10 @@ final class LegalpadDocumentSignatureQuery
     return $this;
   }
 
+  public function newResultObject() {
+    return new LegalpadDocumentSignature();
+  }
+
   protected function loadPage() {
     $table = new LegalpadDocumentSignature();
     $conn_r = $table->establishConnection('r');
