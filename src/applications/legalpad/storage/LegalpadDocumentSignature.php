@@ -2,7 +2,9 @@
 
 final class LegalpadDocumentSignature
   extends LegalpadDAO
-  implements PhabricatorPolicyInterface {
+  implements
+    PhabricatorPolicyInterface,
+    PhabricatorConduitResultInterface {
 
   const VERIFIED = 0;
   const UNVERIFIED = 1;
@@ -92,5 +94,61 @@ final class LegalpadDocumentSignature
   public function hasAutomaticCapability($capability, PhabricatorUser $viewer) {
     return ($viewer->getPHID() == $this->getSignerPHID());
   }
+
+/* -(  PhabricatorConduitResultInterface  )---------------------------------- */
+
+public function getFieldSpecificationsForConduit() {
+  return array(
+    id(new PhabricatorConduitSearchFieldSpecification())
+      ->setKey('documentPHID')
+      ->setType('string')
+      ->setDescription(pht('The PHID of the document signed by this signature.')),
+    id(new PhabricatorConduitSearchFieldSpecification())
+      ->setKey('documentVersion')
+      ->setType('string')
+      ->setDescription(pht('The version of the document that was signed.')),
+      id(new PhabricatorConduitSearchFieldSpecification())
+      ->setKey('signatureType')
+      ->setType('string')
+      ->setDescription(pht('The type of signature.')),
+      id(new PhabricatorConduitSearchFieldSpecification())
+      ->setKey('signerName')
+      ->setType('string')
+      ->setDescription(pht('The name of the signer.')),
+    id(new PhabricatorConduitSearchFieldSpecification())
+      ->setKey('signerPHID')
+      ->setType('string')
+      ->setDescription(pht('The PHID of the signer.')),
+    id(new PhabricatorConduitSearchFieldSpecification())
+      ->setKey('signerEmail')
+      ->setType('string')
+      ->setDescription(pht('The email address of the signer.')),
+    id(new PhabricatorConduitSearchFieldSpecification())
+      ->setKey('signatureData')
+      ->setType('array')
+      ->setDescription(pht('The email address of the signer.')),
+    id(new PhabricatorConduitSearchFieldSpecification())
+      ->setKey('verified')
+      ->setType('bool')
+      ->setDescription(pht('Indicates if the signature is verified.')),
+  );
+}
+
+public function getFieldValuesForConduit() {
+  return array(
+    'documentPHID' => $this->getDocumentPHID(),
+    'documentVersion' => $this->getDocumentVersion(),
+    'signatureType' => $this->getSignatureType(),
+    'signerName' => $this->getSignerName(),
+    'signerPHID' => $this->getSignerPHID(),
+    'signerEmail' => $this->getSignerEmail(),
+    'signatureData' => $this->getSignatureData(),
+    'verified' => $this->getVerified(),
+  );
+}
+
+public function getConduitSearchAttachments() {
+  return array();
+}
 
 }
