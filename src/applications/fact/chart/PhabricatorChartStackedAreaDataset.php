@@ -116,7 +116,7 @@ final class PhabricatorChartStackedAreaDataset
     $domain_max = $data_query->getMaximumValue();
     $domain_min = $data_query->getMinimumValue();
     $resolution = ($domain_max - $domain_min) / 100;
-
+    $resolution=-1;
     $events = array();
     foreach ($raw_points as $function_idx => $points) {
       $event_list = array();

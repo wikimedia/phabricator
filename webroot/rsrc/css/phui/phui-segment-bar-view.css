@@ -21,6 +21,20 @@
   height: 8px;
 }
 
+.phui-segment-bar-bigbars .phui-segment-bar-segments {
+  height: 20px;
+}
+.phui-segment-bar-bigbars .phui-segment-bar-segment-view {
+  text-align: center;
+  min-width: 16px;
+}
+.phui-segment-bar-bigbars
+.phui-segment-bar-segment-view
+ span {
+  margin-left:9px;
+  font-weight:bold;
+  color:white;
+}
 .phui-segment-bar-segment-view {
   position: absolute;
   top: 0;
@@ -28,6 +42,7 @@
   margin-left: -5px;
   border-right: 5px solid;
   border-radius: 0 4px 4px 0;
+
 }
 
 .phui-segment-bar-segment-view.red {
@@ -73,4 +88,9 @@
 .phui-segment-bar-segment-view.sky {
   background: {$sky};
   border-color: {$sky};
+}
+
+.phui-segment-bar-segment-view.grey {
+  background: lightgrey;
+  border-color: lightgrey;
 }
