@@ -22,6 +22,7 @@ final class PhabricatorStandardPageView extends PhabricatorBarePageView
   private $tabs;
   private $crumbs;
   private $navigation;
+  private $footer;
   private $headItems = array(); // WMF HACK
 
   public function setShowFooter($show_footer) {
@@ -197,6 +198,22 @@ final class PhabricatorStandardPageView extends PhabricatorBarePageView
 
 
   protected function willRenderPage() {
+    $footer = $this->renderFooter();
+
+    // NOTE: A cleaner solution would be to let body layout elements implement
+    // some kind of "LayoutInterface" so content can be embedded inside frames,
+    // but there's only really one use case for this for now.
+    $children = $this->renderChildren();
+    if ($children) {
+      $layout = head($children);
+      if ($layout instanceof PHUIFormationView) {
+        $layout->setFooter($footer);
+        $footer = null;
+      }
+    }
+
+    $this->footer = $footer;
+
     parent::willRenderPage();
 
     if (!$this->getRequest()) {
@@ -508,8 +525,6 @@ final class PhabricatorStandardPageView extends PhabricatorBarePageView
 
     $body = parent::getBody();
 
-    $footer = $this->renderFooter();
-
     $nav = $this->getNavigation();
     $tabs = $this->getTabs();
     if ($nav) {
@@ -518,7 +533,7 @@ final class PhabricatorStandardPageView extends PhabricatorBarePageView
         $nav->setCrumbs($crumbs);
       }
       $nav->appendChild($body);
-      $nav->appendFooter($footer);
+      $nav->appendFooter($this->footer);
       $content = phutil_implode_html('', array($nav->render()));
     } else {
       $content = array();
@@ -537,7 +552,7 @@ final class PhabricatorStandardPageView extends PhabricatorBarePageView
       }
 
       $content[] = $body;
-      $content[] = $footer;
+      $content[] = $this->footer;
 
       $content = phutil_implode_html('', $content);
     }

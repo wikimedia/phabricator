@@ -666,6 +666,11 @@ final class PhabricatorProjectQuery
     if ($this->memberPHIDs || $this->watcherPHIDs || $this->nameTokens) {
       return true;
     }
+
+    if ($this->slugs) {
+      return true;
+    }
+
     return parent::shouldGroupQueryResultRows();
   }
 

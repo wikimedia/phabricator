@@ -3,6 +3,39 @@
 final class PhutilProseDiffTestCase
   extends PhabricatorTestCase {
 
+  public function testTrimApart() {
+    $map = array(
+      '' => array(),
+      'a' => array('a'),
+      ' a ' => array(
+        ' ',
+        'a',
+        ' ',
+      ),
+      ' a' => array(
+        ' ',
+        'a',
+      ),
+      'a ' => array(
+        'a',
+        ' ',
+      ),
+      ' a b ' => array(
+        ' ',
+        'a b',
+        ' ',
+      ),
+    );
+
+    foreach ($map as $input => $expect) {
+      $actual = PhutilProseDifferenceEngine::trimApart($input);
+      $this->assertEqual(
+        $expect,
+        $actual,
+        pht('Trim Apart: %s', $input));
+    }
+  }
+
   public function testProseDiffsDistance() {
     $this->assertProseParts(
       '',
@@ -30,6 +63,14 @@ final class PhutilProseDiffTestCase
       ),
       pht('Remove Paragraph'));
 
+    $this->assertProseParts(
+       'xxx',
+       "xxxyyy\n.zzz",
+       array(
+         '= xxx',
+         "+ yyy\n.zzz",
+       ),
+       pht('Amend paragraph, and add paragraph starting with punctuation'));
 
     // Without smoothing, the alogorithm identifies that "shark" and "cat"
     // both contain the letter "a" and tries to express this as a very

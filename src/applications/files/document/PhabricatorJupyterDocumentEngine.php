@@ -63,6 +63,7 @@ final class PhabricatorJupyterDocumentEngine
       $blocks->addBlockList($uref, $u_blocks);
       $blocks->addBlockList($vref, $v_blocks);
     } catch (Exception $ex) {
+      phlog($ex);
       $blocks->addMessage($ex->getMessage());
     }
 
@@ -84,11 +85,8 @@ final class PhabricatorJupyterDocumentEngine
     if ($utype === $vtype) {
       switch ($utype) {
         case 'markdown':
-          $usource = idx($ucell, 'source');
-          $usource = implode('', $usource);
-
-          $vsource = idx($vcell, 'source');
-          $vsource = implode('', $vsource);
+          $usource = $this->readString($ucell, 'source');
+          $vsource = $this->readString($vcell, 'source');
 
           $diff = id(new PhutilProseDifferenceEngine())
             ->getDiff($usource, $vsource);
@@ -112,8 +110,6 @@ final class PhabricatorJupyterDocumentEngine
           $vsource = idx($vcell, 'raw');
           $udisplay = idx($ucell, 'display');
           $vdisplay = idx($vcell, 'display');
-          $ulabel = idx($ucell, 'label');
-          $vlabel = idx($vcell, 'label');
 
           $intraline_segments = ArcanistDiffUtils::generateIntralineDiff(
             $usource,
@@ -129,23 +125,23 @@ final class PhabricatorJupyterDocumentEngine
             $v_segments[] = $v_segment;
           }
 
-          $usource = ArcanistDiffUtils::applyIntralineDiff(
+          $usource = PhabricatorDifferenceEngine::applyIntralineDiff(
             $udisplay,
             $u_segments);
 
-          $vsource = ArcanistDiffUtils::applyIntralineDiff(
+          $vsource = PhabricatorDifferenceEngine::applyIntralineDiff(
             $vdisplay,
             $v_segments);
 
-          $u_content = $this->newCodeLineCell($ucell, $usource);
-          $v_content = $this->newCodeLineCell($vcell, $vsource);
+          list($u_label, $u_content) = $this->newCodeLineCell($ucell, $usource);
+          list($v_label, $v_content) = $this->newCodeLineCell($vcell, $vsource);
 
           $classes = array(
             'jupyter-cell-flush',
           );
 
-          $u_content = $this->newJupyterCell($ulabel, $u_content, $classes);
-          $v_content = $this->newJupyterCell($vlabel, $v_content, $classes);
+          $u_content = $this->newJupyterCell($u_label, $u_content, $classes);
+          $v_content = $this->newJupyterCell($v_label, $v_content, $classes);
 
           $u_content = $this->newCellContainer($u_content);
           $v_content = $this->newCellContainer($v_content);
@@ -254,7 +250,7 @@ final class PhabricatorJupyterDocumentEngine
           $hash_input = $cell['raw'];
           break;
         case 'markdown':
-          $hash_input = implode('', $cell['source']);
+          $hash_input = $this->readString($cell, 'source');
           break;
         default:
           $hash_input = serialize($cell);
@@ -326,7 +322,6 @@ final class PhabricatorJupyterDocumentEngine
           'be rendered as a Jupyter notebook.'));
     }
 
-
     $nbformat = idx($data, 'nbformat');
     if (!strlen($nbformat)) {
       throw new Exception(
@@ -367,10 +362,8 @@ final class PhabricatorJupyterDocumentEngine
     $results = array();
     foreach ($cells as $cell) {
       $cell_type = idx($cell, 'cell_type');
-
       if ($cell_type === 'markdown') {
-        $source = $cell['source'];
-        $source = implode('', $source);
+        $source = $this->readString($cell, 'source');
 
         // Attempt to split contiguous blocks of markdown into smaller
         // pieces.
@@ -395,11 +388,7 @@ final class PhabricatorJupyterDocumentEngine
 
       $label = $this->newCellLabel($cell);
 
-      $lines = idx($cell, 'source');
-      if (!is_array($lines)) {
-        $lines = array();
-      }
-
+      $lines = $this->readStringList($cell, 'source');
       $content = $this->highlightLines($lines);
 
       $count = count($lines);
@@ -517,10 +506,7 @@ final class PhabricatorJupyterDocumentEngine
   }
 
   private function newMarkdownCell(array $cell) {
-    $content = idx($cell, 'source');
-    if (!is_array($content)) {
-      $content = array();
-    }
+    $content = $this->readStringList($cell, 'source');
 
     // TODO: This should ideally highlight as Markdown, but the "md"
     // highlighter in Pygments is painfully slow and not terribly useful.
@@ -540,11 +526,7 @@ final class PhabricatorJupyterDocumentEngine
   private function newCodeCell(array $cell) {
     $label = $this->newCellLabel($cell);
 
-    $content = idx($cell, 'source');
-    if (!is_array($content)) {
-      $content = array();
-    }
-
+    $content = $this->readStringList($cell, 'source');
     $content = $this->highlightLines($content);
 
     $outputs = array();
@@ -651,11 +633,7 @@ final class PhabricatorJupyterDocumentEngine
             continue;
           }
 
-          $raw_data = $data[$image_format];
-          if (!is_array($raw_data)) {
-            $raw_data = array($raw_data);
-          }
-          $raw_data = implode('', $raw_data);
+          $raw_data = $this->readString($data, $image_format);
 
           $content = phutil_tag(
             'img',
@@ -686,11 +664,7 @@ final class PhabricatorJupyterDocumentEngine
         break;
       case 'stream':
       default:
-        $content = idx($output, 'text');
-        if (!is_array($content)) {
-          $content = array();
-        }
-        $content = implode('', $content);
+        $content = $this->readString($output, 'text');
         break;
     }
 
@@ -746,6 +720,29 @@ final class PhabricatorJupyterDocumentEngine
     }
 
     return $content;
+  }
+
+  public function shouldSuggestEngine(PhabricatorDocumentRef $ref) {
+    return true;
+  }
+
+  private function readString(array $src, $key) {
+    $list = $this->readStringList($src, $key);
+    return implode('', $list);
+  }
+
+  private function readStringList(array $src, $key) {
+    $list = idx($src, $key);
+
+    if (is_array($list)) {
+      $list = $list;
+    } else if (is_string($list)) {
+      $list = array($list);
+    } else {
+      $list = array();
+    }
+
+    return $list;
   }
 
 }
