@@ -6,6 +6,7 @@ final class PHUISegmentBarSegmentView extends AphrontTagView {
   private $color;
   private $position;
   private $tooltip;
+  private $value;
 
   public function setWidth($width) {
     $this->width = $width;
@@ -29,6 +30,19 @@ final class PHUISegmentBarSegmentView extends AphrontTagView {
   public function setTooltip($tooltip) {
     $this->tooltip = $tooltip;
     return $this;
+  }
+
+  public function setValue($value) {
+    $this->value = $value;
+    return $this;
+  }
+
+  public function getValue() {
+    return $this->value;
+  }
+
+  protected function getTagContent() {
+    return phutil_tag('span', [], $this->getValue());
   }
 
   protected function canAppendChild() {

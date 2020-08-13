@@ -43,7 +43,7 @@
 }
 
 .device-desktop .phui-property-list-key {
-  width: 12%;
+  width: 18%;
   margin-left: 1%;
   text-align: right;
   float: left;
@@ -75,7 +75,7 @@ div.phui-property-list-stacked .phui-property-list-properties
 }
 
 .device-desktop .phui-property-list-value {
-  width: 84%;
+  width: 78%;
   margin-left: 1%;
   float: left;
   margin-bottom: 4px;
