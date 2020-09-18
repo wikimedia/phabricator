@@ -167,6 +167,11 @@ final class PhabricatorSearchResultView extends AphrontView {
     $parts = array();
     $highlight = 0;
     $offset = 0;
+
+    // Convert instances of PhutilSafeHTML within $str into
+    // plain strings. Needed to avoid a bug in phutil_utf8v.
+    // See https://phabricator.wikimedia.org/T263063
+    $str = (string) $str;
     foreach (phutil_utf8v_combined($str) as $character) {
       $length = strlen($character);
 
