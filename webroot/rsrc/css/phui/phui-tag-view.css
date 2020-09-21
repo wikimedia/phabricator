@@ -54,6 +54,14 @@ a.phui-tag-view:hover {
   border: 1px solid transparent;
 }
 
+.tokenizer-result .phui-tag-dot {
+  margin-right: 6px;
+}
+
+.jx-tokenizer-token .phui-tag-dot {
+  margin-left: 2px;
+}
+
 .phui-tag-type-state {
   color: #ffffff;
   text-shadow: rgba(100, 100, 100, 0.40) 0px -1px 1px;
@@ -431,6 +439,12 @@ a.phui-tag-view:hover.phui-tag-checkered .phui-tag-core,
 
 a.phui-tag-view:hover.phui-tag-disabled .phui-tag-core {
   border-color: {$sh-disabledborder};
+}
+
+.phui-tag-placeholder .phui-tag-core {
+  border-color: transparent;
+  background-color: {$sh-disabledbackground};
+  opacity: 0.5;
 }
 
 /* - Outline Tags --------------------------------------------------------------

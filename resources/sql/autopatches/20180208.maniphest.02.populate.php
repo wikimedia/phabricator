@@ -37,6 +37,7 @@ foreach (new LiskMigrationIterator($table) as $task) {
   $xactions = id(new ManiphestTransactionQuery())
     ->setViewer($viewer)
     ->withObjectPHIDs(array($task->getPHID()))
+    ->needHandles(false)
     ->withTransactionTypes(
       array(
         $type_merge,

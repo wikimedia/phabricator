@@ -73,13 +73,13 @@ abstract class DiffusionSSHWorkflow extends PhabricatorSSHWorkflow {
     return $this->shouldProxy;
   }
 
-  protected function getProxyCommand($for_write) {
+  final protected function getAlmanacServiceRefs($for_write) {
     $viewer = $this->getSSHUser();
     $repository = $this->getRepository();
 
     $is_cluster_request = $this->getIsClusterRequest();
 
-    $uri = $repository->getAlmanacServiceURI(
+    $refs = $repository->getAlmanacServiceRefs(
       $viewer,
       array(
         'neverProxy' => $is_cluster_request,
@@ -89,14 +89,28 @@ abstract class DiffusionSSHWorkflow extends PhabricatorSSHWorkflow {
         'writable' => $for_write,
       ));
 
-    if (!$uri) {
+    if (!$refs) {
       throw new Exception(
         pht(
           'Failed to generate an intracluster proxy URI even though this '.
           'request was routed as a proxy request.'));
     }
 
-    $uri = new PhutilURI($uri);
+    return $refs;
+  }
+
+  final protected function getProxyCommand($for_write) {
+    $refs = $this->getAlmanacServiceRefs($for_write);
+
+    $ref = head($refs);
+
+    return $this->getProxyCommandForServiceRef($ref);
+  }
+
+  final protected function getProxyCommandForServiceRef(
+    DiffusionServiceRef $ref) {
+
+    $uri = new PhutilURI($ref->getURI());
 
     $username = AlmanacKeys::getClusterSSHUser();
     if ($username === null) {
@@ -127,9 +141,9 @@ abstract class DiffusionSSHWorkflow extends PhabricatorSSHWorkflow {
     // This is suppressing "added <address> to the list of known hosts"
     // messages, which are confusing and irrelevant when they arise from
     // proxied requests. It might also be suppressing lots of useful errors,
-    // of course. Ideally, we would enforce host keys eventually.
+    // of course. Ideally, we would enforce host keys eventually. See T13121.
     $options[] = '-o';
-    $options[] = 'LogLevel=quiet';
+    $options[] = 'LogLevel=ERROR';
 
     // NOTE: We prefix the command with "@username", which the far end of the
     // connection will parse in order to act as the specified user. This
@@ -253,6 +267,10 @@ abstract class DiffusionSSHWorkflow extends PhabricatorSSHWorkflow {
           'This request is authenticated as a cluster device, but is '.
           'performing a write. Writes must be performed with a real '.
           'user account.'));
+    }
+
+    if ($repository->isReadOnly()) {
+      throw new Exception($repository->getReadOnlyMessageForDisplay());
     }
 
     $protocol = PhabricatorRepositoryURI::BUILTIN_PROTOCOL_SSH;

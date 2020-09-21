@@ -401,4 +401,12 @@ abstract class HeraldAction extends Phobject {
     return null;
   }
 
+  public function getPHIDsAffectedByAction(HeraldActionRecord $record) {
+    return array();
+  }
+
+  public function isActionAvailable() {
+    return true;
+  }
+
 }

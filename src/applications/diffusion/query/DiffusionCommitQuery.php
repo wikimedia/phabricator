@@ -15,6 +15,7 @@ final class DiffusionCommitQuery
   private $statuses;
   private $packagePHIDs;
   private $unreachable;
+  private $unpublished;
 
   private $needAuditRequests;
   private $needAuditAuthority;
@@ -150,6 +151,11 @@ final class DiffusionCommitQuery
 
   public function withUnreachable($unreachable) {
     $this->unreachable = $unreachable;
+    return $this;
+  }
+
+  public function withUnpublished($unpublished) {
+    $this->unpublished = $unpublished;
     return $this;
   }
 
@@ -853,6 +859,21 @@ final class DiffusionCommitQuery
       }
     }
 
+    if ($this->unpublished !== null) {
+      if ($this->unpublished) {
+        $where[] = qsprintf(
+          $conn,
+          '(commit.importStatus & %d) = 0',
+          PhabricatorRepositoryCommit::IMPORTED_CLOSEABLE);
+      } else {
+        $where[] = qsprintf(
+          $conn,
+          '(commit.importStatus & %d) = %d',
+          PhabricatorRepositoryCommit::IMPORTED_CLOSEABLE,
+          PhabricatorRepositoryCommit::IMPORTED_CLOSEABLE);
+      }
+    }
+
     return $where;
   }
 
@@ -924,11 +945,10 @@ final class DiffusionCommitQuery
     );
   }
 
-  protected function getPagingValueMap($cursor, array $keys) {
-    $commit = $this->loadCursorObject($cursor);
+  protected function newPagingMapFromPartialObject($object) {
     return array(
-      'id' => $commit->getID(),
-      'epoch' => $commit->getEpoch(),
+      'id' => (int)$object->getID(),
+      'epoch' => (int)$object->getEpoch(),
     );
   }
 

@@ -30,22 +30,9 @@ final class PhabricatorPeopleProfileBadgesController
     $crumbs->addTextCrumb(pht('Badges'));
     $crumbs->setBorder(true);
 
-    $nav = $this->getProfileMenu();
-    $nav->selectFilter(PhabricatorPeopleProfileMenuEngine::ITEM_BADGES);
-
-    // Best option?
-    $badges = id(new PhabricatorBadgesQuery())
-      ->setViewer($viewer)
-      ->withStatuses(array(
-        PhabricatorBadgesBadge::STATUS_ACTIVE,
-      ))
-      ->requireCapabilities(
-        array(
-          PhabricatorPolicyCapability::CAN_VIEW,
-          PhabricatorPolicyCapability::CAN_EDIT,
-        ))
-      ->setLimit(1)
-      ->execute();
+    $nav = $this->newNavigation(
+      $user,
+      PhabricatorPeopleProfileMenuEngine::ITEM_BADGES);
 
     $button = id(new PHUIButtonView())
       ->setTag('a')
@@ -54,17 +41,16 @@ final class PhabricatorPeopleProfileBadgesController
       ->setWorkflow(true)
       ->setHref('/badges/award/'.$user->getID().'/');
 
-    if ($badges) {
-      $header->addActionLink($button);
-    }
+    $header->addActionLink($button);
 
     $view = id(new PHUITwoColumnView())
       ->setHeader($header)
       ->addClass('project-view-home')
       ->addClass('project-view-people-home')
-      ->setFooter(array(
-        $this->buildBadgesView($user)
-      ));
+      ->setFooter(
+        array(
+          $badges,
+        ));
 
     return $this->newPage()
       ->setTitle($title)

@@ -200,6 +200,11 @@ final class PhameBlog extends PhameDAO
     return '/phame/blog/manage/'.$this->getID().'/';
   }
 
+  public function getFeedURI() {
+    // WMF HACK: For use in PhameBlogViewController
+    return '/phame/blog/feed/'.$this->getID().'/';
+  }
+
   public function getProfileImageURI() {
     return $this->getProfileImageFile()->getBestURI();
   }

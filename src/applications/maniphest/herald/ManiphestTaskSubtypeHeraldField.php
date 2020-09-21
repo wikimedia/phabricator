@@ -23,7 +23,8 @@ final class ManiphestTaskSubtypeHeraldField
   }
 
   protected function getDatasourceValueMap() {
-    return id(new ManiphestTask())->newEditEngineSubtypeMap();
+    $map = id(new ManiphestTask())->newEditEngineSubtypeMap();
+    return $map->getSubtypes();
   }
 
 }

@@ -100,13 +100,13 @@ abstract class PhabricatorOAuth1AuthProvider
     // an access token.
 
     try {
-      $account_id = $adapter->getAccountID();
+      $identifiers = $adapter->getAccountIdentifiers();
     } catch (Exception $ex) {
       // TODO: Handle this in a more user-friendly way.
       throw $ex;
     }
 
-    if (!strlen($account_id)) {
+    if (!$identifiers) {
       $response = $controller->buildProviderErrorResponse(
         $this,
         pht(
@@ -114,16 +114,10 @@ abstract class PhabricatorOAuth1AuthProvider
 
       return array($account, $response);
     }
-    $this->willLoadOrCreateAccount($account_id, $adapter);
-    return array($this->loadOrCreateAccount($account_id), $response);
-  }
 
-  /** called right before an account is loaded or created. This hook can be
-   * overridden in a subclass to check the account before a login is permitted.
-   */
-  protected function willLoadOrCreateAccount($account_id, $adapter) {
-    // override in a subclass
-    return;
+    $account = $this->newExternalAccountForIdentifiers($identifiers);
+
+    return array($account, $response);
   }
 
   public function processEditForm(

@@ -255,46 +255,27 @@ final class PhabricatorPasswordAuthProvider extends PhabricatorAuthProvider {
     $viewer = $request->getUser();
     $content_source = PhabricatorContentSource::newFromRequest($request);
 
-    $captcha_limit = 5;
-    $hard_limit = 32;
-    $limit_window = phutil_units('15 minutes in seconds');
+    $rate_actor = PhabricatorSystemActionEngine::newActorFromRequest($request);
 
-    $failed_attempts = PhabricatorUserLog::loadRecentEventsFromThisIP(
-      PhabricatorUserLog::ACTION_LOGIN_FAILURE,
-      $limit_window);
+    PhabricatorSystemActionEngine::willTakeAction(
+      array($rate_actor),
+      new PhabricatorAuthTryPasswordAction(),
+      1);
 
     // If the same remote address has submitted several failed login attempts
     // recently, require they provide a CAPTCHA response for new attempts.
     $require_captcha = false;
     $captcha_valid = false;
     if (AphrontFormRecaptchaControl::isRecaptchaEnabled()) {
-      if (count($failed_attempts) > $captcha_limit) {
+      try {
+        PhabricatorSystemActionEngine::willTakeAction(
+          array($rate_actor),
+          new PhabricatorAuthTryPasswordWithoutCAPTCHAAction(),
+          1);
+      } catch (PhabricatorSystemActionRateLimitException $ex) {
         $require_captcha = true;
         $captcha_valid = AphrontFormRecaptchaControl::processCaptcha($request);
       }
-    }
-
-    // If the user has submitted quite a few failed login attempts recently,
-    // give them a hard limit.
-    if (count($failed_attempts) > $hard_limit) {
-      $guidance = array();
-
-      $guidance[] = pht(
-        'Your remote address has failed too many login attempts recently. '.
-        'Wait a few minutes before trying again.');
-
-      $guidance[] = pht(
-        'If you are unable to log in to your account, you can '.
-        '[[ /login/email | send a reset link to your email address ]].');
-
-      $guidance = implode("\n\n", $guidance);
-
-      $dialog = $controller->newDialog()
-        ->setTitle(pht('Too Many Login Attempts'))
-        ->appendChild(new PHUIRemarkupView($viewer, $guidance))
-        ->addCancelButton('/auth/start/', pht('Wait Patiently'));
-
-      return array(null, $dialog);
     }
 
     $response = null;
@@ -324,7 +305,7 @@ final class PhabricatorPasswordAuthProvider extends PhabricatorAuthProvider {
               ->setObject($user);
 
             if ($engine->isValidPassword($envelope)) {
-              $account = $this->loadOrCreateAccount($user->getPHID());
+              $account = $this->newExternalAccountForUser($user);
               $log_user = $user;
             }
           }
@@ -337,7 +318,7 @@ final class PhabricatorPasswordAuthProvider extends PhabricatorAuthProvider {
         $log = PhabricatorUserLog::initializeNewLog(
           null,
           $log_user ? $log_user->getPHID() : null,
-          PhabricatorUserLog::ACTION_LOGIN_FAILURE);
+          PhabricatorLoginFailureUserLogType::LOGTYPE);
         $log->save();
       }
 
@@ -356,16 +337,6 @@ final class PhabricatorPasswordAuthProvider extends PhabricatorAuthProvider {
 
   public function shouldRequireRegistrationPassword() {
     return true;
-  }
-
-  protected function willSaveAccount(PhabricatorExternalAccount $account) {
-    parent::willSaveAccount($account);
-    $account->setUserPHID($account->getAccountID());
-  }
-
-  public function willRegisterAccount(PhabricatorExternalAccount $account) {
-    parent::willRegisterAccount($account);
-    $account->setAccountID($account->getUserPHID());
   }
 
   public static function getPasswordProvider() {
@@ -394,4 +365,5 @@ final class PhabricatorPasswordAuthProvider extends PhabricatorAuthProvider {
   public function shouldAllowEmailTrustConfiguration() {
     return false;
   }
+
 }

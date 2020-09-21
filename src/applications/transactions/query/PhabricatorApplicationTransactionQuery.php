@@ -3,11 +3,15 @@
 abstract class PhabricatorApplicationTransactionQuery
   extends PhabricatorCursorPagedPolicyAwareQuery {
 
+  private $ids;
   private $phids;
   private $objectPHIDs;
   private $authorPHIDs;
   private $transactionTypes;
   private $withComments;
+  private $createdMin;
+  private $createdMax;
+  private $aggregatePagingCursor;
 
   private $needComments = true;
   private $needHandles  = true;
@@ -35,6 +39,11 @@ abstract class PhabricatorApplicationTransactionQuery
 
   abstract public function getTemplateApplicationTransaction();
 
+  public function withIDs(array $ids) {
+    $this->ids = $ids;
+    return $this;
+  }
+
   public function withPHIDs(array $phids) {
     $this->phids = $phids;
     return $this;
@@ -60,6 +69,12 @@ abstract class PhabricatorApplicationTransactionQuery
     return $this;
   }
 
+  public function withDateCreatedBetween($min, $max) {
+    $this->createdMin = $min;
+    $this->createdMax = $max;
+    return $this;
+  }
+
   public function needComments($need) {
     $this->needComments = $need;
     return $this;
@@ -68,6 +83,22 @@ abstract class PhabricatorApplicationTransactionQuery
   public function needHandles($need) {
     $this->needHandles = $need;
     return $this;
+  }
+
+  public function setAggregatePagingCursor(PhabricatorQueryCursor $cursor) {
+    $this->aggregatePagingCursor = $cursor;
+    return $this;
+  }
+
+  public function getAggregatePagingCursor() {
+    return $this->aggregatePagingCursor;
+  }
+
+  protected function willExecute() {
+    $cursor_object = $this->getAggregatePagingCursor();
+    if ($cursor_object) {
+      $this->nextPage(array($cursor_object->getObject()));
+    }
   }
 
   protected function loadPage() {
@@ -157,6 +188,13 @@ abstract class PhabricatorApplicationTransactionQuery
   protected function buildWhereClauseParts(AphrontDatabaseConnection $conn) {
     $where = parent::buildWhereClauseParts($conn);
 
+    if ($this->ids !== null) {
+      $where[] = qsprintf(
+        $conn,
+        'x.id IN (%Ld)',
+        $this->ids);
+    }
+
     if ($this->phids !== null) {
       $where[] = qsprintf(
         $conn,
@@ -191,6 +229,20 @@ abstract class PhabricatorApplicationTransactionQuery
           $conn,
           'c.id IS NULL');
       }
+    }
+
+    if ($this->createdMin !== null) {
+      $where[] = qsprintf(
+        $conn,
+        'x.dateCreated >= %d',
+        $this->createdMin);
+    }
+
+    if ($this->createdMax !== null) {
+      $where[] = qsprintf(
+        $conn,
+        'x.dateCreated <= %d',
+        $this->createdMax);
     }
 
     return $where;
@@ -248,5 +300,39 @@ abstract class PhabricatorApplicationTransactionQuery
   protected function getPrimaryTableAlias() {
     return 'x';
   }
+
+  protected function newPagingMapFromPartialObject($object) {
+    return parent::newPagingMapFromPartialObject($object) + array(
+      'created' => $object->getDateCreated(),
+      'phid' => $object->getPHID(),
+    );
+  }
+
+  public function getBuiltinOrders() {
+    return parent::getBuiltinOrders() + array(
+      'global' => array(
+        'vector' => array('created', 'phid'),
+        'name' => pht('Global'),
+      ),
+    );
+  }
+
+  public function getOrderableColumns() {
+    return parent::getOrderableColumns() + array(
+      'created' => array(
+        'table' => 'x',
+        'column' => 'dateCreated',
+        'type' => 'int',
+      ),
+      'phid' => array(
+        'table' => 'x',
+        'column' => 'phid',
+        'type' => 'string',
+        'reverse' => true,
+        'unique' => true,
+      ),
+    );
+  }
+
 
 }

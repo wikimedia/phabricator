@@ -98,14 +98,11 @@ final class PhabricatorProjectBoardReorderController
       ->setDrag(true);
 
     foreach ($columns as $column) {
-      // Don't allow milestone columns to be reordered.
+      // do allow milestone columns to be reordered.
       $proxy = $column->getProxy();
-      if ($proxy && $proxy->isMilestone()) {
-        continue;
-      }
 
       // At least for now, don't show subproject column.
-      if ($proxy) {
+      if ($proxy && !$proxy->isMilestone()) {
         continue;
       }
 
@@ -115,6 +112,8 @@ final class PhabricatorProjectBoardReorderController
 
       if ($column->isHidden()) {
         $item->setDisabled(true);
+      } elseif($proxy && $proxy->isMilestone()) {
+        $item->setTitleText(pht('Milestone'));
       }
 
       $item->setGrippable(true);

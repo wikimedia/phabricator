@@ -6,6 +6,12 @@ final class PhabricatorSearchResultView extends AphrontView {
   private $object;
   private $result;
   private $tokens;
+  private $body;
+
+  public function setBody($body) {
+    $this->body = $body;
+    return $this;
+  }
 
   public function setHandle(PhabricatorObjectHandle $handle) {
     $this->handle = $handle;
@@ -34,7 +40,11 @@ final class PhabricatorSearchResultView extends AphrontView {
     $type_name = nonempty($handle->getTypeName(), pht('Document'));
 
     $raw_title = $handle->getFullName();
-    $title = $this->emboldenQuery($raw_title);
+    if (strlen($raw_title) <= 2048) {
+      $title = $this->emboldenQuery($raw_title);
+    } else {
+      $title = $raw_title;
+    }
 
     $item = id(new PHUIObjectItemView())
       ->setHeader($title)
@@ -43,6 +53,26 @@ final class PhabricatorSearchResultView extends AphrontView {
       ->setImageURI($handle->getImageURI())
       ->addAttribute($type_name)
       ->setImageIcon($handle->getTypeIcon());
+
+      if ($this->body) {
+      $max_token = 0;
+      $all_tokens = 0;
+      foreach ($this->tokens as $token) {
+        $raw_token = $token->getToken();
+        $token_value = $raw_token->getValue();
+        $len = strlen($token_value);
+        if ($len > $max_token) {
+          $max_token = $len;
+        }
+        $all_tokens += $len;
+      }
+      $item->appendChild(
+        phutil_tag('span', array('class' => 'phui-source-fragment'),
+        $this->emboldenQuery(
+          $this->body,
+          60 + $max_token,
+          400 + $all_tokens)));
+    }
 
     if ($handle->getStatus() == PhabricatorObjectHandle::STATUS_CLOSED) {
       $item->setDisabled(true);
@@ -57,8 +87,14 @@ final class PhabricatorSearchResultView extends AphrontView {
    * Find the words which are part of the query string, and bold them in a
    * result string. This makes it easier for users to see why a result
    * matched their query.
+   *
+   * @param int $context_length - max length of displayed context text.
+   *                     pass a value > 0 to trim the text between
+   *                     matches down to the specified number of
+   *                     characters.
+   * @param int $limit - max overall length of returned text.
    */
-  private function emboldenQuery($str) {
+  private function emboldenQuery($str, $context_length = 0, $limit = 0) {
     $tokens = $this->tokens;
 
     if (!$tokens) {
@@ -70,10 +106,6 @@ final class PhabricatorSearchResultView extends AphrontView {
     }
 
     if (!strlen($str)) {
-      return $str;
-    }
-
-    if (strlen($str) > 2048) {
       return $str;
     }
 
@@ -135,6 +167,11 @@ final class PhabricatorSearchResultView extends AphrontView {
     $parts = array();
     $highlight = 0;
     $offset = 0;
+
+    // Convert instances of PhutilSafeHTML within $str into
+    // plain strings. Needed to avoid a bug in phutil_utf8v.
+    // See https://phabricator.wikimedia.org/T263063
+    $str = (string) $str;
     foreach (phutil_utf8v_combined($str) as $character) {
       $length = strlen($character);
 
@@ -174,11 +211,33 @@ final class PhabricatorSearchResultView extends AphrontView {
 
     // Finally, add tags.
     $result = array();
+    $total_length = 0;
     foreach ($parts as $part) {
       if ($part['highlighted']) {
+        $total_length += strlen($part['text']);
         $result[] = phutil_tag('strong', array(), $part['text']);
       } else {
-        $result[] = $part['text'];
+        if ($context_length > 0 && strlen($part['text']) >= $context_length) {
+          $half_context = $context_length / 2;
+          if (count($result) > 0) {
+            $result[] = array(
+              substr($part['text'], 0, $half_context),
+              phutil_safe_html(' &hellip; '),
+              substr($part['text'], -$half_context),
+            );
+            $total_length += $context_length;
+          } else {
+            $result[] = substr($part['text'], -$context_length);
+            $total_length += $context_length;
+          }
+        } else {
+          $result[] = $part['text'];
+          $total_length += strlen($part['text']);
+        }
+      }
+      if ($limit > 0 && $total_length >= $limit) {
+        $result[] = phutil_safe_html('&hellip;');
+        break;
       }
     }
 

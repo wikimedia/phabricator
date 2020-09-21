@@ -4,6 +4,7 @@ final class ManiphestTaskGraph
   extends PhabricatorObjectGraph {
 
   private $seedMaps = array();
+  private $isStandalone;
 
   protected function getEdgeTypes() {
     return array(
@@ -22,6 +23,15 @@ final class ManiphestTaskGraph
 
   protected function isClosed($object) {
     return $object->isClosed();
+  }
+
+  public function setIsStandalone($is_standalone) {
+    $this->isStandalone = $is_standalone;
+    return $this;
+  }
+
+  public function getIsStandalone() {
+    return $this->isStandalone;
   }
 
   protected function newTableRow($phid, $object, $trace) {
@@ -74,9 +84,18 @@ final class ManiphestTaskGraph
         ' ',
         $link,
       );
+
+      $subtype_tag = null;
+
+      $subtype = $object->newSubtypeObject();
+      if ($subtype && $subtype->hasTagView()) {
+        $subtype_tag = $subtype->newTagView($viewer)
+          ->setSlimShady(true);
+      }
     } else {
       $status = null;
       $assigned = null;
+      $subtype_tag = null;
       $link = $viewer->renderHandle($phid);
     }
 
@@ -105,18 +124,23 @@ final class ManiphestTaskGraph
       $marker,
       $trace,
       $status,
+      $subtype_tag,
       $assigned,
       $link,
     );
   }
 
   protected function newTable(AphrontTableView $table) {
+    $subtype_map = id(new ManiphestTask())->newEditEngineSubtypeMap();
+    $has_subtypes = ($subtype_map->getCount() > 1);
+
     return $table
       ->setHeaders(
         array(
           null,
           null,
           pht('Status'),
+          pht('Subtype'),
           pht('Assigned'),
           pht('Task'),
         ))
@@ -126,12 +150,28 @@ final class ManiphestTaskGraph
           'threads',
           'graph-status',
           null,
+          null,
           'wide pri object-link',
         ))
       ->setColumnVisibility(
         array(
           true,
           !$this->getRenderOnlyAdjacentNodes(),
+          true,
+          $has_subtypes,
+        ))
+      ->setDeviceVisibility(
+        array(
+          true,
+
+          // On mobile, we only show the actual graph drawing if we're on the
+          // standalone page, since it can take over the screen otherwise.
+          $this->getIsStandalone(),
+          true,
+
+          // On mobile, don't show subtypes since they're relatively less
+          // important and we're more pressured for space.
+          false,
         ));
   }
 
@@ -158,6 +198,7 @@ final class ManiphestTaskGraph
 
   protected function newEllipsisRow() {
     return array(
+      null,
       null,
       null,
       null,

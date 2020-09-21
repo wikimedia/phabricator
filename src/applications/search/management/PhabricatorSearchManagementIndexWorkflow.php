@@ -116,6 +116,10 @@ final class PhabricatorSearchManagementIndexWorkflow
     // them a hint that they might want to use "--force".
     $track_skips = (!$is_background && !$is_force);
 
+    // Activate "strict" error reporting if we're running in the foreground
+    // so we'll report a wider range of conditions as errors.
+    $is_strict = !$is_background;
+
     $count_updated = 0;
     $count_skipped = 0;
 
@@ -125,11 +129,20 @@ final class PhabricatorSearchManagementIndexWorkflow
           $old_versions = $this->loadIndexVersions($phid);
         }
 
-        PhabricatorSearchWorker::queueDocumentForIndexing($phid, $parameters);
+        PhabricatorSearchWorker::queueDocumentForIndexing(
+          $phid,
+          $parameters,
+          $is_strict);
 
         if ($track_skips) {
           $new_versions = $this->loadIndexVersions($phid);
-          if ($old_versions !== $new_versions) {
+
+          if (!$old_versions && !$new_versions) {
+            // If the document doesn't use an index version, both the lists
+            // of versions will be empty. We still rebuild the index in this
+            // case.
+            $count_updated++;
+          } else if ($old_versions !== $new_versions) {
             $count_updated++;
           } else {
             $count_skipped++;

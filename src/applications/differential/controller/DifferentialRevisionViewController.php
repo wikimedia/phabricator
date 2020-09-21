@@ -51,6 +51,7 @@ final class DifferentialRevisionViewController
       ->setViewer($viewer)
       ->needReviewers(true)
       ->needReviewerAuthority(true)
+      ->needCommitPHIDs(true)
       ->executeOne();
     if (!$revision) {
       return new Aphront404Response();
@@ -146,7 +147,7 @@ final class DifferentialRevisionViewController
     $object_phids = array_merge(
       $revision->getReviewerPHIDs(),
       $subscriber_phids,
-      $revision->loadCommitPHIDs(),
+      $revision->getCommitPHIDs(),
       array(
         $revision->getAuthorPHID(),
         $viewer->getPHID(),
@@ -226,16 +227,22 @@ final class DifferentialRevisionViewController
       $old = array_select_keys($changesets, $old_ids);
       $new = array_select_keys($changesets, $new_ids);
 
-      $query = id(new DifferentialInlineCommentQuery())
+      $inlines = id(new DifferentialDiffInlineCommentQuery())
         ->setViewer($viewer)
-        ->needHidden(true)
-        ->withRevisionPHIDs(array($revision->getPHID()));
-      $inlines = $query->execute();
-      $inlines = $query->adjustInlinesForChangesets(
-        $inlines,
-        $old,
-        $new,
-        $revision);
+        ->withRevisionPHIDs(array($revision->getPHID()))
+        ->withPublishableComments(true)
+        ->withPublishedComments(true)
+        ->execute();
+
+      $inlines = mpull($inlines, 'newInlineCommentObject');
+
+      $inlines = id(new PhabricatorInlineCommentAdjustmentEngine())
+        ->setViewer($viewer)
+        ->setRevision($revision)
+        ->setOldChangesets($old)
+        ->setNewChangesets($new)
+        ->setInlines($inlines)
+        ->execute();
 
       foreach ($inlines as $inline) {
         $changeset_id = $inline->getChangesetID();
@@ -304,10 +311,6 @@ final class DifferentialRevisionViewController
     $subheader = $this->buildSubheaderView($revision);
     $details = $this->buildDetails($revision, $field_list);
     $curtain = $this->buildCurtain($revision);
-
-    $whitespace = $request->getStr(
-      'whitespace',
-      DifferentialChangesetParser::WHITESPACE_IGNORE_MOST);
 
     $repository = $revision->getRepository();
     if ($repository) {
@@ -383,11 +386,9 @@ final class DifferentialRevisionViewController
         ->setDiff($target)
         ->setRenderingReferences($rendering_references)
         ->setVsMap($vs_map)
-        ->setWhitespace($whitespace)
         ->setSymbolIndexes($symbol_indexes)
         ->setTitle(pht('Diff %s', $target->getID()))
         ->setBackground(PHUIObjectBoxView::BLUE_PROPERTY);
-
 
       $revision_id = $revision->getID();
       $inline_list_uri = "/revision/inlines/{$revision_id}/";
@@ -412,7 +413,6 @@ final class DifferentialRevisionViewController
       ->setDiffUnitStatuses($broken_diffs)
       ->setSelectedVersusDiffID($diff_vs)
       ->setSelectedDiffID($target->getID())
-      ->setSelectedWhitespace($whitespace)
       ->setCommitsForLinks($commits_for_links);
 
     $local_table = id(new DifferentialLocalCommitsView())
@@ -461,6 +461,15 @@ final class DifferentialRevisionViewController
         $reviewer_changesets = $this->getPackageChangesets($reviewer_phid);
         $reviewer->attachChangesets($reviewer_changesets);
       }
+
+      $authority_packages = $this->getAuthorityPackages();
+      foreach ($changesets as $changeset) {
+        $changeset_packages = $this->getChangesetPackages($changeset);
+
+        $changeset
+          ->setAuthorityPackages($authority_packages)
+          ->setChangesetPackages($changeset_packages);
+      }
     }
 
     $tab_group = new PHUITabGroupView();
@@ -479,16 +488,13 @@ final class DifferentialRevisionViewController
         ->setKey('history')
         ->appendChild($history));
 
-    $filetree_on = $viewer->compareUserSetting(
-      PhabricatorShowFiletreeSetting::SETTINGKEY,
-      PhabricatorShowFiletreeSetting::VALUE_ENABLE_FILETREE);
-
-    $collapsed_key = PhabricatorFiletreeVisibleSetting::SETTINGKEY;
-    $filetree_collapsed = (bool)$viewer->getUserSetting($collapsed_key);
+    $filetree = id(new DifferentialFileTreeEngine())
+      ->setViewer($viewer);
+    $filetree_collapsed = !$filetree->getIsVisible();
 
     // See PHI811. If the viewer has the file tree on, the files tab with the
     // table of contents is redundant, so default to the "History" tab instead.
-    if ($filetree_on && !$filetree_collapsed) {
+    if (!$filetree_collapsed) {
       $tab_group->selectTab('history');
     }
 
@@ -614,20 +620,9 @@ final class DifferentialRevisionViewController
     $crumbs->addTextCrumb($monogram);
     $crumbs->setBorder(true);
 
-    $nav = null;
-    if ($filetree_on && !$this->isVeryLargeDiff()) {
-      $width_key = PhabricatorFiletreeWidthSetting::SETTINGKEY;
-      $width_value = $viewer->getUserSetting($width_key);
-
-      $nav = id(new DifferentialChangesetFileTreeSideNavBuilder())
-        ->setTitle($monogram)
-        ->setBaseURI(new PhutilURI($revision->getURI()))
-        ->setCollapsed($filetree_collapsed)
-        ->setWidth((int)$width_value)
-        ->build($changesets);
-    }
-
-    Javelin::initBehavior('differential-user-select');
+    $filetree
+      ->setChangesets($changesets)
+      ->setDisabled($this->isVeryLargeDiff());
 
     $view = id(new PHUITwoColumnView())
       ->setHeader($header)
@@ -645,15 +640,21 @@ final class DifferentialRevisionViewController
         ))
       ->setFooter($footer);
 
-    $page =  $this->newPage()
-      ->setTitle($monogram.' '.$revision->getTitle())
-      ->setCrumbs($crumbs)
-      ->setPageObjectPHIDs(array($revision->getPHID()))
-      ->appendChild($view);
+    $main_content = array(
+      $crumbs,
+      $view,
+    );
 
-    if ($nav) {
-      $page->setNavigation($nav);
+    $main_content = $filetree->newView($main_content);
+
+    if (!$filetree->getDisabled()) {
+      $changeset_view->setFormationView($main_content);
     }
+
+    $page = $this->newPage()
+      ->setTitle($monogram.' '.$revision->getTitle())
+      ->setPageObjectPHIDs(array($revision->getPHID()))
+      ->appendChild($main_content);
 
     return $page;
   }
@@ -1040,12 +1041,6 @@ final class DifferentialRevisionViewController
   }
 
 
-  /**
-   * Note this code is somewhat similar to the buildPatch method in
-   * @{class:DifferentialReviewRequestMail}.
-   *
-   * @return @{class:AphrontRedirectResponse}
-   */
   private function buildRawDiffResponse(
     DifferentialRevision $revision,
     array $changesets,
@@ -1095,7 +1090,7 @@ final class DifferentialRevisionViewController
     // this ends up being something like
     //   D123.diff
     // or the verbose
-    //   D123.vs123.id123.whitespaceignore-all.diff
+    //   D123.vs123.id123.highlightjs.diff
     // lame but nice to include these options
     $file_name = ltrim($request_uri->getPath(), '/').'.';
     foreach ($request_uri->getQueryParamsAsPairList() as $pair) {
@@ -1107,15 +1102,17 @@ final class DifferentialRevisionViewController
     }
     $file_name .= 'diff';
 
-    $unguarded = AphrontWriteGuard::beginScopedUnguardedWrites();
-      $file = PhabricatorFile::newFromFileData(
-        $raw_diff,
-        array(
-          'name' => $file_name,
-          'ttl.relative' => phutil_units('24 hours in seconds'),
-          'viewPolicy' => PhabricatorPolicies::POLICY_NOONE,
-        ));
+    $iterator = new ArrayIterator(array($raw_diff));
 
+    $source = id(new PhabricatorIteratorFileUploadSource())
+      ->setName($file_name)
+      ->setMIMEType('text/plain')
+      ->setRelativeTTL(phutil_units('24 hours in seconds'))
+      ->setViewPolicy(PhabricatorPolicies::POLICY_NOONE)
+      ->setIterator($iterator);
+
+    $unguarded = AphrontWriteGuard::beginScopedUnguardedWrites();
+      $file = $source->uploadFile();
       $file->attachToObject($revision->getPHID());
     unset($unguarded);
 

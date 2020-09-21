@@ -22,6 +22,12 @@ final class PhabricatorConduitCallManagementWorkflow
               'stdin.'),
           ),
           array(
+            'name' => 'local',
+            'help' => pht(
+              'Force the request to execute in this process, rather than '.
+              'proxying to another host in the cluster.'),
+          ),
+          array(
             'name' => 'as',
             'param' => 'username',
             'help' => pht(
@@ -58,6 +64,10 @@ final class PhabricatorConduitCallManagementWorkflow
             'No such user "%s" exists.',
             $as));
       }
+
+      // Allow inline generation of user caches for the user we're acting
+      // as, since some calls may read user preferences.
+      $actor->setAllowInlineCacheGeneration(true);
     } else {
       $actor = $viewer;
     }
@@ -71,9 +81,17 @@ final class PhabricatorConduitCallManagementWorkflow
 
     $params = phutil_json_decode($input_json);
 
-    $result = id(new ConduitCall($method, $params))
-      ->setUser($actor)
-      ->execute();
+    $call = id(new ConduitCall($method, $params))
+      ->setUser($actor);
+
+    $api_request = $call->getAPIRequest();
+
+    $is_local = $args->getArg('local');
+    if ($is_local) {
+      $api_request->setIsClusterRequest(true);
+    }
+
+    $result = $call->execute();
 
     $output = array(
       'result' => $result,

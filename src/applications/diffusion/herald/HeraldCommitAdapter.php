@@ -35,18 +35,6 @@ final class HeraldCommitAdapter
   }
 
   public function newTestAdapter(PhabricatorUser $viewer, $object) {
-    $object = id(new DiffusionCommitQuery())
-      ->setViewer($viewer)
-      ->withPHIDs(array($object->getPHID()))
-      ->needCommitData(true)
-      ->executeOne();
-    if (!$object) {
-      throw new Exception(
-        pht(
-          'Failed to reload commit ("%s") to fetch commit data.',
-          $object->getPHID()));
-    }
-
     return id(clone $this)
       ->setObject($object);
   }
@@ -56,7 +44,24 @@ final class HeraldCommitAdapter
   }
 
   public function setObject($object) {
-    $this->commit = $object;
+    $viewer = $this->getViewer();
+    $commit_phid = $object->getPHID();
+
+    $commit = id(new DiffusionCommitQuery())
+      ->setViewer($viewer)
+      ->withPHIDs(array($commit_phid))
+      ->needCommitData(true)
+      ->needIdentities(true)
+      ->needAuditRequests(true)
+      ->executeOne();
+    if (!$commit) {
+      throw new Exception(
+        pht(
+          'Failed to reload commit ("%s") to fetch commit data.',
+          $commit_phid));
+    }
+
+    $this->commit = $commit;
 
     return $this;
   }
@@ -175,31 +180,34 @@ final class HeraldCommitAdapter
   }
 
   public function loadDifferentialRevision() {
-    $viewer = $this->getViewer();
-
     if ($this->affectedRevision === null) {
-      $this->affectedRevision = false;
+      $viewer = $this->getViewer();
 
-      $commit = $this->getObject();
-      $data = $commit->getCommitData();
+      // NOTE: The viewer here is omnipotent, which means that Herald discloses
+      // some information users do not normally have access to when rules load
+      // the revision related to a commit. See D20468.
 
-      $revision_id = $data->getCommitDetail('differential.revisionID');
-      if ($revision_id) {
-        // NOTE: The Herald rule owner might not actually have access to
-        // the revision, and can control which revision a commit is
-        // associated with by putting text in the commit message. However,
-        // the rules they can write against revisions don't actually expose
-        // anything interesting, so it seems reasonable to load unconditionally
-        // here.
+      // A user who wants to learn about "Dxyz" can write a Herald rule which
+      // uses all the "Related revision..." fields, then push a commit which
+      // contains "Differential Revision: Dxyz" in the message to make Herald
+      // evaluate the commit with "Dxyz" as the related revision.
 
-        $revision = id(new DifferentialRevisionQuery())
-          ->withIDs(array($revision_id))
-          ->setViewer($viewer)
-          ->needReviewers(true)
-          ->executeOne();
-        if ($revision) {
-          $this->affectedRevision = $revision;
-        }
+      // At time of writing, this commit will link to the revision and the
+      // transcript for the commit will disclose some information about the
+      // revision (like reviewers, subscribers, and build status) which the
+      // commit author could not otherwise see.
+
+      // For now, we just accept this. The disclosures are relatively
+      // uninteresting and you have to jump through a lot of hoops (and leave
+      // a lot of evidence) to get this information.
+
+      $revision = DiffusionCommitRevisionQuery::loadRevisionForCommit(
+        $viewer,
+        $this->getObject());
+      if ($revision) {
+        $this->affectedRevision = $revision;
+      } else {
+        $this->affectedRevision = false;
       }
     }
 
@@ -348,6 +356,22 @@ final class HeraldCommitAdapter
   private function getRepository() {
     return $this->getObject()->getRepository();
   }
+
+  public function getAuthorPHID() {
+    return $this->getObject()->getEffectiveAuthorPHID();
+  }
+
+  public function getCommitterPHID() {
+    $commit = $this->getObject();
+
+    if ($commit->hasCommitterIdentity()) {
+      $identity = $commit->getCommitterIdentity();
+      return $identity->getCurrentEffectiveUserPHID();
+    }
+
+    return null;
+  }
+
 
 /* -(  HarbormasterBuildableAdapterInterface  )------------------------------ */
 

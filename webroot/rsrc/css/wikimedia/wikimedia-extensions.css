@@ -1,0 +1,12 @@
+/**
+ * @provides wikimedia-extensions-css
+ */
+ .gerrit-patches-hidden {
+   display:none;
+ }
+  .gerrit-button-hidden {
+   display:none !important;
+ }
+.gerrit-patches-expanded {
+  display:block;
+}

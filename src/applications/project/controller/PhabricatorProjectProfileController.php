@@ -53,7 +53,7 @@ final class PhabricatorProjectProfileController
 
     $subtype = $project->newSubtypeObject();
     if ($subtype && $subtype->hasTagView()) {
-      $subtype_tag = $subtype->newTagView();
+      $subtype_tag = $subtype->newTagView($this->getViewer());
       $header->addTag($subtype_tag);
     }
 
@@ -63,28 +63,44 @@ final class PhabricatorProjectProfileController
     $member_list = id(new PhabricatorProjectMemberListView())
       ->setUser($viewer)
       ->setProject($project)
-      ->setLimit(5)
+      ->setLimit(10)
       ->setBackground(PHUIObjectBoxView::BLUE_PROPERTY)
       ->setUserPHIDs($project->getMemberPHIDs());
 
     $watcher_list = id(new PhabricatorProjectWatcherListView())
       ->setUser($viewer)
       ->setProject($project)
-      ->setLimit(5)
+      ->setLimit(10)
       ->setBackground(PHUIObjectBoxView::BLUE_PROPERTY)
       ->setUserPHIDs($project->getWatcherPHIDs());
 
-    $nav = $this->getProfileMenu();
-    $nav->selectFilter(PhabricatorProject::ITEM_PROFILE);
+    $nav = $this->newNavigation(
+      $project,
+      PhabricatorProject::ITEM_PROFILE);
 
-    $stories = id(new PhabricatorFeedQuery())
+    $query = id(new PhabricatorFeedQuery())
       ->setViewer($viewer)
-      ->withFilterPHIDs(
-        array(
-          $project->getPHID(),
-        ))
+      ->withFilterPHIDs(array($project->getPHID()))
       ->setLimit(50)
-      ->execute();
+      ->setReturnPartialResultsOnOverheat(true);
+
+    $stories = $query->execute();
+
+    $overheated_view = null;
+    $is_overheated = $query->getIsOverheated();
+    if ($is_overheated) {
+      $overheated_message =
+        PhabricatorApplicationSearchController::newOverheatedError(
+          (bool)$stories);
+
+      $overheated_view = id(new PHUIInfoView())
+        ->setSeverity(PHUIInfoView::SEVERITY_WARNING)
+        ->setTitle(pht('Query Overheated'))
+        ->setErrors(
+          array(
+            $overheated_message,
+          ));
+    }
 
     $view_all = id(new PHUIButtonView())
       ->setTag('a')
@@ -102,7 +118,11 @@ final class PhabricatorProjectProfileController
     $feed = id(new PHUIObjectBoxView())
       ->setHeader($feed_header)
       ->addClass('project-view-feed')
-      ->appendChild($feed);
+      ->appendChild(
+        array(
+          $overheated_view,
+          $feed,
+        ));
 
     require_celerity_resource('project-view-css');
 

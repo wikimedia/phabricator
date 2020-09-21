@@ -35,6 +35,7 @@ final class PhabricatorProjectSubprojectsController
         ->withParentProjectPHIDs(array($project->getPHID()))
         ->needImages(true)
         ->withIsMilestone(false)
+        ->setOrderVector(array('-status', 'name'))
         ->execute();
 
       $subproject_list = id(new PHUIObjectBoxView())
@@ -77,8 +78,9 @@ final class PhabricatorProjectSubprojectsController
       $milestones,
       $subprojects);
 
-    $nav = $this->getProfileMenu();
-    $nav->selectFilter(PhabricatorProject::ITEM_SUBPROJECTS);
+    $nav = $this->newNavigation(
+      $project,
+      PhabricatorProject::ITEM_SUBPROJECTS);
 
     $crumbs = $this->buildApplicationCrumbs();
     $crumbs->addTextCrumb(pht('Subprojects'));

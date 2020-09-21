@@ -121,6 +121,7 @@ final class PhabricatorExtraConfigSetupCheck extends PhabricatorSetupCheck {
         'phabricator.uninstalled-applications',
         'phabricator.application-settings',
         'config.ignore-issues',
+        'auth.lock-config',
       );
       $soft_locks = array_fuse($soft_locks);
       if (isset($soft_locks[$key])) {
@@ -146,7 +147,7 @@ final class PhabricatorExtraConfigSetupCheck extends PhabricatorSetupCheck {
         'that it was previously not locked, you set it using the web UI, '.
         'and it later became locked.'.
         "\n\n".
-        'You should copy this configuration value in a local configuration '.
+        'You should copy this configuration value to a local configuration '.
         'source (usually by using %s) and then remove it from the database '.
         'with the command below.'.
         "\n\n".
@@ -320,6 +321,9 @@ final class PhabricatorExtraConfigSetupCheck extends PhabricatorSetupCheck {
       'Per-application mail subject prefix customization is no longer '.
       'directly supported. Prefixes and other strings may be customized with '.
       '"translation.override".');
+
+    $phd_reason = pht(
+      'Use "bin/phd debug ..." to get a detailed daemon execution log.');
 
     $ancient_config += array(
       'phid.external-loaders' =>
@@ -533,6 +537,14 @@ final class PhabricatorExtraConfigSetupCheck extends PhabricatorSetupCheck {
         'This ancient extension point has been replaced with other '.
         'mechanisms, including "AphrontSite".'),
 
+      'differential.whitespace-matters' => pht(
+        'Whitespace rendering is now handled automatically.'),
+
+      'phd.pid-directory' => pht(
+        'Phabricator daemons no longer use PID files.'),
+
+      'phd.trace' => $phd_reason,
+      'phd.verbose' => $phd_reason,
     );
 
     return $ancient_config;

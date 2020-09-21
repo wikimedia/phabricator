@@ -48,7 +48,6 @@ class PhabricatorSearchResultHighlightsEngineExtension
       );
       $item->appendChild($highlight_view);
     }
-
     return $item;
   }
 

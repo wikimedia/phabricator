@@ -33,9 +33,8 @@ final class PhabricatorRepositoryCommit
 
   const IMPORTED_MESSAGE = 1;
   const IMPORTED_CHANGE = 2;
-  const IMPORTED_OWNERS = 4;
-  const IMPORTED_HERALD = 8;
-  const IMPORTED_ALL = 15;
+  const IMPORTED_PUBLISH = 8;
+  const IMPORTED_ALL = 11;
 
   const IMPORTED_CLOSEABLE = 1024;
   const IMPORTED_UNREACHABLE = 2048;
@@ -467,6 +466,18 @@ final class PhabricatorRepositoryCommit
     return $data->getCommitDetail('authorPHID');
   }
 
+  public function getEffectiveAuthorPHID() {
+    if ($this->hasAuthorIdentity()) {
+      $identity = $this->getAuthorIdentity();
+      if ($identity->hasEffectiveUser()) {
+        return $identity->getCurrentEffectiveUserPHID();
+      }
+    }
+
+    $data = $this->getCommitData();
+    return $data->getCommitDetail('authorPHID');
+  }
+
   public function getAuditStatusObject() {
     $status = $this->getAuditStatus();
     return DiffusionCommitAuditStatus::newForStatus($status);
@@ -494,6 +505,10 @@ final class PhabricatorRepositoryCommit
 
   public function isAuditStatusAudited() {
     return $this->getAuditStatusObject()->isAudited();
+  }
+
+  public function isPermanentCommit() {
+    return (bool)$this->isPartiallyImported(self::IMPORTED_CLOSEABLE);
   }
 
 /* -(  PhabricatorPolicyInterface  )----------------------------------------- */

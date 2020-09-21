@@ -10,6 +10,7 @@
 }
 
 .chart .axis text {
+  font: {$basefont};
   fill: {$darkgreytext};
 }
 
@@ -35,20 +36,61 @@
 }
 
 .chart .point {
-  fill: {$lightblue};
+  fill: #ffffff;
   stroke: {$blue};
-  stroke-width: 1px;
+  stroke-width: 2px;
+  position: relative;
+  cursor: pointer;
 }
 
 .chart-tooltip {
   position: absolute;
   text-align: center;
   width: 120px;
-  height: 16px;
   overflow: hidden;
   padding: 2px;
   background: {$lightbluebackground};
   border: 1px solid {$blueborder};
   border-radius: 8px;
   pointer-events: none;
+}
+
+.chart-hardpoint {
+  min-height: 480px;
+  overflow: hidden;
+  position: relative;
+}
+
+.device-desktop .chart-container {
+  position: absolute;
+  bottom: 0;
+  top: 0;
+  left: 0;
+  right: 300px;
+}
+
+.device .chart-container {
+  min-height: 480px;
+}
+
+.device-desktop .chart-curtain {
+  width: 300px;
+  position: absolute;
+  bottom: 0;
+  top: 0;
+  right: 0;
+}
+
+.chart-function-label-list {
+  background: {$lightbluebackground};
+  border: 1px solid {$lightblueborder};
+  padding: 8px 12px;
+}
+
+.device-desktop .chart-function-label-list {
+  margin-top: 23px;
+}
+
+.chart-function-label-list-item .phui-icon-view {
+  margin-right: 8px;
 }

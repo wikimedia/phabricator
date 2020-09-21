@@ -22,6 +22,8 @@ final class PhabricatorStandardPageView extends PhabricatorBarePageView
   private $tabs;
   private $crumbs;
   private $navigation;
+  private $footer;
+  private $headItems = array(); // WMF HACK
 
   public function setShowFooter($show_footer) {
     $this->showFooter = $show_footer;
@@ -30,18 +32,6 @@ final class PhabricatorStandardPageView extends PhabricatorBarePageView
 
   public function getShowFooter() {
     return $this->showFooter;
-  }
-
-  public function setApplicationMenu($application_menu) {
-    // NOTE: For now, this can either be a PHUIListView or a
-    // PHUIApplicationMenuView.
-
-    $this->applicationMenu = $application_menu;
-    return $this;
-  }
-
-  public function getApplicationMenu() {
-    return $this->applicationMenu;
   }
 
   public function setApplicationName($application_name) {
@@ -208,6 +198,22 @@ final class PhabricatorStandardPageView extends PhabricatorBarePageView
 
 
   protected function willRenderPage() {
+    $footer = $this->renderFooter();
+
+    // NOTE: A cleaner solution would be to let body layout elements implement
+    // some kind of "LayoutInterface" so content can be embedded inside frames,
+    // but there's only really one use case for this for now.
+    $children = $this->renderChildren();
+    if ($children) {
+      $layout = head($children);
+      if ($layout instanceof PHUIFormationView) {
+        $layout->setFooter($footer);
+        $footer = null;
+      }
+    }
+
+    $this->footer = $footer;
+
     parent::willRenderPage();
 
     if (!$this->getRequest()) {
@@ -316,6 +322,12 @@ final class PhabricatorStandardPageView extends PhabricatorBarePageView
         ));
     }
 
+    // If we aren't showing the page chrome, skip rendering DarkConsole and the
+    // main menu, since they won't be visible on the page.
+    if (!$this->getShowChrome()) {
+      return;
+    }
+
     if ($console) {
       require_celerity_resource('aphront-dark-console-css');
 
@@ -345,7 +357,7 @@ final class PhabricatorStandardPageView extends PhabricatorBarePageView
       $menu->setController($this->getController());
     }
 
-    $application_menu = $this->getApplicationMenu();
+    $application_menu = $this->applicationMenu;
     if ($application_menu) {
       if ($application_menu instanceof PHUIApplicationMenuView) {
         $crumbs = $this->getCrumbs();
@@ -359,9 +371,14 @@ final class PhabricatorStandardPageView extends PhabricatorBarePageView
       $menu->setApplicationMenu($application_menu);
     }
 
+
     $this->menuContent = $menu->render();
   }
 
+  // WMF HACK: For use by PhameBlogViewController
+  public function addHeadItem($html) {
+    $this->headItems[] = $html;
+  }
 
   protected function getHead() {
     $monospaced = null;
@@ -395,9 +412,11 @@ final class PhabricatorStandardPageView extends PhabricatorBarePageView
     }
 
     return hsprintf(
-      '%s%s%s',
+      '%s%s%s%s',
       parent::getHead(),
       $font_css,
+      // WMF HACK: For use by PhameBlogViewController
+      $this->headItems,
       $response->renderSingleResource('javelin-magical-init', 'phabricator'));
   }
 
@@ -506,8 +525,6 @@ final class PhabricatorStandardPageView extends PhabricatorBarePageView
 
     $body = parent::getBody();
 
-    $footer = $this->renderFooter();
-
     $nav = $this->getNavigation();
     $tabs = $this->getTabs();
     if ($nav) {
@@ -516,7 +533,7 @@ final class PhabricatorStandardPageView extends PhabricatorBarePageView
         $nav->setCrumbs($crumbs);
       }
       $nav->appendChild($body);
-      $nav->appendFooter($footer);
+      $nav->appendFooter($this->footer);
       $content = phutil_implode_html('', array($nav->render()));
     } else {
       $content = array();
@@ -535,7 +552,7 @@ final class PhabricatorStandardPageView extends PhabricatorBarePageView
       }
 
       $content[] = $body;
-      $content[] = $footer;
+      $content[] = $this->footer;
 
       $content = phutil_implode_html('', $content);
     }
@@ -865,13 +882,6 @@ final class PhabricatorStandardPageView extends PhabricatorBarePageView
   public function produceAphrontResponse() {
     $controller = $this->getController();
 
-    if (!$this->getApplicationMenu()) {
-      $application_menu = $controller->buildApplicationMenu();
-      if ($application_menu) {
-        $this->setApplicationMenu($application_menu);
-      }
-    }
-
     $viewer = $this->getUser();
     if ($viewer && $viewer->getPHID()) {
       $object_phids = $this->pageObjects;
@@ -887,6 +897,17 @@ final class PhabricatorStandardPageView extends PhabricatorBarePageView
       $response = id(new AphrontAjaxResponse())
         ->setContent($content);
     } else {
+      // See T13247. Try to find some navigational menu items to create a
+      // mobile navigation menu from.
+      $application_menu = $controller->buildApplicationMenu();
+      if (!$application_menu) {
+        $navigation = $this->getNavigation();
+        if ($navigation) {
+          $application_menu = $navigation->getMenu();
+        }
+      }
+      $this->applicationMenu = $application_menu;
+
       $content = $this->render();
 
       $response = id(new AphrontWebpageResponse())

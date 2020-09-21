@@ -23,11 +23,6 @@ final class LegalpadDocumentRequireSignatureTransaction
     }
   }
 
-  public function shouldHide() {
-    return $this->getOldValue()
-        == $this->getNewValue();
-  }
-
   public function getTitle() {
     $new = $this->getNewValue();
 
@@ -58,23 +53,26 @@ final class LegalpadDocumentRequireSignatureTransaction
   }
 
   public function validateTransactions($object, array $xactions) {
-    $actor = $this->getActor();
-    $is_admin = $actor->getIsAdmin();
     $errors = array();
 
-    if (!$xactions) {
-      return $errors;
-    }
-
-    $old = $this->generateOldValue($object);
-
+    $old = (bool)$object->getRequireSignature();
     foreach ($xactions as $xaction) {
-      $is_changed = (bool)$old != (bool)$xaction->getNewValue();
-      if (!$is_admin && $is_changed) {
+      $new = (bool)$xaction->getNewValue();
+
+      if ($old === $new) {
+        continue;
+      }
+
+      $is_admin = $this->getActor()->getIsAdmin();
+      if (!$is_admin) {
         $errors[] = $this->newInvalidError(
-          pht('Only admins may require signature.'));
+          pht(
+            'Only administrators may change whether a document '.
+            'requires a signature.'),
+          $xaction);
       }
     }
+
     return $errors;
   }
 

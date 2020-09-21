@@ -79,14 +79,37 @@ final class PhabricatorOwnersPath extends PhabricatorOwnersDAO {
   public static function getSetFromTransactionValue(array $v) {
     $set = array();
     foreach ($v as $ref) {
-      $set[$ref['repositoryPHID']][$ref['path']][$ref['excluded']] = true;
+      $key = self::getScalarKeyForRef($ref);
+      $set[$key] = true;
     }
     return $set;
   }
 
   public static function isRefInSet(array $ref, array $set) {
-    return isset($set[$ref['repositoryPHID']][$ref['path']][$ref['excluded']]);
+    $key = self::getScalarKeyForRef($ref);
+    return isset($set[$key]);
   }
+
+  private static function getScalarKeyForRef(array $ref) {
+    // See T13464. When building refs from raw transactions, the path has
+    // not been normalized yet and doesn't have a separate "display" path.
+    // If the "display" path isn't populated, just use the actual path to
+    // build the ref key.
+
+    if (isset($ref['display'])) {
+      $display = $ref['display'];
+    } else {
+      $display = $ref['path'];
+    }
+
+    return sprintf(
+      'repository=%s path=%s display=%s excluded=%d',
+      $ref['repositoryPHID'],
+      $ref['path'],
+      $display,
+      $ref['excluded']);
+  }
+
 
   /**
    * Get the number of directory matches between this path specification and

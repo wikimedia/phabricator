@@ -5,8 +5,9 @@ final class DifferentialHunkParser extends Phobject {
   private $oldLines;
   private $newLines;
   private $intraLineDiffs;
+  private $depthOnlyLines;
   private $visibleLinesMask;
-  private $whitespaceMode;
+  private $normalized;
 
   /**
    * Get a map of lines on which hunks start, other than line 1. This
@@ -35,7 +36,7 @@ final class DifferentialHunkParser extends Phobject {
   }
   public function getVisibleLinesMask() {
     if ($this->visibleLinesMask === null) {
-      throw new PhutilInvalidStateException('generateVisibileLinesMask');
+      throw new PhutilInvalidStateException('generateVisibleLinesMask');
     }
     return $this->visibleLinesMask;
   }
@@ -115,20 +116,22 @@ final class DifferentialHunkParser extends Phobject {
     return $this;
   }
 
-
-  public function setWhitespaceMode($white_space_mode) {
-    $this->whitespaceMode = $white_space_mode;
+  public function setDepthOnlyLines(array $map) {
+    $this->depthOnlyLines = $map;
     return $this;
   }
 
-  private function getWhitespaceMode() {
-    if ($this->whitespaceMode === null) {
-      throw new Exception(
-        pht(
-          'You must %s before accessing this data.',
-          'setWhitespaceMode'));
-    }
-    return $this->whitespaceMode;
+  public function getDepthOnlyLines() {
+    return $this->depthOnlyLines;
+  }
+
+  public function setNormalized($normalized) {
+    $this->normalized = $normalized;
+    return $this;
+  }
+
+  public function getNormalized() {
+    return $this->normalized;
   }
 
   public function getIsDeleted() {
@@ -148,13 +151,6 @@ final class DifferentialHunkParser extends Phobject {
 
     // This is an empty file.
     return false;
-  }
-
-  /**
-   * Returns true if the hunks change any text, not just whitespace.
-   */
-  public function getHasTextChanges() {
-    return $this->getHasChanges('text');
   }
 
   /**
@@ -184,9 +180,6 @@ final class DifferentialHunkParser extends Phobject {
       }
 
       if ($o['type'] !== $n['type']) {
-        // The types are different, so either the underlying text is actually
-        // different or whatever whitespace rules we're using consider them
-        // different.
         return true;
       }
 
@@ -269,62 +262,7 @@ final class DifferentialHunkParser extends Phobject {
     $this->setOldLines($rebuild_old);
     $this->setNewLines($rebuild_new);
 
-    $this->updateChangeTypesForWhitespaceMode();
-
-    return $this;
-  }
-
-  private function updateChangeTypesForWhitespaceMode() {
-    $mode = $this->getWhitespaceMode();
-
-    $mode_show_all = DifferentialChangesetParser::WHITESPACE_SHOW_ALL;
-    if ($mode === $mode_show_all) {
-      // If we're showing all whitespace, we don't need to perform any updates.
-      return;
-    }
-
-    $mode_trailing = DifferentialChangesetParser::WHITESPACE_IGNORE_TRAILING;
-    $is_trailing = ($mode === $mode_trailing);
-
-    $new = $this->getNewLines();
-    $old = $this->getOldLines();
-    foreach ($old as $key => $o) {
-      $n = $new[$key];
-
-      if (!$o || !$n) {
-        continue;
-      }
-
-      if ($is_trailing) {
-        // In "trailing" mode, we need to identify lines which are marked
-        // changed but differ only by trailing whitespace. We mark these lines
-        // unchanged.
-        if ($o['type'] != $n['type']) {
-          if (rtrim($o['text']) === rtrim($n['text'])) {
-            $old[$key]['type'] = null;
-            $new[$key]['type'] = null;
-          }
-        }
-      } else {
-        // In "ignore most" and "ignore all" modes, we need to identify lines
-        // which are marked unchanged but have internal whitespace changes.
-        // We want to ignore leading and trailing whitespace changes only, not
-        // internal whitespace changes (`diff` doesn't have a mode for this, so
-        // we have to fix it here). If the text is marked unchanged but the
-        // old and new text differs by internal space, mark the lines changed.
-        if ($o['type'] === null && $n['type'] === null) {
-          if ($o['text'] !== $n['text']) {
-            if (trim($o['text']) !== trim($n['text'])) {
-              $old[$key]['type'] = '-';
-              $new[$key]['type'] = '+';
-            }
-          }
-        }
-      }
-    }
-
-    $this->setOldLines($old);
-    $this->setNewLines($new);
+    $this->updateChangeTypesForNormalization();
 
     return $this;
   }
@@ -334,6 +272,7 @@ final class DifferentialHunkParser extends Phobject {
     $new = $this->getNewLines();
 
     $diffs = array();
+    $depth_only = array();
     foreach ($old as $key => $o) {
       $n = $new[$key];
 
@@ -342,24 +281,150 @@ final class DifferentialHunkParser extends Phobject {
       }
 
       if ($o['type'] != $n['type']) {
-        $diffs[$key] = ArcanistDiffUtils::generateIntralineDiff(
-          $o['text'],
-          $n['text']);
+        $o_segments = array();
+        $n_segments = array();
+        $tab_width = 2;
+
+        $o_text = $o['text'];
+        $n_text = $n['text'];
+
+        if ($o_text !== $n_text && (ltrim($o_text) === ltrim($n_text))) {
+          $o_depth = $this->getIndentDepth($o_text, $tab_width);
+          $n_depth = $this->getIndentDepth($n_text, $tab_width);
+
+          if ($o_depth < $n_depth) {
+            $segment_type = '>';
+            $segment_width = $this->getCharacterCountForVisualWhitespace(
+              $n_text,
+              ($n_depth - $o_depth),
+              $tab_width);
+            if ($segment_width) {
+              $n_text = substr($n_text, $segment_width);
+              $n_segments[] = array(
+                $segment_type,
+                $segment_width,
+              );
+            }
+          } else if ($o_depth > $n_depth) {
+            $segment_type = '<';
+            $segment_width = $this->getCharacterCountForVisualWhitespace(
+              $o_text,
+              ($o_depth - $n_depth),
+              $tab_width);
+            if ($segment_width) {
+              $o_text = substr($o_text, $segment_width);
+              $o_segments[] = array(
+                $segment_type,
+                $segment_width,
+              );
+            }
+          }
+
+          // If there are no remaining changes to this line after we've marked
+          // off the indent depth changes, this line was only modified by
+          // changing the indent depth. Mark it for later so we can change how
+          // it is displayed.
+          if ($o_text === $n_text) {
+            $depth_only[$key] = $segment_type;
+          }
+        }
+
+        $intraline_segments = ArcanistDiffUtils::generateIntralineDiff(
+          $o_text,
+          $n_text);
+
+        foreach ($intraline_segments[0] as $o_segment) {
+          $o_segments[] = $o_segment;
+        }
+
+        foreach ($intraline_segments[1] as $n_segment) {
+          $n_segments[] = $n_segment;
+        }
+
+        $diffs[$key] = array(
+          $o_segments,
+          $n_segments,
+        );
       }
     }
 
     $this->setIntraLineDiffs($diffs);
+    $this->setDepthOnlyLines($depth_only);
 
     return $this;
   }
 
-  public function generateVisibileLinesMask($lines_context) {
+  public function generateVisibleBlocksMask($lines_context) {
+
+    // See T13468. This is similar to "generateVisibleLinesMask()", but
+    // attempts to work around a series of bugs which cancel each other
+    // out but make a mess of the intermediate steps.
+
+    $old = $this->getOldLines();
+    $new = $this->getNewLines();
+
+    $length = max(count($old), count($new));
+
+    $visible_lines = array();
+    for ($ii = 0; $ii < $length; $ii++) {
+      $old_visible = (isset($old[$ii]) && $old[$ii]['type']);
+      $new_visible = (isset($new[$ii]) && $new[$ii]['type']);
+
+      $visible_lines[$ii] = ($old_visible || $new_visible);
+    }
+
+    $mask = array();
+    $reveal_cursor = -1;
+    for ($ii = 0; $ii < $length; $ii++) {
+
+      // If this line isn't visible, it isn't going to reveal anything.
+      if (!$visible_lines[$ii]) {
+
+        // If it hasn't been revealed by a nearby line, mark it as masked.
+        if (empty($mask[$ii])) {
+          $mask[$ii] = false;
+        }
+
+        continue;
+      }
+
+      // If this line is visible, reveal all the lines nearby.
+
+      // First, compute the minimum and maximum offsets we want to reveal.
+      $min_reveal = max($ii - $lines_context, 0);
+      $max_reveal = min($ii + $lines_context, $length - 1);
+
+      // Naively, we'd do more work than necessary when revealing context for
+      // several adjacent visible lines: we would mark all the overlapping
+      // lines as revealed several times.
+
+      // To avoid duplicating work, keep track of the largest line we've
+      // revealed to. Since we reveal context by marking every consecutive
+      // line, we don't need to touch any line above it.
+      $min_reveal = max($min_reveal, $reveal_cursor);
+
+      // Reveal the remaining unrevealed lines.
+      for ($jj = $min_reveal; $jj <= $max_reveal; $jj++) {
+        $mask[$jj] = true;
+      }
+
+      // Move the cursor to the next line which may still need to be revealed.
+      $reveal_cursor = $max_reveal + 1;
+    }
+
+    $this->setVisibleLinesMask($mask);
+
+    return $mask;
+  }
+
+  public function generateVisibleLinesMask($lines_context) {
     $old = $this->getOldLines();
     $new = $this->getNewLines();
     $max_length = max(count($old), count($new));
     $visible = false;
     $last = 0;
     $mask = array();
+
     for ($cursor = -$lines_context; $cursor < $max_length; $cursor++) {
       $offset = $cursor + $lines_context;
       if ((isset($old[$offset]) && $old[$offset]['type']) ||
@@ -391,6 +456,11 @@ final class DifferentialHunkParser extends Phobject {
 
     $corpus = array();
     foreach ($lines as $l) {
+      if ($l === null) {
+        $corpus[] = "\n";
+        continue;
+      }
+
       if ($l['type'] != '\\') {
         if ($l['text'] === null) {
           // There's no text on this side of the diff, but insert a placeholder
@@ -512,8 +582,13 @@ final class DifferentialHunkParser extends Phobject {
       $changes = $hunk->getSplitLines();
       foreach ($changes as $line) {
         $diff_type = $line[0]; // Change type in diff of diffs.
+        $is_same = ($diff_type === ' ');
+        $is_add = ($diff_type === '+');
+        $is_rem = ($diff_type === '-');
+
         $orig_type = $line[1]; // Change type in the original diff.
-        if ($diff_type == ' ') {
+
+        if ($is_same) {
           // Use the same key for lines that are next to each other.
           if ($olds_cursor > $news_cursor) {
             $key = $olds_cursor + 1;
@@ -524,17 +599,32 @@ final class DifferentialHunkParser extends Phobject {
           $news[$key] = null;
           $olds_cursor = $key;
           $news_cursor = $key;
-        } else if ($diff_type == '-') {
+        } else if ($is_rem) {
           $olds[] = array($n_old, $orig_type);
           $olds_cursor++;
-        } else if ($diff_type == '+') {
+        } else if ($is_add) {
           $news[] = array($n_new, $orig_type);
           $news_cursor++;
+        } else {
+          throw new Exception(
+            pht(
+              'Found unknown intradiff source line, expected a line '.
+              'beginning with "+", "-", or " " (space): %s.',
+              $line));
         }
-        if (($diff_type == '-' || $diff_type == ' ') && $orig_type != '-') {
+
+        // See T13539. Don't increment the line count if this line was removed,
+        // or if the line is a "No newline at end of file" marker.
+        $not_a_line = ($orig_type === '-' || $orig_type === '\\');
+        if ($not_a_line) {
+          continue;
+        }
+
+        if ($is_same || $is_rem) {
           $n_old++;
         }
-        if (($diff_type == '+' || $diff_type == ' ') && $orig_type != '-') {
+
+        if ($is_same || $is_add) {
           $n_new++;
         }
       }
@@ -553,14 +643,18 @@ final class DifferentialHunkParser extends Phobject {
         list($n, $type) = $olds[$i];
         if ($type == '+' ||
             ($type == ' ' && isset($news[$i]) && $news[$i][1] != ' ')) {
-          $highlight_old[] = $offsets_old[$n];
+          if (isset($offsets_old[$n])) {
+            $highlight_old[] = $offsets_old[$n];
+          }
         }
       }
       if (isset($news[$i])) {
         list($n, $type) = $news[$i];
         if ($type == '+' ||
             ($type == ' ' && isset($olds[$i]) && $olds[$i][1] != ' ')) {
-          $highlight_new[] = $offsets_new[$n];
+          if (isset($offsets_new[$n])) {
+            $highlight_new[] = $offsets_new[$n];
+          }
         }
       }
     }
@@ -671,4 +765,148 @@ final class DifferentialHunkParser extends Phobject {
 
     return $offsets;
   }
+
+  private function getIndentDepth($text, $tab_width) {
+    $len = strlen($text);
+
+    $depth = 0;
+    for ($ii = 0; $ii < $len; $ii++) {
+      $c = $text[$ii];
+
+      // If this is a space, increase the indent depth by 1.
+      if ($c == ' ') {
+        $depth++;
+        continue;
+      }
+
+      // If this is a tab, increase the indent depth to the next tabstop.
+
+      // For example, if the tab width is 4, these sequences both lead us to
+      // a visual width of 8, i.e. the cursor will be in the 8th column:
+      //
+      //   <tab><tab>
+      //   <space><tab><space><space><space><tab>
+
+      if ($c == "\t") {
+        $depth = ($depth + $tab_width);
+        $depth = $depth - ($depth % $tab_width);
+        continue;
+      }
+
+      break;
+    }
+
+    return $depth;
+  }
+
+  private function getCharacterCountForVisualWhitespace(
+    $text,
+    $depth,
+    $tab_width) {
+
+    // Here, we know the visual indent depth of a line has been increased by
+    // some amount (for example, 6 characters).
+
+    // We want to find the largest whitespace prefix of the string we can
+    // which still fits into that amount of visual space.
+
+    // In most cases, this is very easy. For example, if the string has been
+    // indented by two characters and the string begins with two spaces, that's
+    // a perfect match.
+
+    // However, if the string has been indented by 7 characters, the tab width
+    // is 8, and the string begins with "<space><space><tab>", we can only
+    // mark the two spaces as an indent change. These cases are unusual.
+
+    $character_depth = 0;
+    $visual_depth = 0;
+
+    $len = strlen($text);
+    for ($ii = 0; $ii < $len; $ii++) {
+      if ($visual_depth >= $depth) {
+        break;
+      }
+
+      $c = $text[$ii];
+
+      if ($c == ' ') {
+        $character_depth++;
+        $visual_depth++;
+        continue;
+      }
+
+      if ($c == "\t") {
+        // Figure out how many visual spaces we have until the next tabstop.
+        $tab_visual = ($visual_depth + $tab_width);
+        $tab_visual = $tab_visual - ($tab_visual % $tab_width);
+        $tab_visual = ($tab_visual - $visual_depth);
+
+        // If this tab would take us over the limit, we're all done.
+        $remaining_depth = ($depth - $visual_depth);
+        if ($remaining_depth < $tab_visual) {
+          break;
+        }
+
+        $character_depth++;
+        $visual_depth += $tab_visual;
+        continue;
+      }
+
+      break;
+    }
+
+    return $character_depth;
+  }
+
+  private function updateChangeTypesForNormalization() {
+    if (!$this->getNormalized()) {
+      return;
+    }
+
+    // If we've parsed based on a normalized diff alignment, we may currently
+    // believe some lines are unchanged when they have actually changed. This
+    // happens when:
+    //
+    //   - a line changes;
+    //   - the change is a kind of change we normalize away when aligning the
+    //     diff, like an indentation change;
+    //   - we normalize the change away to align the diff; and so
+    //   - the old and new copies of the line are now aligned in the new
+    //     normalized diff.
+    //
+    // Then we end up with an alignment where the two lines that differ only
+    // in some some trivial way are aligned. This is great, and exactly what
+    // we're trying to accomplish by doing all this alignment stuff in the
+    // first place.
+    //
+    // However, in this case the correctly-aligned lines will be incorrectly
+    // marked as unchanged because the diff alorithm was fed normalized copies
+    // of the lines, and these copies truly weren't any different.
+    //
+    // When lines are aligned and marked identical, but they're not actually
+    // identical, we now mark them as changed. The rest of the processing will
+    // figure out how to render them appropritely.
+
+    $new = $this->getNewLines();
+    $old = $this->getOldLines();
+    foreach ($old as $key => $o) {
+      $n = $new[$key];
+
+      if (!$o || !$n) {
+        continue;
+      }
+
+      if ($o['type'] === null && $n['type'] === null) {
+        if ($o['text'] !== $n['text']) {
+          $old[$key]['type'] = '-';
+          $new[$key]['type'] = '+';
+        }
+      }
+    }
+
+    $this->setOldLines($old);
+    $this->setNewLines($new);
+  }
+
+
 }

@@ -6,9 +6,13 @@
   color: #aa0066;
 }
 
+.remarkup-code .language-tag {
+  color: {$lightgreytext};
+}
+
 .remarkup-code td > span {
   display: inline;
-  word-break: break-all;
+  line-break: anywhere;
 }
 
 .remarkup-code .rbw_r { color: red; }
@@ -28,4 +32,10 @@ span.crossreference-item {
 .remarkup-code .invisible {
   color: #222222;
   background: #dddddd;
+}
+
+.suspicious-character {
+  background: #ff7700;
+  color: #ffffff;
+  cursor: default;
 }

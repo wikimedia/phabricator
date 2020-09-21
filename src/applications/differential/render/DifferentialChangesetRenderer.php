@@ -28,12 +28,16 @@ abstract class DifferentialChangesetRenderer extends Phobject {
   private $originalNew;
   private $gaps;
   private $mask;
-  private $depths;
   private $originalCharacterEncoding;
   private $showEditAndReplyLinks;
   private $canMarkDone;
   private $objectOwnerPHID;
   private $highlightingDisabled;
+  private $scopeEngine = false;
+  private $depthOnlyLines;
+
+  private $documentEngine;
+  private $documentEngineBlocks;
 
   private $oldFile = false;
   private $newFile = false;
@@ -76,14 +80,6 @@ abstract class DifferentialChangesetRenderer extends Phobject {
     return $this->isUndershield;
   }
 
-  public function setDepths($depths) {
-    $this->depths = $depths;
-    return $this;
-  }
-  protected function getDepths() {
-    return $this->depths;
-  }
-
   public function setMask($mask) {
     $this->mask = $mask;
     return $this;
@@ -98,6 +94,15 @@ abstract class DifferentialChangesetRenderer extends Phobject {
   }
   protected function getGaps() {
     return $this->gaps;
+  }
+
+  public function setDepthOnlyLines(array $lines) {
+    $this->depthOnlyLines = $lines;
+    return $this;
+  }
+
+  public function getDepthOnlyLines() {
+    return $this->depthOnlyLines;
   }
 
   public function attachOldFile(PhabricatorFile $old = null) {
@@ -237,9 +242,28 @@ abstract class DifferentialChangesetRenderer extends Phobject {
     return $this->oldChangesetID;
   }
 
+  public function setDocumentEngine(PhabricatorDocumentEngine $engine) {
+    $this->documentEngine = $engine;
+    return $this;
+  }
+
+  public function getDocumentEngine() {
+    return $this->documentEngine;
+  }
+
+  public function setDocumentEngineBlocks(
+    PhabricatorDocumentEngineBlocks $blocks) {
+    $this->documentEngineBlocks = $blocks;
+    return $this;
+  }
+
+  public function getDocumentEngineBlocks() {
+    return $this->documentEngineBlocks;
+  }
+
   public function setNewComments(array $new_comments) {
     foreach ($new_comments as $line_number => $comments) {
-      assert_instances_of($comments, 'PhabricatorInlineCommentInterface');
+      assert_instances_of($comments, 'PhabricatorInlineComment');
     }
     $this->newComments = $new_comments;
     return $this;
@@ -250,7 +274,7 @@ abstract class DifferentialChangesetRenderer extends Phobject {
 
   public function setOldComments(array $old_comments) {
     foreach ($old_comments as $line_number => $comments) {
-      assert_instances_of($comments, 'PhabricatorInlineCommentInterface');
+      assert_instances_of($comments, 'PhabricatorInlineComment');
     }
     $this->oldComments = $old_comments;
     return $this;
@@ -353,6 +377,16 @@ abstract class DifferentialChangesetRenderer extends Phobject {
     $notice = null;
     if ($this->getIsTopLevel()) {
       $force = (!$content && !$props);
+
+      // If we have DocumentEngine messages about the blocks, assume they
+      // explain why there's no content.
+      $blocks = $this->getDocumentEngineBlocks();
+      if ($blocks) {
+        if ($blocks->getMessages()) {
+          $force = false;
+        }
+      }
+
       $notice = $this->renderChangeTypeHeader($force);
     }
 
@@ -361,14 +395,14 @@ abstract class DifferentialChangesetRenderer extends Phobject {
       $undershield = $this->renderUndershieldHeader();
     }
 
-    $result = $notice.$props.$undershield.$content;
+    $result = array(
+      $notice,
+      $props,
+      $undershield,
+      $content,
+    );
 
-    // TODO: Let the user customize their tab width / display style.
-    // TODO: We should possibly post-process "\r" as well.
-    // TODO: Both these steps should happen earlier.
-    $result = str_replace("\t", '  ', $result);
-
-    return phutil_safe_html($result);
+    return hsprintf('%s', $result);
   }
 
   abstract public function isOneUpRenderer();
@@ -376,11 +410,13 @@ abstract class DifferentialChangesetRenderer extends Phobject {
     $range_start,
     $range_len,
     $rows);
-  abstract public function renderFileChange(
-    $old = null,
-    $new = null,
-    $id = 0,
-    $vs = 0);
+
+  public function renderDocumentEngineBlocks(
+    PhabricatorDocumentEngineBlocks $blocks,
+    $old_changeset_key,
+    $new_changeset_key) {
+    return null;
+  }
 
   abstract protected function renderChangeTypeHeader($force);
   abstract protected function renderUndershieldHeader();
@@ -404,9 +440,6 @@ abstract class DifferentialChangesetRenderer extends Phobject {
    *      important (e.g., generated code).
    *    - `"text"`: Force the text to be shown. This is probably only relevant
    *      when a file is not changed.
-   *    - `"whitespace"`: Force the text to be shown, and the diff to be
-   *      rendered with all whitespace shown. This is probably only relevant
-   *      when a file is changed only by altering whitespace.
    *    - `"none"`: Don't show the link (e.g., text not available).
    *
    * @param   string        Message explaining why the diff is hidden.
@@ -472,6 +505,8 @@ abstract class DifferentialChangesetRenderer extends Phobject {
         $ospec['htype'] = $old[$ii]['type'];
         if (isset($old_render[$ii])) {
           $ospec['render'] = $old_render[$ii];
+        } else if ($ospec['htype'] === '\\') {
+          $ospec['render'] = $old[$ii]['text'];
         }
       }
 
@@ -481,6 +516,8 @@ abstract class DifferentialChangesetRenderer extends Phobject {
         $nspec['htype'] = $new[$ii]['type'];
         if (isset($new_render[$ii])) {
           $nspec['render'] = $new_render[$ii];
+        } else if ($nspec['htype'] === '\\') {
+          $nspec['render'] = $new[$ii]['text'];
         }
       }
 
@@ -614,16 +651,26 @@ abstract class DifferentialChangesetRenderer extends Phobject {
     $old = $changeset->getOldProperties();
     $new = $changeset->getNewProperties();
 
-    // When adding files, don't show the uninteresting 644 filemode change.
-    if ($changeset->getChangeType() == DifferentialChangeType::TYPE_ADD &&
-        $new == array('unix:filemode' => '100644')) {
-      unset($new['unix:filemode']);
-    }
+    // If a property has been changed, but is not present on one side of the
+    // change and has an uninteresting default value on the other, remove it.
+    // This most commonly happens when a change adds or removes a file: the
+    // side of the change with the file has a "100644" filemode in Git.
 
-    // Likewise when removing files.
-    if ($changeset->getChangeType() == DifferentialChangeType::TYPE_DELETE &&
-        $old == array('unix:filemode' => '100644')) {
-      unset($old['unix:filemode']);
+    $defaults = array(
+      'unix:filemode' => '100644',
+    );
+
+    foreach ($defaults as $default_key => $default_value) {
+      $old_value = idx($old, $default_key, $default_value);
+      $new_value = idx($new, $default_key, $default_value);
+
+      $old_default = ($old_value === $default_value);
+      $new_default = ($new_value === $default_value);
+
+      if ($old_default && $new_default) {
+        unset($old[$default_key]);
+        unset($new[$default_key]);
+      }
     }
 
     $metadata = $changeset->getMetadata();
@@ -676,6 +723,49 @@ abstract class DifferentialChangesetRenderer extends Phobject {
     }
 
     return $views;
+  }
+
+  final protected function getScopeEngine() {
+    if ($this->scopeEngine === false) {
+      $hunk_starts = $this->getHunkStartLines();
+
+      // If this change is missing context, don't try to identify scopes, since
+      // we won't really be able to get anywhere.
+      $has_multiple_hunks = (count($hunk_starts) > 1);
+
+      $has_offset_hunks = false;
+      if ($hunk_starts) {
+        $has_offset_hunks = (head_key($hunk_starts) != 1);
+      }
+
+      $missing_context = ($has_multiple_hunks || $has_offset_hunks);
+
+      if ($missing_context) {
+        $scope_engine = null;
+      } else {
+        $line_map = $this->getNewLineTextMap();
+        $scope_engine = id(new PhabricatorDiffScopeEngine())
+          ->setLineTextMap($line_map);
+      }
+
+      $this->scopeEngine = $scope_engine;
+    }
+
+    return $this->scopeEngine;
+  }
+
+  private function getNewLineTextMap() {
+    $new = $this->getNewLines();
+
+    $text_map = array();
+    foreach ($new as $new_line) {
+      if (!isset($new_line['line'])) {
+        continue;
+      }
+      $text_map[$new_line['line']] = $new_line['text'];
+    }
+
+    return $text_map;
   }
 
 }

@@ -80,6 +80,10 @@ final class PhabricatorApplicationSearchController
       return $this->processExportRequest();
     }
 
+    if ($query_action === 'customize') {
+      return $this->processCustomizeRequest();
+    }
+
     $key = $this->getQueryKey();
     if ($key == 'edit') {
       return $this->processEditRequest();
@@ -190,14 +194,12 @@ final class PhabricatorApplicationSearchController
     if ($run_query && !$named_query && $user->isLoggedIn()) {
       $save_button = id(new PHUIButtonView())
         ->setTag('a')
+        ->setColor(PHUIButtonView::GREY)
         ->setHref('/search/edit/key/'.$saved_query->getQueryKey().'/')
         ->setText(pht('Save Query'))
-        ->setIcon('fa-floppy-o');
+        ->setIcon('fa-bookmark');
       $submit->addButton($save_button);
     }
-
-    // TODO: A "Create Dashboard Panel" action goes here somewhere once
-    // we sort out T5307.
 
     $form->appendChild($submit);
     $body = array();
@@ -249,6 +251,8 @@ final class PhabricatorApplicationSearchController
         $pager = $engine->newPagerForSavedQuery($saved_query);
         $pager->readFromRequest($request);
 
+        $query->setReturnPartialResultsOnOverheat(true);
+
         $objects = $engine->executeQuery($query, $pager);
 
         $force_nux = $request->getBool('nux');
@@ -274,9 +278,10 @@ final class PhabricatorApplicationSearchController
             throw new Exception(
               pht(
                 'SearchEngines must render a "%s" object, but this engine '.
-                '(of class "%s") rendered something else.',
+                '(of class "%s") rendered something else ("%s").',
                 'PhabricatorApplicationSearchResultView',
-                get_class($engine)));
+                get_class($engine),
+                phutil_describe_type($list)));
           }
 
           if ($list->getObjectList()) {
@@ -349,6 +354,8 @@ final class PhabricatorApplicationSearchController
         $exec_errors[] = $ex->getMessage();
       } catch (PhabricatorSearchConstraintException $ex) {
         $exec_errors[] = $ex->getMessage();
+      } catch (PhabricatorInvalidQueryCursorException $ex) {
+        $exec_errors[] = $ex->getMessage();
       }
 
       // The engine may have encountered additional errors during rendering;
@@ -382,7 +389,6 @@ final class PhabricatorApplicationSearchController
     require_celerity_resource('application-search-view-css');
 
     return $this->newPage()
-      ->setApplicationMenu($this->buildApplicationMenu())
       ->setTitle(pht('Query: %s', $title))
       ->setCrumbs($crumbs)
       ->setNavigation($nav)
@@ -606,7 +612,6 @@ final class PhabricatorApplicationSearchController
       ->setFooter($lists);
 
     return $this->newPage()
-      ->setApplicationMenu($this->buildApplicationMenu())
       ->setTitle(pht('Saved Queries'))
       ->setCrumbs($crumbs)
       ->setNavigation($nav)
@@ -798,6 +803,7 @@ final class PhabricatorApplicationSearchController
       $object = $query
         ->setViewer(PhabricatorUser::getOmnipotentUser())
         ->setLimit(1)
+        ->setReturnPartialResultsOnOverheat(true)
         ->execute();
       if ($object) {
         return null;
@@ -844,18 +850,30 @@ final class PhabricatorApplicationSearchController
         ));
   }
 
-  private function newOverheatedView(array $results) {
-    if ($results) {
+  public static function newOverheatedError($has_results) {
+    $overheated_link = phutil_tag(
+      'a',
+      array(
+        'href' => 'https://phurl.io/u/overheated',
+        'target' => '_blank',
+      ),
+      pht('Learn More'));
+
+    if ($has_results) {
       $message = pht(
-        'Most objects matching your query are not visible to you, so '.
-        'filtering results is taking a long time. Only some results are '.
-        'shown. Refine your query to find results more quickly.');
+        'This query took too long, so only some results are shown. %s',
+        $overheated_link);
     } else {
       $message = pht(
-        'Most objects matching your query are not visible to you, so '.
-        'filtering results is taking a long time. Refine your query to '.
-        'find results more quickly.');
+        'This query took too long. %s',
+        $overheated_link);
     }
+
+    return $message;
+  }
+
+  private function newOverheatedView(array $results) {
+    $message = self::newOverheatedError((bool)$results);
 
     return id(new PHUIInfoView())
       ->setSeverity(PHUIInfoView::SEVERITY_WARNING)
@@ -946,8 +964,14 @@ final class PhabricatorApplicationSearchController
 
   private function readExportFormatPreference() {
     $viewer = $this->getViewer();
-    $export_key = PhabricatorPolicyFavoritesSetting::SETTINGKEY;
-    return $viewer->getUserSetting($export_key);
+    $export_key = PhabricatorExportFormatSetting::SETTINGKEY;
+    $value = $viewer->getUserSetting($export_key);
+
+    if (is_string($value)) {
+      return $value;
+    }
+
+    return '';
   }
 
   private function writeExportFormatPreference($value) {
@@ -958,7 +982,7 @@ final class PhabricatorApplicationSearchController
       return;
     }
 
-    $export_key = PhabricatorPolicyFavoritesSetting::SETTINGKEY;
+    $export_key = PhabricatorExportFormatSetting::SETTINGKEY;
     $preferences = PhabricatorUserPreferences::loadUserPreferences($viewer);
 
     $editor = id(new PhabricatorUserPreferencesEditor())
@@ -972,4 +996,106 @@ final class PhabricatorApplicationSearchController
     $editor->applyTransactions($preferences, $xactions);
   }
 
+  private function processCustomizeRequest() {
+    $viewer = $this->getViewer();
+    $engine = $this->getSearchEngine();
+    $request = $this->getRequest();
+
+    $object_phid = $request->getStr('search.objectPHID');
+    $context_phid = $request->getStr('search.contextPHID');
+
+    // For now, the object can only be a dashboard panel, so just use a panel
+    // query explicitly.
+    $object = id(new PhabricatorDashboardPanelQuery())
+      ->setViewer($viewer)
+      ->withPHIDs(array($object_phid))
+      ->requireCapabilities(
+        array(
+          PhabricatorPolicyCapability::CAN_VIEW,
+          PhabricatorPolicyCapability::CAN_EDIT,
+        ))
+      ->executeOne();
+    if (!$object) {
+      return new Aphront404Response();
+    }
+
+    $object_name = pht('%s %s', $object->getMonogram(), $object->getName());
+
+    // Likewise, the context object can only be a dashboard.
+    if (strlen($context_phid)) {
+      $context = id(new PhabricatorDashboardQuery())
+        ->setViewer($viewer)
+        ->withPHIDs(array($context_phid))
+        ->executeOne();
+      if (!$context) {
+        return new Aphront404Response();
+      }
+    } else {
+      $context = $object;
+    }
+
+    $done_uri = $context->getURI();
+
+    if ($request->isFormPost()) {
+      $saved_query = $engine->buildSavedQueryFromRequest($request);
+      $engine->saveQuery($saved_query);
+      $query_key = $saved_query->getQueryKey();
+    } else {
+      $query_key = $this->getQueryKey();
+      if ($engine->isBuiltinQuery($query_key)) {
+        $saved_query = $engine->buildSavedQueryFromBuiltin($query_key);
+      } else if ($query_key) {
+        $saved_query = id(new PhabricatorSavedQueryQuery())
+          ->setViewer($viewer)
+          ->withQueryKeys(array($query_key))
+          ->executeOne();
+      } else {
+        $saved_query = null;
+      }
+    }
+
+    if (!$saved_query) {
+      return new Aphront404Response();
+    }
+
+    $form = id(new AphrontFormView())
+      ->setViewer($viewer)
+      ->addHiddenInput('search.objectPHID', $object_phid)
+      ->addHiddenInput('search.contextPHID', $context_phid)
+      ->setAction($request->getPath());
+
+    $engine->buildSearchForm($form, $saved_query);
+
+    $errors = $engine->getErrors();
+    if ($request->isFormPost()) {
+      if (!$errors) {
+        $xactions = array();
+
+        // Since this workflow is currently used only by dashboard panels,
+        // we can hard-code how the edit works.
+        $xactions[] = $object->getApplicationTransactionTemplate()
+          ->setTransactionType(
+            PhabricatorDashboardQueryPanelQueryTransaction::TRANSACTIONTYPE)
+          ->setNewValue($query_key);
+
+        $editor = $object->getApplicationTransactionEditor()
+          ->setActor($viewer)
+          ->setContentSourceFromRequest($request)
+          ->setContinueOnNoEffect(true)
+          ->setContinueOnMissingFields(true);
+
+        $editor->applyTransactions($object, $xactions);
+
+        return id(new AphrontRedirectResponse())->setURI($done_uri);
+      }
+    }
+
+    return $this->newDialog()
+      ->setTitle(pht('Customize Query: %s', $object_name))
+      ->setErrors($errors)
+      ->setWidth(AphrontDialogView::WIDTH_FULL)
+      ->appendForm($form)
+      ->addCancelButton($done_uri)
+      ->addSubmitButton(pht('Save Changes'));
+  }
 }

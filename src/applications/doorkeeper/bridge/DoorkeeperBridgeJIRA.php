@@ -30,7 +30,10 @@ final class DoorkeeperBridgeJIRA extends DoorkeeperBridge {
     $accounts = id(new PhabricatorExternalAccountQuery())
       ->setViewer($viewer)
       ->withUserPHIDs(array($viewer->getPHID()))
-      ->withAccountTypes(array($provider->getProviderType()))
+      ->withProviderConfigPHIDs(
+        array(
+          $provider->getProviderConfigPHID(),
+        ))
       ->requireCapabilities(
         array(
           PhabricatorPolicyCapability::CAN_VIEW,
@@ -47,12 +50,20 @@ final class DoorkeeperBridgeJIRA extends DoorkeeperBridge {
     // (by querying all instances). For now, just query the one instance.
     $account = head($accounts);
 
+    $timeout = $this->getTimeout();
+
     $futures = array();
     foreach ($id_map as $key => $id) {
-      $futures[$key] = $provider->newJIRAFuture(
+      $future = $provider->newJIRAFuture(
         $account,
         'rest/api/2/issue/'.phutil_escape_uri($id),
         'GET');
+
+      if ($timeout !== null) {
+        $future->setTimeout($timeout);
+      }
+
+      $futures[$key] = $future;
     }
 
     $results = array();

@@ -55,6 +55,16 @@
   background-color: {$lightbluebackground};
 }
 
+.aphront-table-view td.row-divider {
+  background-color: {$bluebackground};
+  font-weight: bold;
+  padding: 8px 12px;
+}
+
+.aphront-table-view td.indent {
+  padding-left: 24px;
+}
+
 .aphront-table-view th {
   border-bottom: 1px solid {$thinblueborder};
 }
@@ -160,6 +170,9 @@ th.aphront-table-view-sortable-selected {
   vertical-align: top;
 }
 
+/* Apply this rule to both "<th />" and "<td />" so that the header widths
+   are correct if the table has no rows. */
+.aphront-table-view th.wide,
 .aphront-table-view td.wide {
   white-space: normal;
   width: 100%;
@@ -229,7 +242,8 @@ span.single-display-line-content {
   word-wrap: break-word;
   overflow: hidden;
   text-overflow: ellipsis;
-  max-width: 0;
+  min-width: 320px;
+  max-width: 320px;
 }
 
 .aphront-table-view tr.closed td.object-link .object-name,

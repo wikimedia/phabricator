@@ -21,11 +21,13 @@ JX.install('PHUIXDropdownMenu', {
   construct : function(node) {
     this._node = node;
 
-    JX.DOM.listen(
-      this._node,
-      'click',
-      null,
-      JX.bind(this, this._onclick));
+    if (node) {
+      JX.DOM.listen(
+        this._node,
+        'click',
+        null,
+        JX.bind(this, this._onclick));
+    }
 
     JX.Stratcom.listen(
       'mousedown',
@@ -54,7 +56,8 @@ JX.install('PHUIXDropdownMenu', {
     width: null,
     align: 'right',
     offsetX: 0,
-    offsetY: 0
+    offsetY: 0,
+    disableAutofocus: false
   },
 
   members: {
@@ -62,6 +65,8 @@ JX.install('PHUIXDropdownMenu', {
     _menu: null,
     _open: false,
     _content: null,
+    _position: null,
+    _visible: false,
 
     setContent: function(content) {
       JX.DOM.setContent(this._getMenuNode(), content);
@@ -91,6 +96,12 @@ JX.install('PHUIXDropdownMenu', {
 
       this.invoke('close');
 
+      return this;
+    },
+
+    setPosition: function(pos) {
+      this._position = pos;
+      this._setMenuNodePosition(pos);
       return this;
     },
 
@@ -161,7 +172,10 @@ JX.install('PHUIXDropdownMenu', {
     },
 
     _show : function() {
-      document.body.appendChild(this._menu);
+      if (!this._visible) {
+        this._visible = true;
+        document.body.appendChild(this._menu);
+      }
 
       if (this.getWidth()) {
         new JX.Vector(this.getWidth(), null).setDim(this._menu);
@@ -169,27 +183,41 @@ JX.install('PHUIXDropdownMenu', {
 
       this._adjustposition();
 
-      JX.DOM.alterClass(this._node, 'phuix-dropdown-open', true);
-
-      this._node.setAttribute('aria-expanded', 'true');
+      if (this._node) {
+        JX.DOM.alterClass(this._node, 'phuix-dropdown-open', true);
+        this._node.setAttribute('aria-expanded', 'true');
+      }
 
       // Try to highlight the first link in the menu for assistive technologies.
-      var links = JX.DOM.scry(this._menu, 'a');
-      if (links[0]) {
-        JX.DOM.focus(links[0]);
+      if (!this.getDisableAutofocus()) {
+        var links = JX.DOM.scry(this._menu, 'a');
+        if (links[0]) {
+          JX.DOM.focus(links[0]);
+        }
       }
     },
 
     _hide : function() {
+      this._visible = false;
       JX.DOM.remove(this._menu);
 
-      JX.DOM.alterClass(this._node, 'phuix-dropdown-open', false);
-
-      this._node.setAttribute('aria-expanded', 'false');
+      if (this._node) {
+        JX.DOM.alterClass(this._node, 'phuix-dropdown-open', false);
+        this._node.setAttribute('aria-expanded', 'false');
+      }
     },
 
     _adjustposition : function() {
       if (!this._open) {
+        return;
+      }
+
+      if (this._position) {
+        this._setMenuNodePosition(this._position);
+        return;
+      }
+
+      if (!this._node) {
         return;
       }
 
@@ -198,7 +226,35 @@ JX.install('PHUIXDropdownMenu', {
       var v = JX.$V(this._node);
       var d = JX.Vector.getDim(this._node);
 
-      switch (this.getAlign()) {
+      var alignments = ['right', 'left'];
+      var disallow = {};
+      var margin = 8;
+
+      // If "right" alignment would leave us with the dropdown near or off the
+      // left side of the screen, disallow it.
+      var x_min = ((v.x + d.x) - m.x);
+      if (x_min < margin) {
+        disallow.right = true;
+      }
+
+      var align = this.getAlign();
+
+      // If the position disallows the configured alignment, try the next
+      // best alignment instead.
+
+      // If no alignment is allowed, we'll stick with the original alignment
+      // and accept that it isn't going to render very nicely. This can happen
+      // if the browser window is very, very small.
+      if (align in disallow) {
+        for (var ii = 0; ii < alignments.length; ii++) {
+          if (!(alignments[ii] in disallow)) {
+            align = alignments[ii];
+            break;
+          }
+        }
+      }
+
+      switch (align) {
         case 'right':
           v = v.add(d)
                .add(JX.$V(-m.x, 0));
@@ -208,9 +264,26 @@ JX.install('PHUIXDropdownMenu', {
           break;
       }
 
-      v = v.add(this.getOffsetX(), this.getOffsetY());
+      this._setMenuNodePosition(v);
+    },
 
+    _setMenuNodePosition: function(v) {
+      v = v.add(this.getOffsetX(), this.getOffsetY());
       v.setPos(this._menu);
+    },
+
+    getMenuNodeDimensions: function() {
+      if (!this._visible) {
+        document.body.appendChild(this._menu);
+      }
+
+      var dim = JX.Vector.getDim(this._menu);
+
+      if (!this._visible) {
+        JX.DOM.remove(this._menu);
+      }
+
+      return dim;
     },
 
     _onkey: function(e) {
@@ -227,7 +300,10 @@ JX.install('PHUIXDropdownMenu', {
       }
 
       this.close();
-      JX.DOM.focus(this._node);
+
+      if (this._node) {
+        JX.DOM.focus(this._node);
+      }
 
       e.prevent();
     }

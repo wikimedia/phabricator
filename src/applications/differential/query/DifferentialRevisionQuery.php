@@ -16,7 +16,6 @@ final class DifferentialRevisionQuery
   private $reviewers = array();
   private $revIDs = array();
   private $commitHashes = array();
-  private $commitPHIDs = array();
   private $phids = array();
   private $responsibles = array();
   private $branches = array();
@@ -27,6 +26,7 @@ final class DifferentialRevisionQuery
   private $isOpen;
   private $createdEpochMin;
   private $createdEpochMax;
+  private $noReviewers;
 
   const ORDER_MODIFIED      = 'order-modified';
   const ORDER_CREATED       = 'order-created';
@@ -99,7 +99,31 @@ final class DifferentialRevisionQuery
    * @task config
    */
   public function withReviewers(array $reviewer_phids) {
-    $this->reviewers = $reviewer_phids;
+    if ($reviewer_phids === array()) {
+      throw new Exception(
+        pht(
+          'Empty "withReviewers()" constraint is invalid. Provide one or '.
+          'more values, or remove the constraint.'));
+    }
+
+    $with_none = false;
+
+    foreach ($reviewer_phids as $key => $phid) {
+      switch ($phid) {
+        case DifferentialNoReviewersDatasource::FUNCTION_TOKEN:
+          $with_none = true;
+          unset($reviewer_phids[$key]);
+          break;
+        default:
+          break;
+      }
+    }
+
+    $this->noReviewers = $with_none;
+    if ($reviewer_phids) {
+      $this->reviewers = array_values($reviewer_phids);
+    }
+
     return $this;
   }
 
@@ -116,20 +140,6 @@ final class DifferentialRevisionQuery
    */
   public function withCommitHashes(array $commit_hashes) {
     $this->commitHashes = $commit_hashes;
-    return $this;
-  }
-
-  /**
-   * Filter results to revisions that have one of the provided PHIDs as
-   * commits. Calling this function will clear anything set by previous calls
-   * to @{method:withCommitPHIDs}.
-   *
-   * @param array List of PHIDs of commits
-   * @return this
-   * @task config
-   */
-  public function withCommitPHIDs(array $commit_phids) {
-    $this->commitPHIDs = $commit_phids;
     return $this;
   }
 
@@ -400,7 +410,7 @@ final class DifferentialRevisionQuery
     $conn_r = $table->establishConnection('r');
 
     if ($this->needCommitPHIDs) {
-      $this->loadCommitPHIDs($conn_r, $revisions);
+      $this->loadCommitPHIDs($revisions);
     }
 
     $need_active = $this->needActiveDiffs;
@@ -587,12 +597,21 @@ final class DifferentialRevisionQuery
     if ($this->reviewers) {
       $joins[] = qsprintf(
         $conn,
-        'JOIN %T reviewer ON reviewer.revisionPHID = r.phid
+        'LEFT JOIN %T reviewer ON reviewer.revisionPHID = r.phid
           AND reviewer.reviewerStatus != %s
           AND reviewer.reviewerPHID in (%Ls)',
         id(new DifferentialReviewer())->getTableName(),
         DifferentialReviewerStatus::STATUS_RESIGNED,
         $this->reviewers);
+    }
+
+    if ($this->noReviewers) {
+      $joins[] = qsprintf(
+        $conn,
+        'LEFT JOIN %T no_reviewer ON no_reviewer.revisionPHID = r.phid
+          AND no_reviewer.reviewerStatus != %s',
+        id(new DifferentialReviewer())->getTableName(),
+        DifferentialReviewerStatus::STATUS_RESIGNED);
     }
 
     if ($this->draftAuthors) {
@@ -604,13 +623,6 @@ final class DifferentialRevisionQuery
         PhabricatorEdgeConfig::TABLE_NAME_EDGE,
         PhabricatorObjectHasDraftEdgeType::EDGECONST,
         $this->draftAuthors);
-    }
-
-    if ($this->commitPHIDs) {
-      $joins[] = qsprintf(
-        $conn,
-        'JOIN %T commits ON commits.revisionID = r.id',
-        DifferentialRevision::TABLE_COMMIT);
     }
 
     $joins[] = $this->buildJoinClauseParts($conn);
@@ -672,13 +684,6 @@ final class DifferentialRevisionQuery
       }
       $hash_clauses = qsprintf($conn, '%LO', $hash_clauses);
       $where[] = $hash_clauses;
-    }
-
-    if ($this->commitPHIDs) {
-      $where[] = qsprintf(
-        $conn,
-        'commits.commitPHID IN (%Ls)',
-        $this->commitPHIDs);
     }
 
     if ($this->phids) {
@@ -744,6 +749,24 @@ final class DifferentialRevisionQuery
         $statuses);
     }
 
+    $reviewer_subclauses = array();
+
+    if ($this->noReviewers) {
+      $reviewer_subclauses[] = qsprintf(
+        $conn,
+        'no_reviewer.reviewerPHID IS NULL');
+    }
+
+    if ($this->reviewers) {
+      $reviewer_subclauses[] = qsprintf(
+        $conn,
+        'reviewer.reviewerPHID IS NOT NULL');
+    }
+
+    if ($reviewer_subclauses) {
+      $where[] = qsprintf($conn, '%LO', $reviewer_subclauses);
+    }
+
     $where[] = $this->buildWhereClauseParts($conn);
 
     return $this->formatWhereClause($conn, $where);
@@ -761,6 +784,10 @@ final class DifferentialRevisionQuery
       $this->reviewers);
 
     if (count($join_triggers) > 1) {
+      return true;
+    }
+
+    if ($this->noReviewers) {
       return true;
     }
 
@@ -800,26 +827,33 @@ final class DifferentialRevisionQuery
     ) + parent::getOrderableColumns();
   }
 
-  protected function getPagingValueMap($cursor, array $keys) {
-    $revision = $this->loadCursorObject($cursor);
+  protected function newPagingMapFromPartialObject($object) {
     return array(
-      'id' => $revision->getID(),
-      'updated' => $revision->getDateModified(),
+      'id' => (int)$object->getID(),
+      'updated' => (int)$object->getDateModified(),
     );
   }
 
-  private function loadCommitPHIDs($conn_r, array $revisions) {
+  private function loadCommitPHIDs(array $revisions) {
     assert_instances_of($revisions, 'DifferentialRevision');
-    $commit_phids = queryfx_all(
-      $conn_r,
-      'SELECT * FROM %T WHERE revisionID IN (%Ld)',
-      DifferentialRevision::TABLE_COMMIT,
-      mpull($revisions, 'getID'));
-    $commit_phids = igroup($commit_phids, 'revisionID');
-    foreach ($revisions as $revision) {
-      $phids = idx($commit_phids, $revision->getID(), array());
-      $phids = ipull($phids, 'commitPHID');
-      $revision->attachCommitPHIDs($phids);
+
+    if (!$revisions) {
+      return;
+    }
+
+    $revisions = mpull($revisions, null, 'getPHID');
+
+    $edge_query = id(new PhabricatorEdgeQuery())
+      ->withSourcePHIDs(array_keys($revisions))
+      ->withEdgeTypes(
+        array(
+          DifferentialRevisionHasCommitEdgeType::EDGECONST,
+        ));
+    $edge_query->execute();
+
+    foreach ($revisions as $phid => $revision) {
+      $commit_phids = $edge_query->getDestinationPHIDs(array($phid));
+      $revision->attachCommitPHIDs($commit_phids);
     }
   }
 

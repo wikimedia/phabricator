@@ -64,13 +64,7 @@ final class FeedQueryConduitAPIMethod extends FeedConduitAPIMethod {
       $view_type = 'data';
     }
 
-    $limit = $request->getValue('limit');
-    if (!$limit) {
-      $limit = $this->getDefaultLimit();
-    }
-
     $query = id(new PhabricatorFeedQuery())
-      ->setLimit($limit)
       ->setViewer($user);
 
     $filter_phids = $request->getValue('filterPHIDs');
@@ -78,17 +72,25 @@ final class FeedQueryConduitAPIMethod extends FeedConduitAPIMethod {
       $query->withFilterPHIDs($filter_phids);
     }
 
+    $limit = $request->getValue('limit');
+    if (!$limit) {
+      $limit = $this->getDefaultLimit();
+    }
+
+    $pager = id(new AphrontCursorPagerView())
+      ->setPageSize($limit);
+
     $after = $request->getValue('after');
     if (strlen($after)) {
-      $query->setAfterID($after);
+      $pager->setAfterID($after);
     }
 
     $before = $request->getValue('before');
     if (strlen($before)) {
-      $query->setBeforeID($before);
+      $pager->setBeforeID($before);
     }
 
-    $stories = $query->execute();
+    $stories = $query->executeWithCursorPager($pager);
 
     if ($stories) {
       foreach ($stories as $story) {

@@ -29,25 +29,15 @@ abstract class PhabricatorPolicyCodex
     return array();
   }
 
+  public function getPolicyForEdit($capability) {
+    return $this->getObject()->getPolicy($capability);
+  }
+
   public function getDefaultPolicy() {
     return PhabricatorPolicyQuery::getDefaultPolicyForObject(
       $this->viewer,
       $this->object,
       $this->capability);
-  }
-
-  public function compareToDefaultPolicy(PhabricatorPolicy $policy) {
-    return null;
-  }
-
-  final public function getPolicySpecialRuleForCapability($capability) {
-    foreach ($this->getPolicySpecialRuleDescriptions() as $rule) {
-      if (in_array($capability, $rule->getCapabilities())) {
-        return $rule;
-      }
-    }
-
-    return null;
   }
 
   final protected function newRule() {

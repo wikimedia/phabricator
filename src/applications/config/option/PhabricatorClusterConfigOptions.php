@@ -126,7 +126,6 @@ EOTEXT
           pht('Configure database read replicas.'))
         ->setDescription($databases_help),
       $this->newOption('cluster.search', $search_type, array())
-        ->setLocked(true)
         ->setSummary(
           pht('Configure full-text search services.'))
         ->setDescription($search_help)

@@ -243,8 +243,6 @@ final class DifferentialDiffExtractionEngine extends Phobject {
     PhabricatorContentSource $content_source) {
 
     $viewer = $this->getViewer();
-    $result_data = array();
-
     $new_diff = $this->newDiffFromCommit($commit);
 
     $old_diff = $revision->getActiveDiff();
@@ -261,8 +259,6 @@ final class DifferentialDiffExtractionEngine extends Phobject {
           $old_diff,
           $new_diff);
         if ($has_changed) {
-          $result_data['vsDiff'] = $old_diff->getID();
-
           $revision_monogram = $revision->getMonogram();
           $old_id = $old_diff->getID();
           $new_id = $new_diff->getID();
@@ -285,6 +281,28 @@ final class DifferentialDiffExtractionEngine extends Phobject {
         ->setNewValue($revision->getModernRevisionStatus());
     }
 
+    $concerning_builds = self::loadConcerningBuilds(
+      $this->getViewer(),
+      $revision,
+      $strict = false);
+
+    if ($concerning_builds) {
+      $build_list = array();
+      foreach ($concerning_builds as $build) {
+        $build_list[] = array(
+          'phid' => $build->getPHID(),
+          'status' => $build->getBuildStatus(),
+        );
+      }
+
+      $wrong_builds =
+        DifferentialRevisionWrongBuildsTransaction::TRANSACTIONTYPE;
+
+      $xactions[] = id(new DifferentialTransaction())
+        ->setTransactionType($wrong_builds)
+        ->setNewValue($build_list);
+    }
+
     $type_update = DifferentialRevisionUpdateTransaction::TRANSACTIONTYPE;
 
     $xactions[] = id(new DifferentialTransaction())
@@ -301,6 +319,7 @@ final class DifferentialDiffExtractionEngine extends Phobject {
     $editor = id(new DifferentialTransactionEditor())
       ->setActor($viewer)
       ->setContinueOnMissingFields(true)
+      ->setContinueOnNoEffect(true)
       ->setContentSource($content_source)
       ->setChangedPriorToCommitURI($changed_uri)
       ->setIsCloseByCommit(true);
@@ -310,16 +329,92 @@ final class DifferentialDiffExtractionEngine extends Phobject {
       $editor->setActingAsPHID($author_phid);
     }
 
-    try {
-      $editor->applyTransactions($revision, $xactions);
-    } catch (PhabricatorApplicationTransactionNoEffectException $ex) {
-      // NOTE: We've marked transactions other than the CLOSE transaction
-      // as ignored when they don't have an effect, so this means that we
-      // lost a race to close the revision. That's perfectly fine, we can
-      // just continue normally.
+    $editor->applyTransactions($revision, $xactions);
+  }
+
+  public static function loadConcerningBuilds(
+    PhabricatorUser $viewer,
+    DifferentialRevision $revision,
+    $strict) {
+
+    $diff = $revision->getActiveDiff();
+
+    $buildables = id(new HarbormasterBuildableQuery())
+      ->setViewer($viewer)
+      ->withBuildablePHIDs(array($diff->getPHID()))
+      ->needBuilds(true)
+      ->withManualBuildables(false)
+      ->execute();
+    if (!$buildables) {
+      return array();
     }
 
-    return $result_data;
+    $land_key = HarbormasterBuildPlanBehavior::BEHAVIOR_LANDWARNING;
+    $behavior = HarbormasterBuildPlanBehavior::getBehavior($land_key);
+
+    $key_never = HarbormasterBuildPlanBehavior::LANDWARNING_NEVER;
+    $key_building = HarbormasterBuildPlanBehavior::LANDWARNING_IF_BUILDING;
+    $key_complete = HarbormasterBuildPlanBehavior::LANDWARNING_IF_COMPLETE;
+
+    $concerning_builds = array();
+    foreach ($buildables as $buildable) {
+      $builds = $buildable->getBuilds();
+      foreach ($builds as $build) {
+        $plan = $build->getBuildPlan();
+        $option = $behavior->getPlanOption($plan);
+        $behavior_value = $option->getKey();
+
+        $if_never = ($behavior_value === $key_never);
+        if ($if_never) {
+          continue;
+        }
+
+        $if_building = ($behavior_value === $key_building);
+        if ($if_building && $build->isComplete()) {
+          continue;
+        }
+
+        $if_complete = ($behavior_value === $key_complete);
+        if ($if_complete) {
+          if (!$build->isComplete()) {
+            continue;
+          }
+
+          // TODO: If you "arc land" and a build with "Warn: If Complete"
+          // is still running, you may not see a warning, and push the revision
+          // in good faith. The build may then complete before we get here, so
+          // we now see a completed, failed build.
+
+          // For now, just err on the side of caution and assume these builds
+          // were in a good state when we prompted the user, even if they're in
+          // a bad state now.
+
+          // We could refine this with a rule like "if the build finished
+          // within a couple of minutes before the push happened, assume it was
+          // in good faith", but we don't currently have an especially
+          // convenient way to check when the build finished or when the commit
+          // was pushed or discovered, and this would create some issues in
+          // cases where the repository is observed and the fetch pipeline
+          // stalls for a while.
+
+          // If we're in strict mode (from a pre-commit content hook), we do
+          // not ignore these, since we're doing an instantaneous check against
+          // the current state.
+
+          if (!$strict) {
+            continue;
+          }
+        }
+
+        if ($build->isPassed()) {
+          continue;
+        }
+
+        $concerning_builds[] = $build;
+      }
+    }
+
+    return $concerning_builds;
   }
 
 }

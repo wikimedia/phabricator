@@ -30,20 +30,43 @@ final class PhabricatorApplicationTransactionCommentRemoveController
       ->withPHIDs(array($obj_phid))
       ->executeOne();
 
-    if ($request->isDialogFormPost()) {
+    $done_uri = $obj_handle->getURI();
+
+    // We allow administrative removal of comments even if an object is locked,
+    // so you can lock a flamewar and then go clean it up. Locked threads may
+    // not otherwise be edited, and non-administrators can not remove comments
+    // from locked threads.
+
+    $object = $xaction->getObject();
+    $can_interact = PhabricatorPolicyFilter::canInteract(
+      $viewer,
+      $object);
+    if (!$can_interact && !$viewer->getIsAdmin()) {
+      return $this->newDialog()
+        ->setTitle(pht('Conversation Locked'))
+        ->appendParagraph(
+          pht(
+            'You can not remove this comment because the conversation is '.
+            'locked.'))
+        ->addCancelButton($done_uri);
+    }
+
+    if ($request->isFormOrHisecPost()) {
       $comment = $xaction->getApplicationTransactionCommentObject()
         ->setContent('')
         ->setIsRemoved(true);
 
       $editor = id(new PhabricatorApplicationTransactionCommentEditor())
         ->setActor($viewer)
+        ->setRequest($request)
+        ->setCancelURI($done_uri)
         ->setContentSource(PhabricatorContentSource::newFromRequest($request))
         ->applyEdit($xaction, $comment);
 
       if ($request->isAjax()) {
         return id(new AphrontAjaxResponse())->setContent(array());
       } else {
-        return id(new AphrontReloadResponse())->setURI($obj_handle->getURI());
+        return id(new AphrontReloadResponse())->setURI($done_uri);
       }
     }
 
@@ -54,7 +77,6 @@ final class PhabricatorApplicationTransactionCommentRemoveController
       ->setTitle(pht('Remove Comment'));
 
     $dialog
-      ->addHiddenInput('anchor', $request->getStr('anchor'))
       ->appendParagraph(
         pht(
           "Removing a comment prevents anyone (including you) from reading ".
@@ -65,7 +87,7 @@ final class PhabricatorApplicationTransactionCommentRemoveController
 
     $dialog
       ->addSubmitButton(pht('Remove Comment'))
-      ->addCancelButton($obj_handle->getURI());
+      ->addCancelButton($done_uri);
 
     return $dialog;
   }

@@ -232,7 +232,12 @@ final class DifferentialDiff
 
     $changesets = $diff->getChangesets();
 
+    // TODO: This is "safe", but it would be better to propagate a real user
+    // down the stack.
+    $viewer = PhabricatorUser::getOmnipotentUser();
+
     id(new DifferentialChangesetEngine())
+      ->setViewer($viewer)
       ->rebuildChangesets($changesets);
 
     return $diff;
@@ -387,9 +392,10 @@ final class DifferentialDiff
       return array();
     }
 
-    $unit = id(new HarbormasterBuildUnitMessage())->loadAllWhere(
-      'buildTargetPHID IN (%Ls)',
-      $target_phids);
+    $unit = id(new HarbormasterBuildUnitMessageQuery())
+      ->setViewer($viewer)
+      ->withBuildTargetPHIDs($target_phids)
+      ->execute();
 
     $map = array();
     foreach ($unit as $message) {
@@ -469,6 +475,11 @@ final class DifferentialDiff
         if ($this->hasRevision()) {
           $extended[] = array(
             $this->getRevision(),
+            PhabricatorPolicyCapability::CAN_VIEW,
+          );
+        } else if ($this->getRepositoryPHID()) {
+          $extended[] = array(
+            $this->getRepositoryPHID(),
             PhabricatorPolicyCapability::CAN_VIEW,
           );
         }
@@ -724,6 +735,8 @@ final class DifferentialDiff
   public function destroyObjectPermanently(
     PhabricatorDestructionEngine $engine) {
 
+    $viewer = $engine->getViewer();
+
     $this->openTransaction();
       $this->delete();
 
@@ -736,6 +749,14 @@ final class DifferentialDiff
         $this->getID());
       foreach ($properties as $prop) {
         $prop->delete();
+      }
+
+      $viewstate_query = id(new DifferentialViewStateQuery())
+        ->setViewer($viewer)
+        ->withObjectPHIDs(array($this->getPHID()));
+      $viewstates = new PhabricatorQueryIterator($viewstate_query);
+      foreach ($viewstates as $viewstate) {
+        $viewstate->delete();
       }
 
     $this->saveTransaction();

@@ -294,8 +294,8 @@ final class PhabricatorAuthSessionEngine extends Phobject {
         null,
         $identity_phid,
         ($partial
-          ? PhabricatorUserLog::ACTION_LOGIN_PARTIAL
-          : PhabricatorUserLog::ACTION_LOGIN));
+          ? PhabricatorPartialLoginUserLogType::LOGTYPE
+          : PhabricatorLoginUserLogType::LOGTYPE));
 
       $log->setDetails(
         array(
@@ -366,7 +366,7 @@ final class PhabricatorAuthSessionEngine extends Phobject {
     $log = PhabricatorUserLog::initializeNewLog(
       $user,
       $user->getPHID(),
-      PhabricatorUserLog::ACTION_LOGOUT);
+      PhabricatorLogoutUserLogType::LOGTYPE);
     $log->save();
 
     $extensions = PhabricatorAuthSessionEngineExtension::getAllExtensions();
@@ -389,7 +389,7 @@ final class PhabricatorAuthSessionEngine extends Phobject {
    * appropriate for one-time checks.
    *
    * @param PhabricatorUser User whose session needs to be in high security.
-   * @param AphrontReqeust  Current request.
+   * @param AphrontRequest  Current request.
    * @param string          URI to return the user to if they cancel.
    * @return PhabricatorAuthHighSecurityToken Security token.
    * @task hisec
@@ -421,7 +421,7 @@ final class PhabricatorAuthSessionEngine extends Phobject {
    * use @{method:requireHighSecurityToken}.
    *
    * @param PhabricatorUser User whose session needs to be in high security.
-   * @param AphrontReqeust  Current request.
+   * @param AphrontRequest  Current request.
    * @param string          URI to return the user to if they cancel.
    * @param bool            True to jump partial sessions directly into high
    *                        security instead of just upgrading them to full
@@ -485,7 +485,7 @@ final class PhabricatorAuthSessionEngine extends Phobject {
     // change the order of prompts for users, but the alternative is that the
     // Settings panel order disagrees with the prompt order, which seems more
     // disruptive.
-    $factors = msort($factors, 'newSortVector');
+    $factors = msortv($factors, 'newSortVector');
 
     // If the account has no associated multi-factor auth, just issue a token
     // without putting the session into high security mode. This is generally
@@ -493,7 +493,8 @@ final class PhabricatorAuthSessionEngine extends Phobject {
     // adds an auth factor, existing sessions won't get a free pass into hisec,
     // since they never actually got marked as hisec.
     if (!$factors) {
-      return $this->issueHighSecurityToken($session, true);
+      return $this->issueHighSecurityToken($session, true)
+        ->setIsUnchallengedToken(true);
     }
 
     $this->request = $request;
@@ -688,13 +689,13 @@ final class PhabricatorAuthSessionEngine extends Phobject {
           $log = PhabricatorUserLog::initializeNewLog(
             $viewer,
             $viewer->getPHID(),
-            PhabricatorUserLog::ACTION_ENTER_HISEC);
+            PhabricatorEnterHisecUserLogType::LOGTYPE);
           $log->save();
         } else {
           $log = PhabricatorUserLog::initializeNewLog(
             $viewer,
             $viewer->getPHID(),
-            PhabricatorUserLog::ACTION_FAIL_HISEC);
+            PhabricatorFailHisecUserLogType::LOGTYPE);
           $log->save();
         }
       }
@@ -714,7 +715,14 @@ final class PhabricatorAuthSessionEngine extends Phobject {
       if (isset($validation_results[$factor_phid])) {
         continue;
       }
-      $validation_results[$factor_phid] = new PhabricatorAuthFactorResult();
+
+      $issued_challenges = idx($challenge_map, $factor_phid, array());
+
+      $validation_results[$factor_phid] = $impl->getResultForPrompt(
+        $factor,
+        $viewer,
+        $request,
+        $issued_challenges);
     }
 
     throw id(new PhabricatorAuthHighSecurityRequiredException())
@@ -824,7 +832,7 @@ final class PhabricatorAuthSessionEngine extends Phobject {
     $log = PhabricatorUserLog::initializeNewLog(
       $viewer,
       $viewer->getPHID(),
-      PhabricatorUserLog::ACTION_EXIT_HISEC);
+      PhabricatorExitHisecUserLogType::LOGTYPE);
     $log->save();
   }
 
@@ -865,7 +873,7 @@ final class PhabricatorAuthSessionEngine extends Phobject {
       $log = PhabricatorUserLog::initializeNewLog(
         $viewer,
         $viewer->getPHID(),
-        PhabricatorUserLog::ACTION_LOGIN_FULL);
+        PhabricatorFullLoginUserLogType::LOGTYPE);
       $log->save();
     unset($unguarded);
   }
@@ -910,7 +918,7 @@ final class PhabricatorAuthSessionEngine extends Phobject {
         $log = PhabricatorUserLog::initializeNewLog(
           $viewer,
           $viewer->getPHID(),
-          PhabricatorUserLog::ACTION_LOGIN_LEGALPAD);
+          PhabricatorSignDocumentsUserLogType::LOGTYPE);
         $log->save();
       }
     unset($unguarded);

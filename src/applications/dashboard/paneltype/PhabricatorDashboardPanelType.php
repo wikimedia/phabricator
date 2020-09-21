@@ -5,20 +5,12 @@ abstract class PhabricatorDashboardPanelType extends Phobject {
   abstract public function getPanelTypeKey();
   abstract public function getPanelTypeName();
   abstract public function getPanelTypeDescription();
-  abstract public function getFieldSpecifications();
   abstract public function getIcon();
 
   abstract public function renderPanelContent(
     PhabricatorUser $viewer,
     PhabricatorDashboardPanel $panel,
     PhabricatorDashboardPanelRenderingEngine $engine);
-
-  public function initializeFieldsFromRequest(
-    PhabricatorDashboardPanel $panel,
-    PhabricatorCustomFieldList $field_list,
-    AphrontRequest $request) {
-    return;
-  }
 
   /**
    * Should this panel pull content in over AJAX?
@@ -51,6 +43,24 @@ abstract class PhabricatorDashboardPanelType extends Phobject {
       ->setAncestorClass(__CLASS__)
       ->setUniqueMethod('getPanelTypeKey')
       ->execute();
+  }
+
+  final public function getEditEngineFields(PhabricatorDashboardPanel $panel) {
+    return $this->newEditEngineFields($panel);
+  }
+
+  abstract protected function newEditEngineFields(
+    PhabricatorDashboardPanel $panel);
+
+  public function getSubpanelPHIDs(PhabricatorDashboardPanel $panel) {
+    return array();
+  }
+
+  public function newHeaderEditActions(
+    PhabricatorDashboardPanel $panel,
+    PhabricatorUser $viewer,
+    $context_phid) {
+    return array();
   }
 
 }

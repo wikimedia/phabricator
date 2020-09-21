@@ -30,6 +30,7 @@ final class AphrontRequest extends Phobject {
   private $controller;
   private $uriData = array();
   private $cookiePrefix;
+  private $submitKey;
 
   public function __construct($host, $path) {
     $this->host = $host;
@@ -383,6 +384,15 @@ final class AphrontRequest extends Phobject {
     return $this->validateCSRF();
   }
 
+  public function hasCSRF() {
+    try {
+      $this->validateCSRF();
+      return true;
+    } catch (AphrontMalformedRequestException $ex) {
+      return false;
+    }
+  }
+
   public function isFormOrHisecPost() {
     $post = $this->getExists(self::TYPE_FORM) &&
             $this->isHTTPPost();
@@ -591,15 +601,11 @@ final class AphrontRequest extends Phobject {
   }
 
   public function getRequestURI() {
-    $request_uri = idx($_SERVER, 'REQUEST_URI', '/');
+    $uri_path = phutil_escape_uri($this->getPath());
+    $uri_query = idx($_SERVER, 'QUERY_STRING', '');
 
-    $uri = new PhutilURI($request_uri);
-    $uri->removeQueryParam('__path__');
-
-    $path = phutil_escape_uri($this->getPath());
-    $uri->setPath($path);
-
-    return $uri;
+    return id(new PhutilURI($uri_path.'?'.$uri_query))
+      ->removeQueryParam('__path__');
   }
 
   public function getAbsoluteRequestURI() {
@@ -658,7 +664,7 @@ final class AphrontRequest extends Phobject {
   }
 
   public function isContinueRequest() {
-    return $this->isFormPost() && $this->getStr('__continue__');
+    return $this->isFormOrHisecPost() && $this->getStr('__continue__');
   }
 
   public function isPreviewRequest() {
@@ -909,5 +915,19 @@ final class AphrontRequest extends Phobject {
     return $future;
   }
 
+  public function updateEphemeralCookies() {
+    $submit_cookie = PhabricatorCookies::COOKIE_SUBMIT;
+
+    $submit_key = $this->getCookie($submit_cookie);
+    if (strlen($submit_key)) {
+      $this->clearCookie($submit_cookie);
+      $this->submitKey = $submit_key;
+    }
+
+  }
+
+  public function getSubmitKey() {
+    return $this->submitKey;
+  }
 
 }

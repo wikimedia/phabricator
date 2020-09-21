@@ -47,13 +47,43 @@ final class PhabricatorAuthFinishController
         $viewer,
         $request);
 
-      return $this->newDialog()
+
+
+      $dialog = $this->newDialog()
         ->setTitle(pht('Provide Multi-Factor Credentials'))
         ->setShortTitle(pht('Multi-Factor Login'))
         ->setWidth(AphrontDialogView::WIDTH_FORM)
-        ->addHiddenInput(AphrontRequest::TYPE_HISEC, true)
-        ->appendParagraph(
-          pht(
+        ->addHiddenInput(AphrontRequest::TYPE_HISEC, true);
+
+        $factors = $ex->getFactors();
+        $cutoff = 1564704000;
+        foreach ($factors as $factor) {
+          $provider_key = $factor->getFactorProvider()->getProviderFactorKey();
+          if ($provider_key == 'totp' && $factor->getDateModified() < $cutoff) {
+            $username = $viewer->getUsername();
+            $settings_url = "/settings/user/$username/page/multifactor/?id=";
+            PhabricatorCookies::setNextURICookie($request, $settings_url, true);
+            $warningView = new PHUIInfoView();
+            $warningView->setSeverity('warning');
+            $warningView->setTitle('Your multi-factor TOTP configuration needs to be updated.');
+            $warningView->setErrors( [
+              [
+                'This one-time change is a purely precautionary measure related to ',
+                phutil_tag('a', [
+                 'href' => 'https://lists.wikimedia.org/pipermail/wikitech-l/2020-January/092960.html',
+                 'target' => '_blank' ],
+                 'this'),
+                ' issue. ',
+                'After login is complete you will be redirected to edit your authentication factors. ',
+                'Please remove any authentication factor which was added prior to August 2019 and ',
+                'replace it with a new TOTP factor.']]);
+
+            $dialog->appendChild($warningView);
+
+          }
+        }
+
+         $dialog->appendParagraph( pht(
             'Welcome, %s. To complete the process of logging in, provide your '.
             'multi-factor credentials.',
             phutil_tag('strong', array(), $viewer->getUsername())))
@@ -61,6 +91,9 @@ final class PhabricatorAuthFinishController
         ->setSubmitURI($request->getPath())
         ->addCancelButton($ex->getCancelURI())
         ->addSubmitButton(pht('Continue'));
+
+        return $dialog;
+
     }
 
     // Upgrade the partial session to a full session.

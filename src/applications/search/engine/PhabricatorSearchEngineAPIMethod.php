@@ -144,7 +144,7 @@ EOTEXT
       ->setHeaderText(pht('Builtin and Saved Queries'))
       ->setCollapsed(true)
       ->setBackground(PHUIObjectBoxView::BLUE_PROPERTY)
-      ->appendChild($this->buildRemarkup($info))
+      ->appendChild($this->newRemarkupDocumentationView($info))
       ->appendChild($table);
   }
 
@@ -198,6 +198,7 @@ EOTEXT
       $label = $field->getLabel();
 
       $constants = $field->newConduitConstants();
+      $show_table = false;
 
       $type_object = $field->getConduitParameterType();
       if ($type_object) {
@@ -209,6 +210,7 @@ EOTEXT
             ' ',
             phutil_tag('em', array(), pht('(See table below.)')),
           );
+          $show_table = true;
         }
       } else {
         $type = null;
@@ -222,11 +224,11 @@ EOTEXT
         $description,
       );
 
-      if ($constants) {
-        $constant_lists[] = $this->buildRemarkup(
+      if ($show_table) {
+        $constant_lists[] = $this->newRemarkupDocumentationView(
           pht(
             'Constants supported by the `%s` constraint:',
-            'statuses'));
+            $key));
 
         $constants_rows = array();
         foreach ($constants as $constant) {
@@ -283,7 +285,7 @@ EOTEXT
       ->setHeaderText(pht('Custom Query Constraints'))
       ->setCollapsed(true)
       ->setBackground(PHUIObjectBoxView::BLUE_PROPERTY)
-      ->appendChild($this->buildRemarkup($info))
+      ->appendChild($this->newRemarkupDocumentationView($info))
       ->appendChild($table)
       ->appendChild($constant_lists);
   }
@@ -391,9 +393,9 @@ EOTEXT
       ->setHeaderText(pht('Result Ordering'))
       ->setCollapsed(true)
       ->setBackground(PHUIObjectBoxView::BLUE_PROPERTY)
-      ->appendChild($this->buildRemarkup($orders_info))
+      ->appendChild($this->newRemarkupDocumentationView($orders_info))
       ->appendChild($orders_table)
-      ->appendChild($this->buildRemarkup($columns_info))
+      ->appendChild($this->newRemarkupDocumentationView($columns_info))
       ->appendChild($columns_table);
   }
 
@@ -403,7 +405,7 @@ EOTEXT
     $info = pht(<<<EOTEXT
 Objects matching your query are returned as a list of dictionaries in the
 `data` property of the results. Each dictionary has some metadata and a
-`fields` key, which contains the information abou the object that most callers
+`fields` key, which contains the information about the object that most callers
 will be interested in.
 
 For example, the results may look something like this:
@@ -472,7 +474,7 @@ EOTEXT
       ->setHeaderText(pht('Object Fields'))
       ->setCollapsed(true)
       ->setBackground(PHUIObjectBoxView::BLUE_PROPERTY)
-      ->appendChild($this->buildRemarkup($info))
+      ->appendChild($this->newRemarkupDocumentationView($info))
       ->appendChild($table);
   }
 
@@ -562,7 +564,7 @@ EOTEXT
       ->setHeaderText(pht('Attachments'))
       ->setCollapsed(true)
       ->setBackground(PHUIObjectBoxView::BLUE_PROPERTY)
-      ->appendChild($this->buildRemarkup($info))
+      ->appendChild($this->newRemarkupDocumentationView($info))
       ->appendChild($table);
   }
 
@@ -633,21 +635,7 @@ EOTEXT
       ->setHeaderText(pht('Paging and Limits'))
       ->setCollapsed(true)
       ->setBackground(PHUIObjectBoxView::BLUE_PROPERTY)
-      ->appendChild($this->buildRemarkup($info));
+      ->appendChild($this->newRemarkupDocumentationView($info));
   }
 
-  private function buildRemarkup($remarkup) {
-    $viewer = $this->getViewer();
-
-    $view = new PHUIRemarkupView($viewer, $remarkup);
-
-    $view->setRemarkupOptions(
-      array(
-        PHUIRemarkupView::OPTION_PRESERVE_LINEBREAKS => false,
-      ));
-
-    return id(new PHUIBoxView())
-      ->appendChild($view)
-      ->addPadding(PHUI::PADDING_LARGE);
-  }
 }

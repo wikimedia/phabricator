@@ -130,6 +130,14 @@ abstract class HeraldAdapter extends Phobject {
 
   abstract public function getHeraldName();
 
+  final public function willGetHeraldField($field_key) {
+    // This method is called during rule evaluation, before we engage the
+    // Herald profiler. We make sure we have a concrete implementation so time
+    // spent loading fields out of the classmap is not mistakenly attributed to
+    // whichever field happens to evaluate first.
+    $this->requireFieldImplementation($field_key);
+  }
+
   public function getHeraldField($field_key) {
     return $this->requireFieldImplementation($field_key)
       ->getHeraldFieldValue($this->getObject());
@@ -186,15 +194,16 @@ abstract class HeraldAdapter extends Phobject {
     return $this->appliedTransactions;
   }
 
-  public function queueTransaction($transaction) {
+  final public function queueTransaction(
+    PhabricatorApplicationTransaction $transaction) {
     $this->queuedTransactions[] = $transaction;
   }
 
-  public function getQueuedTransactions() {
+  final public function getQueuedTransactions() {
     return $this->queuedTransactions;
   }
 
-  public function newTransaction() {
+  final public function newTransaction() {
     $object = $this->newObject();
 
     if (!($object instanceof PhabricatorApplicationTransactionInterface)) {
@@ -205,7 +214,19 @@ abstract class HeraldAdapter extends Phobject {
           'PhabricatorApplicationTransactionInterface'));
     }
 
-    return $object->getApplicationTransactionTemplate();
+    $xaction = $object->getApplicationTransactionTemplate();
+
+    if (!($xaction instanceof PhabricatorApplicationTransaction)) {
+      throw new Exception(
+        pht(
+          'Expected object (of class "%s") to return a transaction template '.
+          '(of class "%s"), but it returned something else ("%s").',
+          get_class($object),
+          'PhabricatorApplicationTransaction',
+          phutil_describe_type($xaction)));
+    }
+
+    return $xaction;
   }
 
 
@@ -221,6 +242,12 @@ abstract class HeraldAdapter extends Phobject {
   abstract public function getAdapterContentDescription();
   abstract public function getAdapterApplicationClass();
   abstract public function getObject();
+
+  public function getAdapterContentIcon() {
+    $application_class = $this->getAdapterApplicationClass();
+    $application = newv($application_class, array());
+    return $application->getIcon();
+  }
 
   /**
    * Return a new characteristic object for this adapter.
@@ -352,6 +379,16 @@ abstract class HeraldAdapter extends Phobject {
     return $field->getFieldGroupKey();
   }
 
+  public function isFieldAvailable($field_key) {
+    $field = $this->getFieldImplementation($field_key);
+
+    if (!$field) {
+      return null;
+    }
+
+    return $field->isFieldAvailable();
+  }
+
 
 /* -(  Conditions  )--------------------------------------------------------- */
 
@@ -368,7 +405,7 @@ abstract class HeraldAdapter extends Phobject {
       self::CONDITION_IS_NOT_ANY      => pht('is not any of'),
       self::CONDITION_INCLUDE_ALL     => pht('include all of'),
       self::CONDITION_INCLUDE_ANY     => pht('include any of'),
-      self::CONDITION_INCLUDE_NONE    => pht('do not include'),
+      self::CONDITION_INCLUDE_NONE    => pht('include none of'),
       self::CONDITION_IS_ME           => pht('is myself'),
       self::CONDITION_IS_NOT_ME       => pht('is not myself'),
       self::CONDITION_REGEXP          => pht('matches regexp'),
@@ -744,6 +781,16 @@ abstract class HeraldAdapter extends Phobject {
     return $action->getActionGroupKey();
   }
 
+  public function isActionAvailable($action_key) {
+    $action = $this->getActionImplementation($action_key);
+
+    if (!$action) {
+      return null;
+    }
+
+    return $action->isActionAvailable();
+  }
+
   public function getActions($rule_type) {
     $actions = array();
     foreach ($this->getActionsForRuleType($rule_type) as $key => $action) {
@@ -901,7 +948,6 @@ abstract class HeraldAdapter extends Phobject {
 
   public function renderRuleAsText(
     HeraldRule $rule,
-    PhabricatorHandleList $handles,
     PhabricatorUser $viewer) {
 
     require_celerity_resource('herald-css');
@@ -932,7 +978,7 @@ abstract class HeraldAdapter extends Phobject {
         ),
         array(
           $icon,
-          $this->renderConditionAsText($condition, $handles, $viewer),
+          $this->renderConditionAsText($condition, $viewer),
         ));
     }
 
@@ -963,7 +1009,7 @@ abstract class HeraldAdapter extends Phobject {
         ),
         array(
           $icon,
-          $this->renderActionAsText($viewer, $action, $handles),
+          $this->renderActionAsText($viewer, $action),
         ));
     }
 
@@ -977,7 +1023,6 @@ abstract class HeraldAdapter extends Phobject {
 
   private function renderConditionAsText(
     HeraldCondition $condition,
-    PhabricatorHandleList $handles,
     PhabricatorUser $viewer) {
 
     $field_type = $condition->getFieldName();
@@ -992,7 +1037,7 @@ abstract class HeraldAdapter extends Phobject {
     $condition_type = $condition->getFieldCondition();
     $condition_name = idx($this->getConditionNameMap(), $condition_type);
 
-    $value = $this->renderConditionValueAsText($condition, $handles, $viewer);
+    $value = $this->renderConditionValueAsText($condition, $viewer);
 
     return array(
       $field_name,
@@ -1005,36 +1050,23 @@ abstract class HeraldAdapter extends Phobject {
 
   private function renderActionAsText(
     PhabricatorUser $viewer,
-    HeraldActionRecord $action,
-    PhabricatorHandleList $handles) {
+    HeraldActionRecord $action_record) {
 
-    $impl = $this->getActionImplementation($action->getAction());
-    if ($impl) {
-      $impl->setViewer($viewer);
+    $action_type = $action_record->getAction();
+    $action_value = $action_record->getTarget();
 
-      $value = $action->getTarget();
-      return $impl->renderActionDescription($value);
+    $action = $this->getActionImplementation($action_type);
+    if (!$action) {
+      return pht('Unknown Action ("%s")', $action_type);
     }
 
-    $rule_global = HeraldRuleTypeConfig::RULE_TYPE_GLOBAL;
+    $action->setViewer($viewer);
 
-    $action_type = $action->getAction();
-
-    $default = pht('(Unknown Action "%s") equals', $action_type);
-
-    $action_name = idx(
-      $this->getActionNameMap($rule_global),
-      $action_type,
-      $default);
-
-    $target = $this->renderActionTargetAsText($action, $handles);
-
-    return hsprintf('    %s %s', $action_name, $target);
+    return $action->renderActionDescription($action_value);
   }
 
   private function renderConditionValueAsText(
     HeraldCondition $condition,
-    PhabricatorHandleList $handles,
     PhabricatorUser $viewer) {
 
     $field = $this->requireFieldImplementation($condition->getFieldName());
@@ -1045,76 +1077,26 @@ abstract class HeraldAdapter extends Phobject {
       $condition->getValue());
   }
 
-  private function renderActionTargetAsText(
-    HeraldActionRecord $action,
-    PhabricatorHandleList $handles) {
+  public function renderFieldTranscriptValue(
+    PhabricatorUser $viewer,
+    $field_type,
+    $field_value) {
 
-    // TODO: This should be driven through HeraldAction.
+    $field = $this->getFieldImplementation($field_type);
+    if ($field) {
+      return $field->renderTranscriptValue(
+        $viewer,
+        $field_value);
+    }
 
-    $target = $action->getTarget();
-    if (!is_array($target)) {
-      $target = array($target);
-    }
-    foreach ($target as $index => $val) {
-      switch ($action->getAction()) {
-        default:
-          $handle = $handles->getHandleIfExists($val);
-          if ($handle) {
-            $target[$index] = $handle->renderLink();
-          }
-          break;
-      }
-    }
-    $target = phutil_implode_html(', ', $target);
-    return $target;
+    return phutil_tag(
+      'em',
+      array(),
+      pht(
+        'Unable to render value for unknown field type ("%s").',
+        $field_type));
   }
 
-  /**
-   * Given a @{class:HeraldRule}, this function extracts all the phids that
-   * we'll want to load as handles later.
-   *
-   * This function performs a somewhat hacky approach to figuring out what
-   * is and is not a phid - try to get the phid type and if the type is
-   * *not* unknown assume its a valid phid.
-   *
-   * Don't try this at home. Use more strongly typed data at home.
-   *
-   * Think of the children.
-   */
-  public static function getHandlePHIDs(HeraldRule $rule) {
-    $phids = array($rule->getAuthorPHID());
-    foreach ($rule->getConditions() as $condition) {
-      $value = $condition->getValue();
-      if (!is_array($value)) {
-        $value = array($value);
-      }
-      foreach ($value as $val) {
-        if (phid_get_type($val) !=
-            PhabricatorPHIDConstants::PHID_TYPE_UNKNOWN) {
-          $phids[] = $val;
-        }
-      }
-    }
-
-    foreach ($rule->getActions() as $action) {
-      $target = $action->getTarget();
-      if (!is_array($target)) {
-        $target = array($target);
-      }
-      foreach ($target as $val) {
-        if (phid_get_type($val) !=
-            PhabricatorPHIDConstants::PHID_TYPE_UNKNOWN) {
-          $phids[] = $val;
-        }
-      }
-    }
-
-    if ($rule->isObjectRule()) {
-      $phids[] = $rule->getTriggerObjectPHID();
-    }
-
-    return $phids;
-  }
 
 /* -(  Applying Effects  )--------------------------------------------------- */
 

@@ -4,52 +4,79 @@ final class PhabricatorFilesManagementMigrateWorkflow
   extends PhabricatorFilesManagementWorkflow {
 
   protected function didConstruct() {
+    $arguments = $this->newIteratorArguments();
+
+    $arguments[] = array(
+      'name' => 'engine',
+      'param' => 'storage-engine',
+      'help' => pht('Migrate to the named storage engine.'),
+    );
+
+    $arguments[] = array(
+      'name' => 'dry-run',
+      'help' => pht('Show what would be migrated.'),
+    );
+
+    $arguments[] = array(
+      'name' => 'min-size',
+      'param' => 'bytes',
+      'help' => pht(
+        'Do not migrate data for files which are smaller than a given '.
+        'filesize.'),
+    );
+
+    $arguments[] = array(
+      'name' => 'max-size',
+      'param' => 'bytes',
+      'help' => pht(
+        'Do not migrate data for files which are larger than a given '.
+        'filesize.'),
+    );
+
+    $arguments[] = array(
+      'name' => 'copy',
+      'help' => pht(
+        'Copy file data instead of moving it: after migrating, do not '.
+        'remove the old data even if it is no longer referenced.'),
+    );
+
+    $arguments[] = array(
+      'name' => 'local-disk-source',
+      'param' => 'path',
+      'help' => pht(
+        'When migrating from a local disk source, use the specified '.
+        'path as the root directory.'),
+    );
+
     $this
       ->setName('migrate')
       ->setSynopsis(pht('Migrate files between storage engines.'))
-      ->setArguments(
-        array(
-          array(
-            'name'      => 'engine',
-            'param'     => 'storage_engine',
-            'help'      => pht('Migrate to the named storage engine.'),
-          ),
-          array(
-            'name'      => 'dry-run',
-            'help'      => pht('Show what would be migrated.'),
-          ),
-          array(
-            'name' => 'min-size',
-            'param' => 'bytes',
-            'help' => pht(
-              'Do not migrate data for files which are smaller than a given '.
-              'filesize.'),
-          ),
-          array(
-            'name' => 'max-size',
-            'param' => 'bytes',
-            'help' => pht(
-              'Do not migrate data for files which are larger than a given '.
-              'filesize.'),
-          ),
-          array(
-            'name'      => 'all',
-            'help'      => pht('Migrate all files.'),
-          ),
-          array(
-            'name' => 'copy',
-            'help' => pht(
-              'Copy file data instead of moving it: after migrating, do not '.
-              'remove the old data even if it is no longer referenced.'),
-          ),
-          array(
-            'name'      => 'names',
-            'wildcard'  => true,
-          ),
-        ));
+      ->setArguments($arguments);
   }
 
   public function execute(PhutilArgumentParser $args) {
+
+    // See T13306. This flag allows you to import files from a backup of
+    // local disk storage into some other engine. When the caller provides
+    // the flag, we override the local disk engine configuration and treat
+    // it as though it is configured to use the specified location.
+
+    $local_disk_source = $args->getArg('local-disk-source');
+    if (strlen($local_disk_source)) {
+      $path = Filesystem::resolvePath($local_disk_source);
+      try {
+        Filesystem::assertIsDirectory($path);
+      } catch (FilesystemException $ex) {
+        throw new PhutilArgumentUsageException(
+          pht(
+            'The "--local-disk-source" argument must point to a valid, '.
+            'readable directory on local disk.'));
+      }
+
+      $env = PhabricatorEnv::beginScopedEnv();
+      $env->overrideEnvConfig('storage.local-disk.path', $path);
+    }
+
     $target_key = $args->getArg('engine');
     if (!$target_key) {
       throw new PhutilArgumentUsageException(
@@ -63,14 +90,6 @@ final class PhabricatorFilesManagementMigrateWorkflow
     $target_engine = PhabricatorFile::buildEngine($target_key);
 
     $iterator = $this->buildIterator($args);
-    if (!$iterator) {
-      throw new PhutilArgumentUsageException(
-        pht(
-          'Either specify a list of files to migrate, or use `%s` '.
-          'to migrate all files.',
-          '--all'));
-    }
-
     $is_dry_run = $args->getArg('dry-run');
 
     $min_size = (int)$args->getArg('min-size');

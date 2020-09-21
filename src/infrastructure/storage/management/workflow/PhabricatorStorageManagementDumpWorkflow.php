@@ -14,7 +14,8 @@ final class PhabricatorStorageManagementDumpWorkflow
             'name' => 'for-replica',
             'help' => pht(
               'Add __--master-data__ to the __mysqldump__ command, '.
-              'generating a CHANGE MASTER statement in the output.'),
+              'generating a CHANGE MASTER statement in the output. This '.
+              'option also dumps all data, including caches.'),
           ),
           array(
             'name' => 'output',
@@ -51,24 +52,67 @@ final class PhabricatorStorageManagementDumpWorkflow
   }
 
   public function didExecute(PhutilArgumentParser $args) {
+    $output_file = $args->getArg('output');
+    $is_compress = $args->getArg('compress');
+    $is_overwrite = $args->getArg('overwrite');
+    $is_noindex = $args->getArg('no-indexes');
+    $is_replica = $args->getArg('for-replica');
+
+    if ($is_compress) {
+      if ($output_file === null) {
+        throw new PhutilArgumentUsageException(
+          pht(
+            'The "--compress" flag can only be used alongside "--output".'));
+      }
+
+      if (!function_exists('gzopen')) {
+        throw new PhutilArgumentUsageException(
+          pht(
+            'The "--compress" flag requires the PHP "zlib" extension, but '.
+            'that extension is not available. Install the extension or '.
+            'omit the "--compress" option.'));
+      }
+    }
+
+    if ($is_overwrite) {
+      if ($output_file === null) {
+        throw new PhutilArgumentUsageException(
+          pht(
+            'The "--overwrite" flag can only be used alongside "--output".'));
+      }
+    }
+
+    if ($is_replica && $is_noindex) {
+      throw new PhutilArgumentUsageException(
+        pht(
+          'The "--for-replica" flag can not be used with the '.
+          '"--no-indexes" flag. Replication dumps must contain a complete '.
+          'representation of database state.'));
+    }
+
+    if ($output_file !== null) {
+      if (Filesystem::pathExists($output_file)) {
+        if (!$is_overwrite) {
+          throw new PhutilArgumentUsageException(
+            pht(
+              'Output file "%s" already exists. Use "--overwrite" '.
+              'to overwrite.',
+              $output_file));
+        }
+      }
+    }
+
     $api = $this->getSingleAPI();
     $patches = $this->getPatches();
 
-    $console = PhutilConsole::getConsole();
-
-    $with_indexes = !$args->getArg('no-indexes');
-
     $applied = $api->getAppliedPatches();
     if ($applied === null) {
-      $namespace = $api->getNamespace();
-      $console->writeErr(
+      throw new PhutilArgumentUsageException(
         pht(
-          '**Storage Not Initialized**: There is no database storage '.
-          'initialized in this storage namespace ("%s"). Use '.
-          '**%s** to initialize storage.',
-          $namespace,
-          './bin/storage upgrade'));
-      return 1;
+          'There is no database storage initialized in the current storage '.
+          'namespace ("%s"). Use "bin/storage upgrade" to initialize '.
+          'storage or use "--namespace" to choose a different namespace.',
+          $api->getNamespace()));
     }
 
     $ref = $api->getRef();
@@ -83,6 +127,9 @@ final class PhabricatorStorageManagementDumpWorkflow
 
     $schemata = $actual_map[$ref_key];
     $expect = $expect_map[$ref_key];
+
+    $with_caches = $is_replica;
+    $with_indexes = !$is_noindex;
 
     $targets = array();
     foreach ($schemata->getDatabases() as $database_name => $database) {
@@ -108,7 +155,7 @@ final class PhabricatorStorageManagementDumpWorkflow
             // When dumping tables, leave the data in cache tables in the
             // database. This will be automatically rebuild after the data
             // is restored and does not need to be persisted in backups.
-            $with_data = false;
+            $with_data = $with_caches;
             break;
           case PhabricatorConfigTableSchema::PERSISTENCE_INDEX:
             // When dumping tables, leave index data behind of the caller
@@ -141,44 +188,14 @@ final class PhabricatorStorageManagementDumpWorkflow
       }
     }
 
-    $output_file = $args->getArg('output');
-    $is_compress = $args->getArg('compress');
-    $is_overwrite = $args->getArg('overwrite');
-
-    if ($is_compress) {
-      if ($output_file === null) {
-        throw new PhutilArgumentUsageException(
-          pht(
-            'The "--compress" flag can only be used alongside "--output".'));
-      }
-    }
-
-    if ($is_overwrite) {
-      if ($output_file === null) {
-        throw new PhutilArgumentUsageException(
-          pht(
-            'The "--overwrite" flag can only be used alongside "--output".'));
-      }
-    }
-
-    if ($output_file !== null) {
-      if (Filesystem::pathExists($output_file)) {
-        if (!$is_overwrite) {
-          throw new PhutilArgumentUsageException(
-            pht(
-              'Output file "%s" already exists. Use "--overwrite" '.
-              'to overwrite.',
-              $output_file));
-        }
-      }
-    }
-
     $argv = array();
     $argv[] = '--hex-blob';
     $argv[] = '--single-transaction';
-    $argv[] = '--default-character-set=utf8';
 
-    if ($args->getArg('for-replica')) {
+    $argv[] = '--default-character-set';
+    $argv[] = $api->getClientCharset();
+
+    if ($is_replica) {
       $argv[] = '--master-data';
     }
 
@@ -282,10 +299,13 @@ final class PhabricatorStorageManagementDumpWorkflow
         $preamble = implode('', $preamble);
         $this->writeData($preamble, $file, $is_compress, $output_file);
 
-        $future = new ExecFuture('%C', $spec['command']);
+        // See T13328. The "mysql" command may produce output very quickly.
+        // Don't buffer more than a fixed amount.
+        $future = id(new ExecFuture('%C', $spec['command']))
+          ->setReadBufferSize(32 * 1024 * 1024);
 
         $iterator = id(new FutureIterator(array($future)))
-          ->setUpdateInterval(0.100);
+          ->setUpdateInterval(0.010);
         foreach ($iterator as $ready) {
           list($stdout, $stderr) = $future->read();
           $future->discardBuffers();
@@ -333,7 +353,6 @@ final class PhabricatorStorageManagementDumpWorkflow
 
     return 0;
   }
-
 
   private function writeData($data, $file, $is_compress, $output_file) {
     if (!strlen($data)) {

@@ -91,4 +91,13 @@ final class HarbormasterRunBuildPlansHeraldAction
       'Run build plans: %s.',
       $this->renderHandleList($value));
   }
+
+  public function getPHIDsAffectedByAction(HeraldActionRecord $record) {
+    return $record->getTarget();
+  }
+
+  public function isActionAvailable() {
+    return id(new PhabricatorHarbormasterApplication())->isInstalled();
+  }
+
 }

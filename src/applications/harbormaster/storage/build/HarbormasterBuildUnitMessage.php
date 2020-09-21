@@ -1,12 +1,14 @@
 <?php
 
 final class HarbormasterBuildUnitMessage
-  extends HarbormasterDAO {
+  extends HarbormasterDAO
+  implements PhabricatorPolicyInterface {
 
   protected $buildTargetPHID;
   protected $engine;
   protected $namespace;
   protected $name;
+  protected $nameIndex;
   protected $result;
   protected $duration;
   protected $properties = array();
@@ -131,6 +133,7 @@ final class HarbormasterBuildUnitMessage
         'engine' => 'text255',
         'namespace' => 'text255',
         'name' => 'text255',
+        'nameIndex' => 'bytes12',
         'result' => 'text32',
         'duration' => 'double?',
       ),
@@ -176,18 +179,23 @@ final class HarbormasterBuildUnitMessage
 
     $is_text = ($format !== self::FORMAT_REMARKUP);
     $is_remarkup = ($format === self::FORMAT_REMARKUP);
+    $message = null;
 
     $full_details = $this->getUnitMessageDetails();
+    $byte_length = strlen($full_details);
 
-    if (!strlen($full_details)) {
+    $text_limit = 1024 * 2;
+    $remarkup_limit = 1024 * 8;
+
+    if (!$byte_length) {
       if ($summarize) {
         return null;
       }
-      $details = phutil_tag('em', array(), pht('No details provided.'));
+      $message = phutil_tag('em', array(), pht('No details provided.'));
     } else if ($summarize) {
       if ($is_text) {
         $details = id(new PhutilUTF8StringTruncator())
-          ->setMaximumBytes(2048)
+          ->setMaximumBytes($text_limit)
           ->truncateString($full_details);
         $details = phutil_split_lines($details);
 
@@ -198,7 +206,34 @@ final class HarbormasterBuildUnitMessage
 
         $details = implode('', $details);
       } else {
-        $details = $full_details;
+        if ($byte_length > $remarkup_limit) {
+          $uri = $this->getURI();
+
+          if ($uri) {
+            $link = phutil_tag(
+              'a',
+              array(
+                'href' => $uri,
+                'target' => '_blank',
+              ),
+              pht('View Details'));
+          } else {
+            $link = null;
+          }
+
+          $message = array();
+          $message[] = phutil_tag(
+            'em',
+            array(),
+            pht('This test has too much data to display inline.'));
+          if ($link) {
+            $message[] = $link;
+          }
+
+          $message = phutil_implode_html(" \xC2\xB7 ", $message);
+        } else {
+          $details = $full_details;
+        }
       }
     } else {
       $details = $full_details;
@@ -209,19 +244,47 @@ final class HarbormasterBuildUnitMessage
     $classes = array();
     $classes[] = 'harbormaster-unit-details';
 
-    if ($is_remarkup) {
+    if ($message !== null) {
+      // If we have a message, show that instead of rendering any test details.
+      $details = $message;
+    } else if ($is_remarkup) {
       $details = new PHUIRemarkupView($viewer, $details);
     } else {
       $classes[] = 'harbormaster-unit-details-text';
       $classes[] = 'PhabricatorMonospaced';
     }
 
-    return phutil_tag(
+    $warning = null;
+    if (!$summarize) {
+      $warnings = array();
+
+      if ($is_remarkup && ($byte_length > $remarkup_limit)) {
+        $warnings[] = pht(
+          'This test result has %s bytes of Remarkup test details. Remarkup '.
+          'blocks longer than %s bytes are not rendered inline when showing '.
+          'test summaries.',
+          new PhutilNumber($byte_length),
+          new PhutilNumber($remarkup_limit));
+      }
+
+      if ($warnings) {
+        $warning = id(new PHUIInfoView())
+          ->setSeverity(PHUIInfoView::SEVERITY_WARNING)
+          ->setErrors($warnings);
+      }
+    }
+
+    $content = phutil_tag(
       'div',
       array(
         'class' => implode(' ', $classes),
       ),
       $details);
+
+    return array(
+      $warning,
+      $content,
+    );
   }
 
   public function getUnitMessageDisplayName() {
@@ -257,6 +320,66 @@ final class HarbormasterBuildUnitMessage
     );
 
     return implode("\0", $parts);
+  }
+
+  public function getURI() {
+    $id = $this->getID();
+
+    if (!$id) {
+      return null;
+    }
+
+    return urisprintf(
+      '/harbormaster/unit/view/%d/',
+      $id);
+  }
+
+  public function save() {
+    if ($this->nameIndex === null) {
+      $this->nameIndex = HarbormasterString::newIndex($this->getName());
+    }
+
+    // See T13088. While we're letting installs do online migrations to avoid
+    // downtime, don't populate the "name" column for new writes. New writes
+    // use the "HarbormasterString" table instead.
+    $old_name = $this->name;
+    $this->name = '';
+
+    $caught = null;
+    try {
+      $result = parent::save();
+    } catch (Exception $ex) {
+      $caught = $ex;
+    }
+
+    $this->name = $old_name;
+
+    if ($caught) {
+      throw $caught;
+    }
+
+    return $result;
+  }
+
+
+/* -(  PhabricatorPolicyInterface  )----------------------------------------- */
+
+
+  public function getCapabilities() {
+    return array(
+      PhabricatorPolicyCapability::CAN_VIEW,
+    );
+  }
+
+  public function getPolicy($capability) {
+    switch ($capability) {
+      case PhabricatorPolicyCapability::CAN_VIEW:
+        return PhabricatorPolicies::getMostOpenPolicy();
+    }
+  }
+
+  public function hasAutomaticCapability($capability, PhabricatorUser $viewer) {
+    return false;
   }
 
 }

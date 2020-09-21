@@ -210,8 +210,9 @@ The keys you can provide in a specification are:
   - `claim` //Optional bool.// By default, closing an unassigned task claims
     it. You can set this to `false` to disable this behavior for a particular
     status.
-  - `locked` //Optional bool.// Lock tasks in this status, preventing users
-    from commenting.
+  - `locked` //Optional string.// Lock tasks in this status. Specify "comments"
+    to lock comments (users who can edit the task may override this lock).
+    Specify "edits" to prevent anyone except the task owner from making edits.
   - `mfa` //Optional bool.// Require all edits to this task to be signed with
     multi-factor authentication.
 
@@ -342,6 +343,9 @@ dictionary with these keys:
   - `icon` //Optional string.// Icon for the subtype.
   - `children` //Optional map.// Configure options shown to the user when
      they "Create Subtask". See below.
+  - `fields` //Optional map.// Configure field behaviors. See below.
+  - `mutations` //Optional list.// Configure which subtypes this subtype
+    can easily be converted to by using the "Change Subtype" action. See below.
 
 Each subtype must have a unique key, and you must define a subtype with
 the key "%s", which is used as a default subtype.
@@ -397,6 +401,53 @@ be used when presenting options to the user.
 
 If only one option would be presented, the user will be taken directly to the
 appropriate form instead of being prompted to choose a form.
+
+The `fields` key can configure the behavior of custom fields on specific
+task subtypes. For example:
+
+```
+  {
+    ...
+    "fields": {
+      "custom.some-field": {
+        "disabled": true
+      }
+    }
+    ...
+  }
+```
+
+Each field supports these options:
+
+  - `disabled` //Optional bool.// Allows you to disable fields on certain
+    subtypes.
+  - `name` //Optional string.// Custom name of this field for the subtype.
+
+
+The `mutations` key allows you to control the behavior of the "Change Subtype"
+action above the comment area. By default, this action allows users to change
+the task subtype into any other subtype.
+
+If you'd prefer to make it more difficult to change subtypes or offer only a
+subset of subtypes, you can specify the list of subtypes that "Change Subtypes"
+offers. For example, if you have several similar subtypes and want to allow
+tasks to be converted between them but not easily converted to other types,
+you can make the "Change Subtypes" control show only these options like this:
+
+```
+  {
+    ...
+    "mutations": ["bug", "issue", "defect"]
+    ...
+  }
+```
+
+If you specify an empty list, the "Change Subtypes" action will be completely
+hidden.
+
+This mutation list is advisory and only configures the UI. Tasks may still be
+converted across subtypes freely by using the Bulk Editor or API.
+
 EOTEXT
       ,
       $subtype_default_key));
@@ -427,15 +478,20 @@ You can choose the default priority for newly created tasks with
 EOTEXT
       ));
 
+    $fields_description = $this->deformat(pht(<<<EOTEXT
+List of custom fields for Maniphest tasks.
+
+For details on adding custom fields to Maniphest, see [[ %s | %s ]] in the
+documentation.
+EOTEXT
+      ,
+      PhabricatorEnv::getDoclink('Configuring Custom Fields'),
+      pht('Configuring Custom Fields')));
 
     return array(
       $this->newOption('maniphest.custom-field-definitions', 'wild', array())
         ->setSummary(pht('Custom Maniphest fields.'))
-        ->setDescription(
-          pht(
-            'Array of custom fields for Maniphest tasks. For details on '.
-            'adding custom fields to Maniphest, see "Configuring Custom '.
-            'Fields" in the documentation.'))
+        ->setDescription($fields_description)
         ->addExample($fields_json, pht('Valid setting')),
       $this->newOption('maniphest.fields', $custom_field_type, $default_fields)
         ->setCustomData(id(new ManiphestTask())->getCustomFieldBaseClass())

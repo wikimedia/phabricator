@@ -15,12 +15,15 @@ class PhabricatorEditEngineSubtype
   private $color;
   private $childSubtypes = array();
   private $childIdentifiers = array();
+  private $fieldConfiguration = array();
+  private $mutations;
+
   private $object;
 
   public function getObject() {
     return $this->object;
   }
-  
+
   public function setObject($object) {
     $this->object = $object;
     return $this;
@@ -89,6 +92,15 @@ class PhabricatorEditEngineSubtype
     return $this->childIdentifiers;
   }
 
+  public function setMutations($mutations) {
+    $this->mutations = $mutations;
+    return $this;
+  }
+
+  public function getMutations() {
+    return $this->mutations;
+  }
+
   public function hasTagView() {
     return (bool)strlen($this->getTagText());
   }
@@ -104,6 +116,17 @@ class PhabricatorEditEngineSubtype
     }
 
     return $view;
+  }
+
+  public function setSubtypeFieldConfiguration(
+    $subtype_key,
+    array $configuration) {
+    $this->fieldConfiguration[$subtype_key] = $configuration;
+    return $this;
+  }
+
+  public function getSubtypeFieldConfiguration($subtype_key) {
+    return idx($this->fieldConfiguration, $subtype_key);
   }
 
   public static function validateSubtypeKey($subtype) {
@@ -151,6 +174,8 @@ class PhabricatorEditEngineSubtype
           'color' => 'optional string',
           'icon' => 'optional string',
           'children' => 'optional map<string, wild>',
+          'fields' => 'optional map<string, wild>',
+          'mutations' => 'optional list<string>',
         ));
 
       $key = $value['key'];
@@ -195,6 +220,18 @@ class PhabricatorEditEngineSubtype
               'or the other, but not both.'));
         }
       }
+
+      $fields = idx($value, 'fields');
+      if ($fields) {
+        foreach ($fields as $field_key => $configuration) {
+          PhutilTypeSpec::checkMap(
+            $configuration,
+            array(
+              'disabled' => 'optional bool',
+              'name' => 'optional string',
+            ));
+        }
+      }
     }
 
     if (!isset($map[self::SUBTYPE_DEFAULT])) {
@@ -204,6 +241,28 @@ class PhabricatorEditEngineSubtype
           'with key "%s". This subtype is required and must be defined.',
           self::SUBTYPE_DEFAULT));
     }
+
+    foreach ($config as $value) {
+      $key = idx($value, 'key');
+
+      $mutations = idx($value, 'mutations');
+      if (!$mutations) {
+        continue;
+      }
+
+      foreach ($mutations as $mutation) {
+        if (!isset($map[$mutation])) {
+          throw new Exception(
+            pht(
+              'Subtype configuration is invalid: subtype with key "%s" '.
+              'specifies that it can mutate into subtype "%s", but that is '.
+              'not a valid subtype.',
+              $key,
+              $mutation));
+        }
+      }
+    }
+
   }
 
   public static function newSubtypeMap(array $config) {
@@ -256,6 +315,17 @@ class PhabricatorEditEngineSubtype
       if ($child_forms) {
         $subtype->setChildFormIdentifiers($child_forms);
       }
+
+      $field_configurations = idx($entry, 'fields');
+      if ($field_configurations) {
+        foreach ($field_configurations as $field_key => $field_configuration) {
+          $subtype->setSubtypeFieldConfiguration(
+            $field_key,
+            $field_configuration);
+        }
+      }
+
+      $subtype->setMutations(idx($entry, 'mutations'));
 
       $map[$key] = $subtype;
     }

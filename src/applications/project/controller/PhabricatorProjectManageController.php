@@ -37,8 +37,9 @@ final class PhabricatorProjectManageController
       new PhabricatorProjectTransactionQuery());
     $timeline->setShouldTerminate(true);
 
-    $nav = $this->getProfileMenu();
-    $nav->selectFilter(PhabricatorProject::ITEM_MANAGE);
+    $nav = $this->newNavigation(
+      $project,
+      PhabricatorProject::ITEM_MANAGE);
 
     $crumbs = $this->buildApplicationCrumbs();
     $crumbs->addTextCrumb(pht('Manage'));
@@ -80,6 +81,9 @@ final class PhabricatorProjectManageController
       $project,
       PhabricatorPolicyCapability::CAN_EDIT);
 
+    $can_create = $this->hasApplicationCapability(
+      ProjectCreateProjectsCapability::CAPABILITY);
+
     $curtain = $this->newCurtainView($project);
 
     $curtain->addAction(
@@ -112,16 +116,16 @@ final class PhabricatorProjectManageController
           ->setName(pht('Activate Project'))
           ->setIcon('fa-check')
           ->setHref($this->getApplicationURI("archive/{$id}/"))
-          ->setDisabled(!$can_edit)
-          ->setWorkflow(true));
+          ->setDisabled(!$can_create)
+          ->setWorkflow(!$can_create));
     } else {
       $curtain->addAction(
         id(new PhabricatorActionView())
           ->setName(pht('Archive Project'))
           ->setIcon('fa-ban')
           ->setHref($this->getApplicationURI("archive/{$id}/"))
-          ->setDisabled(!$can_edit)
-          ->setWorkflow(true));
+          ->setDisabled(!$can_create)
+          ->setWorkflow(!$can_create));
     }
 
     return $curtain;

@@ -42,7 +42,7 @@ final class PhabricatorMarkupEngine extends Phobject {
   private $objects = array();
   private $viewer;
   private $contextObject;
-  private $version = 18;
+  private $version = 20;
   private $engineCaches = array();
   private $auxiliaryConfig = array();
 
@@ -545,6 +545,7 @@ final class PhabricatorMarkupEngine extends Phobject {
     $rules[] = new PhutilRemarkupDelRule();
     $rules[] = new PhutilRemarkupUnderlineRule();
     $rules[] = new PhutilRemarkupHighlightRule();
+    $rules[] = new PhutilRemarkupAnchorRule();
 
     foreach (self::loadCustomInlineRules() as $rule) {
       $rules[] = clone $rule;

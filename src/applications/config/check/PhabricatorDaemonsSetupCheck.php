@@ -8,14 +8,21 @@ final class PhabricatorDaemonsSetupCheck extends PhabricatorSetupCheck {
 
   protected function executeChecks() {
 
-    $task_daemon = id(new PhabricatorDaemonLogQuery())
-      ->setViewer(PhabricatorUser::getOmnipotentUser())
-      ->withStatus(PhabricatorDaemonLogQuery::STATUS_ALIVE)
-      ->withDaemonClasses(array('PhabricatorTaskmasterDaemon'))
-      ->setLimit(1)
-      ->execute();
+    try {
+      $task_daemons = id(new PhabricatorDaemonLogQuery())
+        ->setViewer(PhabricatorUser::getOmnipotentUser())
+        ->withStatus(PhabricatorDaemonLogQuery::STATUS_ALIVE)
+        ->withDaemonClasses(array('PhabricatorTaskmasterDaemon'))
+        ->setLimit(1)
+        ->execute();
 
-    if (!$task_daemon) {
+      $no_daemons = !$task_daemons;
+    } catch (Exception $ex) {
+      // Just skip this warning if the query fails for some reason.
+      $no_daemons = false;
+    }
+
+    if ($no_daemons) {
       $doc_href = PhabricatorEnv::getDoclink('Managing Daemons with phd');
 
       $summary = pht(
@@ -48,10 +55,17 @@ final class PhabricatorDaemonsSetupCheck extends PhabricatorSetupCheck {
 
     $expect_user = PhabricatorEnv::getEnvConfig('phd.user');
     if (strlen($expect_user)) {
-      $all_daemons = id(new PhabricatorDaemonLogQuery())
-        ->setViewer(PhabricatorUser::getOmnipotentUser())
-        ->withStatus(PhabricatorDaemonLogQuery::STATUS_ALIVE)
-        ->execute();
+
+      try {
+        $all_daemons = id(new PhabricatorDaemonLogQuery())
+          ->setViewer(PhabricatorUser::getOmnipotentUser())
+          ->withStatus(PhabricatorDaemonLogQuery::STATUS_ALIVE)
+          ->execute();
+      } catch (Exception $ex) {
+        // If this query fails for some reason, just skip this check.
+        $all_daemons = array();
+      }
+
       foreach ($all_daemons as $daemon) {
         $actual_user = $daemon->getRunningAsUser();
         if ($actual_user == $expect_user) {

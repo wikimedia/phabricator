@@ -13,6 +13,7 @@ final class PhabricatorAuthListController
     $list = new PHUIObjectItemListView();
     $can_manage = $this->hasApplicationCapability(
         AuthManageProvidersCapability::CAPABILITY);
+    $is_locked = PhabricatorEnv::getEnvConfig('auth.lock-config');
 
     foreach ($configs as $config) {
       $item = new PHUIObjectItemView();
@@ -63,25 +64,28 @@ final class PhabricatorAuthListController
           array(
             'href' => $this->getApplicationURI('config/new/'),
           ),
-          pht('Add Authentication Provider'))));
+          pht('Add Provider'))));
 
     $crumbs = $this->buildApplicationCrumbs();
     $crumbs->addTextCrumb(pht('Login and Registration'));
     $crumbs->setBorder(true);
 
-    $guidance_context = new PhabricatorAuthProvidersGuidanceContext();
+    $guidance_context = id(new PhabricatorAuthProvidersGuidanceContext())
+      ->setCanManage($can_manage);
 
     $guidance = id(new PhabricatorGuidanceEngine())
       ->setViewer($viewer)
       ->setGuidanceContext($guidance_context)
       ->newInfoView();
 
+    $is_disabled = (!$can_manage || $is_locked);
     $button = id(new PHUIButtonView())
       ->setTag('a')
       ->setButtonType(PHUIButtonView::BUTTONTYPE_SIMPLE)
-      ->setHref($this->getApplicationURI('config/new/'))
       ->setIcon('fa-plus')
-      ->setDisabled(!$can_manage)
+      ->setDisabled($is_disabled)
+      ->setWorkflow($is_disabled)
+      ->setHref($this->getApplicationURI('config/new/'))
       ->setText(pht('Add Provider'));
 
     $list->setFlush(true);

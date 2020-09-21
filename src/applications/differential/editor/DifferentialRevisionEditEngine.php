@@ -63,6 +63,10 @@ final class DifferentialRevisionEditEngine
     return $object->getMonogram();
   }
 
+  public function getCreateURI($form_key) {
+    return '/differential/diff/create/';
+  }
+
   protected function getObjectCreateShortText() {
     return pht('Create Revision');
   }
@@ -298,24 +302,14 @@ final class DifferentialRevisionEditEngine
 
   protected function newAutomaticCommentTransactions($object) {
     $viewer = $this->getViewer();
-    $xactions = array();
-
-    $inlines = DifferentialTransactionQuery::loadUnsubmittedInlineComments(
-      $viewer,
-      $object);
-    $inlines = msort($inlines, 'getID');
 
     $editor = $object->getApplicationTransactionEditor()
       ->setActor($viewer);
 
-    $query_template = id(new DifferentialDiffInlineCommentQuery())
-      ->withRevisionPHIDs(array($object->getPHID()));
-
     $xactions = $editor->newAutomaticInlineTransactions(
       $object,
-      $inlines,
       DifferentialTransaction::TYPE_INLINE,
-      $query_template);
+      new DifferentialDiffInlineCommentQuery());
 
     return $xactions;
   }
@@ -334,6 +328,13 @@ final class DifferentialRevisionEditEngine
     $content = array();
 
     if ($inlines) {
+      // Reload inlines to get inline context.
+      $inlines = id(new DifferentialDiffInlineCommentQuery())
+        ->setViewer($viewer)
+        ->withIDs(mpull($inlines, 'getID'))
+        ->needInlineContext(true)
+        ->execute();
+
       $inline_preview = id(new PHUIDiffInlineCommentPreviewListView())
         ->setViewer($viewer)
         ->setInlineComments($inlines);

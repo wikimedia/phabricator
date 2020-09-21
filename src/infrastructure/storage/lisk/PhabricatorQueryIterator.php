@@ -10,7 +10,12 @@ final class PhabricatorQueryIterator extends PhutilBufferedIterator {
   }
 
   protected function didRewind() {
-    $this->pager = new AphrontCursorPagerView();
+    $pager = new AphrontCursorPagerView();
+
+    $page_size = $this->getPageSize();
+    $pager->setPageSize($page_size);
+
+    $this->pager = $pager;
   }
 
   public function key() {
@@ -24,6 +29,8 @@ final class PhabricatorQueryIterator extends PhutilBufferedIterator {
 
     $pager = clone $this->pager;
     $query = clone $this->query;
+
+    $query->setDisableOverheating(true);
 
     $results = $query->executeWithCursorPager($pager);
 

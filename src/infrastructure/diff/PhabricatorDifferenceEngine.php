@@ -10,25 +10,12 @@
 final class PhabricatorDifferenceEngine extends Phobject {
 
 
-  private $ignoreWhitespace;
   private $oldName;
   private $newName;
+  private $normalize;
 
 
 /* -(  Configuring the Engine  )--------------------------------------------- */
-
-
-  /**
-   * If true, ignore whitespace when computing differences.
-   *
-   * @param bool Ignore whitespace?
-   * @return this
-   * @task config
-   */
-  public function setIgnoreWhitespace($ignore_whitespace) {
-    $this->ignoreWhitespace = $ignore_whitespace;
-    return $this;
-  }
 
 
   /**
@@ -57,6 +44,16 @@ final class PhabricatorDifferenceEngine extends Phobject {
   }
 
 
+  public function setNormalize($normalize) {
+    $this->normalize = $normalize;
+    return $this;
+  }
+
+  public function getNormalize() {
+    return $this->normalize;
+  }
+
+
 /* -(  Generating Diffs  )--------------------------------------------------- */
 
 
@@ -73,9 +70,6 @@ final class PhabricatorDifferenceEngine extends Phobject {
   public function generateRawDiffFromFileContent($old, $new) {
 
     $options = array();
-    if ($this->ignoreWhitespace) {
-      $options[] = '-bw';
-    }
 
     // Generate diffs with full context.
     $options[] = '-U65535';
@@ -87,6 +81,12 @@ final class PhabricatorDifferenceEngine extends Phobject {
     $options[] = $old_name;
     $options[] = '-L';
     $options[] = $new_name;
+
+    $normalize = $this->getNormalize();
+    if ($normalize) {
+      $old = $this->normalizeFile($old);
+      $new = $this->normalizeFile($new);
+    }
 
     $old_tmp = new TempFile();
     $new_tmp = new TempFile();
@@ -100,12 +100,10 @@ final class PhabricatorDifferenceEngine extends Phobject {
       $new_tmp);
 
     if (!$err) {
-      // This indicates that the two files are the same (or, possibly, the
-      // same modulo whitespace differences, which is why we can't do this
-      // check trivially before running `diff`). Build a synthetic, changeless
-      // diff so that we can still render the raw, unchanged file instead of
-      // being forced to just say "this file didn't change" since we don't have
-      // the content.
+      // This indicates that the two files are the same. Build a synthetic,
+      // changeless diff so that we can still render the raw, unchanged file
+      // instead of being forced to just say "this file didn't change" since we
+      // don't have the content.
 
       $entire_file = explode("\n", $old);
       foreach ($entire_file as $k => $line) {
@@ -123,26 +121,6 @@ final class PhabricatorDifferenceEngine extends Phobject {
               "+++ {$new_name}\n".
               "@@ -1,{$len} +1,{$len} @@\n".
               $entire_file."\n";
-    } else {
-      if ($this->ignoreWhitespace) {
-
-        // Under "-bw", `diff` is inconsistent about emitting "\ No newline
-        // at end of file". For instance, a long file with a change in the
-        // middle will emit a contextless "\ No newline..." at the end if a
-        // newline is removed, but not if one is added. A file with a change
-        // at the end will emit the "old" "\ No newline..." block only, even
-        // if the newline was not removed. Since we're ostensibly ignoring
-        // whitespace changes, just drop these lines if they appear anywhere
-        // in the diff.
-
-        $lines = explode("\n", $diff);
-        foreach ($lines as $key => $line) {
-          if (isset($line[0]) && $line[0] == '\\') {
-            unset($lines[$key]);
-          }
-        }
-        $diff = implode("\n", $lines);
-      }
     }
 
     return $diff;
@@ -166,6 +144,118 @@ final class PhabricatorDifferenceEngine extends Phobject {
     $diff = DifferentialDiff::newEphemeralFromRawChanges(
       $changes);
     return head($diff->getChangesets());
+  }
+
+  private function normalizeFile($corpus) {
+    // We can freely apply any other transformations we want to here: we have
+    // no constraints on what we need to preserve. If we normalize every line
+    // to "cat", the diff will still work, the alignment of the "-" / "+"
+    // lines will just be very hard to read.
+
+    // In general, we'll make the diff better if we normalize two lines that
+    // humans think are the same.
+
+    // We'll make the diff worse if we normalize two lines that humans think
+    // are different.
+
+
+    // Strip all whitespace present anywhere in the diff, since humans never
+    // consider whitespace changes to alter the line into a "different line"
+    // even when they're semantic (e.g., in a string constant). This covers
+    // indentation changes, trailing whitepspace, and formatting changes
+    // like "+/-".
+    $corpus = preg_replace('/[ \t]/', '', $corpus);
+
+    return $corpus;
+  }
+
+  public static function applyIntralineDiff($str, $intra_stack) {
+    $buf = '';
+    $p = $s = $e = 0; // position, start, end
+    $highlight = $tag = $ent = false;
+    $highlight_o = '<span class="bright">';
+    $highlight_c = '</span>';
+
+    $depth_in = '<span class="depth-in">';
+    $depth_out = '<span class="depth-out">';
+
+    $is_html = false;
+    if ($str instanceof PhutilSafeHTML) {
+      $is_html = true;
+      $str = $str->getHTMLContent();
+    }
+
+    $n = strlen($str);
+    for ($i = 0; $i < $n; $i++) {
+
+      if ($p == $e) {
+        do {
+          if (empty($intra_stack)) {
+            $buf .= substr($str, $i);
+            break 2;
+          }
+          $stack = array_shift($intra_stack);
+          $s = $e;
+          $e += $stack[1];
+        } while ($stack[0] === 0);
+
+        switch ($stack[0]) {
+          case '>':
+            $open_tag = $depth_in;
+            break;
+          case '<':
+            $open_tag = $depth_out;
+            break;
+          default:
+            $open_tag = $highlight_o;
+            break;
+        }
+      }
+
+      if (!$highlight && !$tag && !$ent && $p == $s) {
+        $buf .= $open_tag;
+        $highlight = true;
+      }
+
+      if ($str[$i] == '<') {
+        $tag = true;
+        if ($highlight) {
+          $buf .= $highlight_c;
+        }
+      }
+
+      if (!$tag) {
+        if ($str[$i] == '&') {
+          $ent = true;
+        }
+        if ($ent && $str[$i] == ';') {
+          $ent = false;
+        }
+        if (!$ent) {
+          $p++;
+        }
+      }
+
+      $buf .= $str[$i];
+
+      if ($tag && $str[$i] == '>') {
+        $tag = false;
+        if ($highlight) {
+          $buf .= $open_tag;
+        }
+      }
+
+      if ($highlight && ($p == $e || $i == $n - 1)) {
+        $buf .= $highlight_c;
+        $highlight = false;
+      }
+    }
+
+    if ($is_html) {
+      return phutil_safe_html($buf);
+    }
+
+    return $buf;
   }
 
 }

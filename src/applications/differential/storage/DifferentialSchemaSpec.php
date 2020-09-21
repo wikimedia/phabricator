@@ -9,7 +9,8 @@ final class DifferentialSchemaSpec extends PhabricatorConfigSchemaSpec {
       id(new DifferentialRevision())->getApplicationName(),
       DifferentialChangeset::TABLE_CACHE,
       array(
-        'id' => 'id',
+        'id' => 'auto',
+        'cacheIndex' => 'bytes12',
         'cache' => 'bytes',
         'dateCreated' => 'epoch',
       ),
@@ -18,30 +19,16 @@ final class DifferentialSchemaSpec extends PhabricatorConfigSchemaSpec {
           'columns' => array('id'),
           'unique' => true,
         ),
-        'dateCreated' => array(
+        'key_cacheIndex' => array(
+          'columns' => array('cacheIndex'),
+          'unique' => true,
+        ),
+        'key_created' => array(
           'columns' => array('dateCreated'),
         ),
       ),
       array(
         'persistence' => PhabricatorConfigTableSchema::PERSISTENCE_CACHE,
-      ));
-
-    $this->buildRawSchema(
-      id(new DifferentialRevision())->getApplicationName(),
-      DifferentialRevision::TABLE_COMMIT,
-      array(
-        'revisionID' => 'id',
-        'commitPHID' => 'phid',
-      ),
-      array(
-        'PRIMARY' => array(
-          'columns' => array('revisionID', 'commitPHID'),
-          'unique' => true,
-        ),
-        'commitPHID' => array(
-          'columns' => array('commitPHID'),
-          'unique' => true,
-        ),
       ));
 
     $this->buildRawSchema(

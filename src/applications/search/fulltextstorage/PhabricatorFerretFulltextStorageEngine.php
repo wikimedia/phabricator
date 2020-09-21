@@ -53,6 +53,7 @@ final class PhabricatorFerretFulltextStorageEngine
 
     $type_results = array();
     $metadata = array();
+    $bodies = array();
     foreach ($type_map as $type => $spec) {
       $engine = $spec['engine'];
       $object = $spec['object'];
@@ -81,8 +82,27 @@ final class PhabricatorFerretFulltextStorageEngine
         ->setOrder('relevance')
         ->setLimit($offset + $limit);
 
-      $results = $engine_query->execute();
-      $results = mpull($results, null, 'getPHID');
+      $objects = $engine_query->execute();
+      $fulltext_engine = null;
+      foreach ($objects as $object) {
+        $phid = $object->getPHID();
+        if ($fulltext_engine == null) {
+          $fulltext_engine = $object->newFulltextEngine();
+        }
+
+        $fulltext_engine->setObject($object);
+        $document = $fulltext_engine->buildEphemeralAbstractDocument();
+        $fields = $document->getFieldData();
+        foreach ($fields as $field) {
+          if ($field[0] == 'body') {
+            $body = $field[1];
+            $bodies[$phid] = $body;
+            break;
+          }
+        }
+
+      }
+      $results = mpull($objects, null, 'getPHID');
       $type_results[$type] = $results;
 
       $metadata += $engine_query->getFerretMetadata();
@@ -108,7 +128,12 @@ final class PhabricatorFerretFulltextStorageEngine
     $list = array_select_keys($list, array_keys($metadata)) + $list;
 
     $result_slice = array_slice($list, $offset, $limit, true);
-    return array_keys($result_slice);
+    $phids = array_keys($result_slice);
+
+    return id(new PhabricatorFulltextResultSet())
+      ->setPHIDs($phids)
+      ->setFulltextTokens($this->getFulltextTokens())
+      ->setBodies($bodies);
   }
 
   public function indexExists() {

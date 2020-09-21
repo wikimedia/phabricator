@@ -7,6 +7,9 @@ final class PhabricatorProjectArchiveController
     $viewer = $request->getViewer();
     $id = $request->getURIData('id');
 
+    $this->requireApplicationCapability(
+      ProjectCreateProjectsCapability::CAPABILITY);
+
     $project = id(new PhabricatorProjectQuery())
       ->setViewer($viewer)
       ->withIDs(array($id))

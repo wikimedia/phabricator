@@ -20,7 +20,8 @@ final class PhabricatorSettingsTimezoneController
       $zone = new DateTimeZone($identifier);
       $offset = -($zone->getOffset($now) / 60);
       if ($offset == $client_offset) {
-        $options[$identifier] = $identifier;
+        $name = PhabricatorTime::getTimezoneDisplayName($identifier);
+        $options[$identifier] = $name;
       }
     }
 
@@ -113,6 +114,11 @@ final class PhabricatorSettingsTimezoneController
   }
 
   private function formatOffset($offset) {
+    // This controller works with client-side (Javascript) offsets, which have
+    // the opposite sign we might expect -- for example "UTC-3" is a positive
+    // offset. Invert the sign before rendering the offset.
+    $offset = -1 * $offset;
+
     $hours = $offset / 60;
     // Non-integer number of hours off UTC?
     if ($offset % 60) {

@@ -89,7 +89,7 @@ final class PhabricatorProjectListView extends AphrontView {
 
       $subtype = $project->newSubtypeObject();
       if ($subtype && $subtype->hasTagView()) {
-        $subtype_tag = $subtype->newTagView()
+        $subtype_tag = $subtype->newTagView($this->getViewer())
           ->setSlimShady(true);
         $item->addAttribute($subtype_tag);
       }

@@ -31,15 +31,10 @@ final class DiffusionLowLevelGitRefQuery extends DiffusionLowLevelQuery {
 
     $repository = $this->getRepository();
 
-    if ($repository->isWorkingCopyBare()) {
-      $branch_prefix = 'refs/heads/';
-    } else {
-      $remote = DiffusionGitBranch::DEFAULT_GIT_REMOTE;
-      $branch_prefix = 'refs/remotes/'.$remote.'/';
-    }
+    $prefixes = array();
 
+    $branch_prefix = 'refs/heads/';
     $tag_prefix = 'refs/tags/';
-
 
     if ($with_refs || count($ref_types) > 1) {
       // If we're loading refs or more than one type of ref, just query
@@ -71,11 +66,6 @@ final class DiffusionLowLevelGitRefQuery extends DiffusionLowLevelQuery {
     $remote_prefix = 'refs/remotes/';
     $remote_len = strlen($remote_prefix);
 
-    $ignore_refs = array(
-        'refs/notes/' => true,
-        'refs/drafts/' => true,
-    );
-
     // NOTE: Although git supports --count, we can't apply any offset or
     // limit logic until the very end because we may encounter a HEAD which
     // we want to discard.
@@ -84,10 +74,8 @@ final class DiffusionLowLevelGitRefQuery extends DiffusionLowLevelQuery {
     $results = array();
     foreach ($lines as $line) {
       $fields = $this->extractFields($line);
+
       $refname = $fields['refname'];
-      if ($fields['objecttype'] == 'tree') {
-        continue;
-      }
       if (!strncmp($refname, $branch_prefix, $branch_len)) {
         $short = substr($refname, $branch_len);
         $type = $type_branch;
@@ -100,19 +88,7 @@ final class DiffusionLowLevelGitRefQuery extends DiffusionLowLevelQuery {
         // and that remote has its own remotes. We don't care about their
         // state and they may be out of date, so ignore them.
         continue;
-      } else if (preg_match('(^refs/changes/(.*)/(.*)/meta)', $refname)) {
-        // ignore gerrit's notedb commits
-        continue;
       } else {
-        $ref_parts = explode('/', $refname, 3);
-        $ref_prefix = count($ref_parts > 2)
-                    ? "$ref_parts[0]/$ref_parts[1]/"
-                    : false;
-
-        if ($ref_prefix && isset($ignore_refs[$ref_prefix])) {
-          continue;
-        }
-
         $short = $refname;
         $type = $type_ref;
       }
