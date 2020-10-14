@@ -4,6 +4,7 @@ final class PHUISegmentBarView extends AphrontTagView {
 
   private $label;
   private $segments = array();
+  private $bigbars = false;
 
   public function setLabel($label) {
     $this->label = $label;
@@ -20,10 +21,19 @@ final class PHUISegmentBarView extends AphrontTagView {
     return false;
   }
 
+  public function setBigbars($bigbars) {
+    $this->bigbars = $bigbars;
+    return $this;
+  }
+
   protected function getTagAttributes() {
-    return array(
+    $attr = array(
       'class' => 'phui-segment-bar-view',
     );
+    if ($this->bigbars) {
+      $attr['class'] .= ' phui-segment-bar-bigbars';
+    }
+    return $attr;
   }
 
   protected function getTagContent() {

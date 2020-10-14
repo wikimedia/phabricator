@@ -70,14 +70,14 @@ final class PhabricatorProjectBurndownChartEngine
     $open_function->getFunctionLabel()
       ->setKey('open')
       ->setName(pht('Open Tasks'))
-      ->setColor('rgba(0, 0, 200, 1)')
-      ->setFillColor('rgba(0, 0, 200, 0.15)');
+      ->setColor('rgba(10, 100, 220, 1)')
+      ->setFillColor('rgba(10, 50, 220, 0.30)');
 
     $closed_function->getFunctionLabel()
       ->setKey('closed')
       ->setName(pht('Closed Tasks'))
-      ->setColor('rgba(0, 200, 0, 1)')
-      ->setFillColor('rgba(0, 200, 0, 0.15)');
+      ->setColor('rgba(20, 220, 100, 1)')
+      ->setFillColor('rgba(20, 220, 50, 0.30)');
 
     $datasets = array();
 

@@ -46,8 +46,8 @@ final class PhabricatorProjectActivityChartEngine
     $function->getFunctionLabel()
       ->setKey('moved-in')
       ->setName(pht('Tasks Moved Into Project'))
-      ->setColor('rgba(128, 128, 200, 1)')
-      ->setFillColor('rgba(128, 128, 200, 0.15)');
+      ->setColor('rgba(128, 64, 140, 1)')
+      ->setFillColor('rgba(128, 64, 140, 0.25)');
 
     $functions[] = $function;
 
@@ -64,8 +64,8 @@ final class PhabricatorProjectActivityChartEngine
     $function->getFunctionLabel()
       ->setKey('reopened')
       ->setName(pht('Tasks Reopened'))
-      ->setColor('rgba(128, 128, 200, 1)')
-      ->setFillColor('rgba(128, 128, 200, 0.15)');
+      ->setColor('rgba(148, 188, 220, 1)')
+      ->setFillColor('rgba(148, 188, 220, 0.20)');
 
     $functions[] = $function;
 
@@ -78,8 +78,8 @@ final class PhabricatorProjectActivityChartEngine
     $function->getFunctionLabel()
       ->setKey('created')
       ->setName(pht('Tasks Created'))
-      ->setColor('rgba(0, 0, 200, 1)')
-      ->setFillColor('rgba(0, 0, 200, 0.15)');
+      ->setColor('rgba(64, 64, 250, 1)')
+      ->setFillColor('rgba(64, 64, 250, 0.40)');
 
     $functions[] = $function;
 
@@ -97,7 +97,7 @@ final class PhabricatorProjectActivityChartEngine
       ->setKey('closed')
       ->setName(pht('Tasks Closed'))
       ->setColor('rgba(0, 200, 0, 1)')
-      ->setFillColor('rgba(0, 200, 0, 0.15)');
+      ->setFillColor('rgba(0, 200, 0, 0.35)');
 
     $functions[] = $function;
 
@@ -114,8 +114,8 @@ final class PhabricatorProjectActivityChartEngine
     $function->getFunctionLabel()
       ->setKey('moved-out')
       ->setName(pht('Tasks Moved Out of Project'))
-      ->setColor('rgba(128, 200, 128, 1)')
-      ->setFillColor('rgba(128, 200, 128, 0.15)');
+      ->setColor('rgba(148, 230, 168, 1)')
+      ->setFillColor('rgba(148, 230, 168, 0.35)');
 
     $functions[] = $function;
 

@@ -5840,6 +5840,7 @@ phutil_register_library_map(array(
     'ProjectDefaultJoinCapability' => 'applications/project/capability/ProjectDefaultJoinCapability.php',
     'ProjectDefaultViewCapability' => 'applications/project/capability/ProjectDefaultViewCapability.php',
     'ProjectEditConduitAPIMethod' => 'applications/project/conduit/ProjectEditConduitAPIMethod.php',
+    'ProjectMetrics' => 'applications/project/wikimedia/ProjectMetrics.php',
     'ProjectQueryConduitAPIMethod' => 'applications/project/conduit/ProjectQueryConduitAPIMethod.php',
     'ProjectRemarkupRule' => 'applications/project/remarkup/ProjectRemarkupRule.php',
     'ProjectRemarkupRuleTestCase' => 'applications/project/remarkup/__tests__/ProjectRemarkupRuleTestCase.php',
