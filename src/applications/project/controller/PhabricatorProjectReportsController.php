@@ -71,25 +71,24 @@ final class PhabricatorProjectReportsController
     $col2 = new PHUIObjectBoxView();
     $row->addColumn($col2);
     $break = [phutil_tag('br')];
+
     $period = $request->getStr('period');
     if ($period == 'custom') {
       $period = 'period';
     }
 
-
-
     $completed = id(new PHUIObjectBoxView())
       ->setHeaderText(pht('Throughput'))
-      ->appendChild(pht("%d tasks completed this %s.",
-      $project_metrics->getMetric('completed'),
-      $period))
+      ->appendChild(
+        pht("%d tasks completed this %s.",
+        $project_metrics->getMetric('completed'),
+        $period))
       ->appendChild($break);
-    $col1->appendChild($completed)->appendChild($break);
 
     $overdue = $project_metrics->getMetric('overdue');
     if ($overdue) {
       $overdue_view = id(new PHUIObjectBoxView())
-      ->setHeaderText(pht('Over-due Tasks'));
+        ->setHeaderText(pht('Over-due Tasks'));
       $handles = $viewer->loadHandles(array_keys($overdue));
       foreach($overdue as $phid=>$due_date) {
         $handle = $handles->getHandleIfExists($phid, false);
@@ -97,8 +96,8 @@ final class PhabricatorProjectReportsController
           $human_date = phabricator_date($due_date, $viewer);
           $link = $handle->renderHovercardLink();
           $overdue_row = id(new AphrontMultiColumnView())
-          ->addColumn($link)
-          ->addColumn($human_date);
+            ->addColumn($link)
+            ->addColumn($human_date);
           $overdue_view->appendChild($overdue_row);
         }
       }
@@ -108,12 +107,12 @@ final class PhabricatorProjectReportsController
     $task_age_view = id(new PHUIObjectBoxView())
       ->setHeaderText(pht('Age of open tasks'));
 
-
     $histogram = $project_metrics->getMetric('histogram');
-    $total = array_sum ($histogram);
+    $total = array_sum($histogram);
     foreach ($histogram as $age => $count) {
       $bar = new PHUISegmentBarView();
-      $bar->setBigbars(true)
+      $bar
+        ->setBigbars(true)
         ->setLabel(pht("%d week(s)", $age/7));
       $task_age_view->appendChild($bar);
       $bar->newSegment()
@@ -121,10 +120,13 @@ final class PhabricatorProjectReportsController
         ->setValue($count)
         ->setColor('blue');
     }
-    $col1->appendChild($completed)->appendChild($break);
-    $col1->appendChild($task_age_view)->appendChild($break);
+    $col1
+      ->appendChild($task_age_view)
+      ->appendChild($break);
+    $col2
+      ->appendChild($completed)
+      ->appendChild($break);
     $metrics[] = $row;
-
 
     $assignments = $project_metrics->getMetric('tasks_by_owner');
     arsort($assignments);
@@ -133,11 +135,8 @@ final class PhabricatorProjectReportsController
     $box = id(new PHUIObjectBoxView())
       ->setHeaderText(pht('Assigned Workload'));
 
-    //    $row->addColumn($box);
-    $col1->appendChild($box);
-
     $total = array_sum($assignments);
-    $count=0;
+    $count = 0;
     foreach ($assignments as $phid=>$tasks) {
       if (empty($phid)) {
         continue;
@@ -149,12 +148,12 @@ final class PhabricatorProjectReportsController
         $assignedView = id(new PHUISegmentBarView())
           ->setBigbars(true);
         $box->appendChild($assignedView);
-        $assignedView->setLabel(
-          $handle->renderHovercardLink())
-            ->newSegment()
-            ->setWidth($tasks / $total)
-            ->setColor('blue')
-            ->setValue($tasks);
+        $assignedView
+          ->setLabel($handle->renderHovercardLink())
+          ->newSegment()
+          ->setWidth($tasks / $total)
+          ->setColor('blue')
+          ->setValue($tasks);
       }
       if ($tasks < 2 || $count > 8) {
         $base_uri = PhabricatorEnv::getAnyBaseURI();
@@ -169,11 +168,13 @@ final class PhabricatorProjectReportsController
           'window' => $window_date->format('r'),
           'order' => '-total'
         ]);
-        $box->appendChild(
-          id(new PHUIBoxView())
+        $box->appendChild(id(new PHUIBoxView())
           ->addPadding(PHUI::PADDING_MEDIUM)
           ->appendChild(
-            phutil_tag('a', ['href'=>$link], pht('See full report.'))
+            phutil_tag(
+              'a',
+              ['href'=>$link],
+              pht('See full report.'))
           ));
         break;
       }
@@ -181,7 +182,6 @@ final class PhabricatorProjectReportsController
     if ($count > 0) {
       $col1->appendChild($box);
     }
-
 
     $view = id(new PHUIBoxView())
       ->addPadding(PHUI::PADDING_MEDIUM)
@@ -193,48 +193,42 @@ final class PhabricatorProjectReportsController
 
     if ($project->getHasWorkboard()) {
       $columns = $project_metrics->getMetric('columns');
-
       $workboard_stats =   id(new PHUIObjectBoxView())
       ->setHeaderText(pht('Open Tasks by column'));
 
       $col_count = count($columns);
       $total = 0;
+
       foreach ($columns as $col=>$val) {
         $total += count($val['tasks']);
       }
       $avg_per_column = $total / $col_count;
       $max_age = $project_metrics->getMetric('max_age');
+
       foreach ($columns as $col=>$val) {
         $task_count = count($val['tasks']);
         if ($task_count < 1) {
           continue;
         }
-        if ($task_count) {
-          $bar = id(new PHUISegmentBarView())
+
+        $bar = id(new PHUISegmentBarView())
           ->setBigbars(true)
           ->setLabel($val['name']);
 
-          $bar->newSegment()
-            ->setWidth($task_count / $total )
-            ->setValue($task_count)
-            ->setColor("blue");
-          $workboard_stats->appendChild($bar);
-        }
-
+        $bar->newSegment()
+          ->setWidth($task_count / $total )
+          ->setValue($task_count)
+          ->setColor("blue");
+        $workboard_stats->appendChild($bar);
       }
-
       $col2->appendChild($workboard_stats);
     }
 
     return $this->newPage()
       ->setNavigation($nav)
       ->setCrumbs($crumbs)
-      ->setTitle(array($project->getName(), pht('Reports')))
+      ->setTitle([$project->getName(), pht('Reports')])
       ->appendChild($view);
-  }
-
-  private function renderStatsChart($stats) {
-    return '=-[ '. $stats['min'].' [' . $stats['mean'] . '] ' . $stats['max'] . ' ]-=';
   }
 
   private function renderDateControls(AphrontRequest $request) {
@@ -248,9 +242,9 @@ final class PhabricatorProjectReportsController
     ];
 
     $period = id(new AphrontFormSelectControl())
-    ->setName('period')
-    ->setLabel(pht('Period'))
-    ->setOptions($periods);
+      ->setName('period')
+      ->setLabel(pht('Period'))
+      ->setOptions($periods);
     $period->readValueFromRequest($request);
 
     if (!array_key_exists($period->getValue(), $periods)) {
@@ -259,12 +253,13 @@ final class PhabricatorProjectReportsController
 
     $start = new DateTime('now');
     $start_date = id(new AphrontFormDateControl())
-    ->setLabel(pht("From"))
-    ->setName("startdate")
-    ->setUser($viewer)
-    ->setIsTimeDisabled(true)
-    ->setIsDisabled(false)
-    ->setAllowNull(false);
+      ->setLabel(pht("From"))
+      ->setName("startdate")
+      ->setUser($viewer)
+      ->setIsTimeDisabled(true)
+      ->setIsDisabled(false)
+      ->setAllowNull(false);
+
     $start_date->readValueFromRequest($request);
     if ($start_date->getValue() == null) {
       $start_date->setValue($start->getTimestamp());
@@ -273,18 +268,18 @@ final class PhabricatorProjectReportsController
     }
 
     $end_date = id(new AphrontFormDateControl())
-    ->setLabel(pht("To"))
-    ->setName("enddate")
-    ->setUser($viewer)
-    ->setIsTimeDisabled(true)
-    ->setIsDisabled(false)
-    ->setAllowNull(false);
+      ->setLabel(pht("To"))
+      ->setName("enddate")
+      ->setUser($viewer)
+      ->setIsTimeDisabled(true)
+      ->setIsDisabled(false)
+      ->setAllowNull(false);
     $end_date->readValueFromRequest($request);
+
     $end = new DateTime('now');
     $end->setTimestamp($end_date->getValue());
 
     $period_val = $period->getValue();
-
     if ($period_val != "custom") {
       if ($period_val == 'week') {
         $dayofweek = $start->format("N");
@@ -332,8 +327,9 @@ final class PhabricatorProjectReportsController
     $date_controls->addColumn($period);
     $date_controls->addColumn($start_date);
     $date_controls->addColumn($end_date);
-    $date_controls->addColumn(id(new AphrontFormSubmitControl())
-    ->setValue(pht('Update')));
+    $date_controls->addColumn(
+      id(new AphrontFormSubmitControl())
+        ->setValue(pht('Update')));
 
     $form = id(new AphrontFormView())
       ->setViewer($viewer)
