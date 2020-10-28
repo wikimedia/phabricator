@@ -17,6 +17,9 @@ class ProjectMetrics {
   }
 
   public function getMetric($name) {
+    if (!isset($this->metrics[$name])) {
+      return null;
+    }
     return $this->metrics[$name];
   }
 
@@ -45,7 +48,10 @@ class ProjectMetrics {
     return $columns;
   }
 
-  public function getAssignmentMetrics($projectPHIDs) {
+  public function getAssignmentMetrics(array $projectPHIDs) {
+    if (empty($projectPHIDs)) {
+      return [];
+    }
     $query = new ManiphestTaskQuery();
     $query->setViewer(PhabricatorUser::getOmnipotentUser())
       ->withStatuses(ManiphestTaskStatus::getOpenStatusConstants())
@@ -129,6 +135,9 @@ class ProjectMetrics {
         array($container_phids))
       ->withStatuses(ManiphestTaskStatus::getOpenStatusConstants());
     $tasks = $query->execute();
+    if (empty($tasks)){
+      return;
+    }
     $task_phids = mpull($tasks, 'getPHID');
     $task_owner_phids = mpull($tasks, 'getOwnerPHID');
     $owner_tasks = [];
@@ -211,6 +220,10 @@ class ProjectMetrics {
     if ($buckets == null) {
       $buckets = $this->makeHistogramBuckets(6, 7);
     }
+
+    $max_age = max($ages);
+    $buckets[$max_age] = 0;
+
     sort($ages);
     reset($buckets);
     $current = key($buckets);
@@ -269,6 +282,9 @@ class ProjectMetrics {
   }
 
   public static function getTaskDueByPHID(array $phids) {
+    if (empty($phids)){
+      return [];
+    }
     $fieldIndex = PhabricatorHash::digestForIndex(
       'std:maniphest:deadline.due');
     $storage = new ManiphestCustomFieldStorage();
