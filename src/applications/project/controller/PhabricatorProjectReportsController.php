@@ -103,84 +103,94 @@ final class PhabricatorProjectReportsController
       }
       $col1->appendChild($overdue_view);
     }
-    $age = $project_metrics->getMetric('age');
+
     $task_age_view = id(new PHUIObjectBoxView())
       ->setHeaderText(pht('Age of open tasks'));
 
     $histogram = $project_metrics->getMetric('histogram');
-    $total = array_sum($histogram);
-    foreach ($histogram as $age => $count) {
-      $bar = new PHUISegmentBarView();
-      $bar
-        ->setBigbars(true)
-        ->setLabel(pht("%d week(s)", $age/7));
-      $task_age_view->appendChild($bar);
-      $bar->newSegment()
-        ->setWidth( $count / $total )
-        ->setValue($count)
-        ->setColor('blue');
+    if (is_array($histogram)) {
+      $total = array_sum($histogram);
+      $ages = array_keys($histogram);
+      $max_age = max($ages);
+      foreach ($histogram as $age => $count) {
+        $bar = new PHUISegmentBarView();
+        $bar
+          ->setBigbars(true)
+          ->setLabel(pht("%d week(s)", $age/7));
+        if ($age == $max_age) {
+          $bar->setLabel('Older');
+        }
+        $task_age_view->appendChild($bar);
+        $bar->newSegment()
+          ->setWidth( $count / $total )
+          ->setValue($count)
+          ->setColor('blue');
+      }
     }
+    $col1
+      ->appendChild($completed)
+      ->appendChild($break);
     $col1
       ->appendChild($task_age_view)
       ->appendChild($break);
-    $col2
-      ->appendChild($completed)
-      ->appendChild($break);
+
     $metrics[] = $row;
 
     $assignments = $project_metrics->getMetric('tasks_by_owner');
-    arsort($assignments);
+    if ($assignments) {
+      arsort($assignments);
 
-    $handles = $viewer->loadHandles(array_keys($assignments));
-    $box = id(new PHUIObjectBoxView())
-      ->setHeaderText(pht('Assigned Workload'));
+      $handles = $viewer->loadHandles(array_keys($assignments));
+      $box = id(new PHUIObjectBoxView())
+        ->setHeaderText(pht('Assigned Workload'));
 
-    $total = array_sum($assignments);
-    $count = 0;
-    foreach ($assignments as $phid=>$tasks) {
-      if (empty($phid)) {
-        continue;
+      $total = array_sum($assignments);
+      $count = 0;
+      foreach ($assignments as $phid=>$tasks) {
+        if (empty($phid)) {
+          continue;
+        }
+
+        $handle = $handles->getHandleIfExists($phid, false);
+        if ($handle) {
+          $count++;
+          $assignedView = id(new PHUISegmentBarView())
+            ->setBigbars(true);
+          $box->appendChild($assignedView);
+          $assignedView
+            ->setLabel($handle->renderHovercardLink())
+            ->newSegment()
+            ->setWidth($tasks / $total)
+            ->setColor('blue')
+            ->setValue($tasks);
+        }
+        if ($tasks < 2 || $count > 8) {
+          $base_uri = PhabricatorEnv::getAnyBaseURI();
+          $link = new PhutilURI($base_uri);
+          $link->setPath("/maniphest/report/user/");
+          $window_date = new DateTime();
+          $window_date->setTimestamp(
+            $request->getInt('startdate'));
+
+          $link->setQueryParams([
+            'project' => $project->getPHID(),
+            'window' => $window_date->format('r'),
+            'order' => '-total'
+          ]);
+          $box->appendChild(id(new PHUIBoxView())
+            ->addPadding(PHUI::PADDING_MEDIUM)
+            ->appendChild(
+              phutil_tag(
+                'a',
+                ['href'=>$link],
+                pht('See full report.'))
+            ));
+          break;
+        }
       }
-
-      $handle = $handles->getHandleIfExists($phid, false);
-      if ($handle) {
-        $count++;
-        $assignedView = id(new PHUISegmentBarView())
-          ->setBigbars(true);
-        $box->appendChild($assignedView);
-        $assignedView
-          ->setLabel($handle->renderHovercardLink())
-          ->newSegment()
-          ->setWidth($tasks / $total)
-          ->setColor('blue')
-          ->setValue($tasks);
+      if ($count > 0) {
+        $col2->appendChild($box);
       }
-      if ($tasks < 2 || $count > 8) {
-        $base_uri = PhabricatorEnv::getAnyBaseURI();
-        $link = new PhutilURI($base_uri);
-        $link->setPath("/maniphest/report/user/");
-        $window_date = new DateTime();
-        $window_date->setTimestamp(
-          $request->getInt('startdate'));
-
-        $link->setQueryParams([
-          'project' => $project->getPHID(),
-          'window' => $window_date->format('r'),
-          'order' => '-total'
-        ]);
-        $box->appendChild(id(new PHUIBoxView())
-          ->addPadding(PHUI::PADDING_MEDIUM)
-          ->appendChild(
-            phutil_tag(
-              'a',
-              ['href'=>$link],
-              pht('See full report.'))
-          ));
-        break;
-      }
-    }
-    if ($count > 0) {
-      $col1->appendChild($box);
     }
 
     $view = id(new PHUIBoxView())
@@ -207,7 +217,7 @@ final class PhabricatorProjectReportsController
 
       foreach ($columns as $col=>$val) {
         $task_count = count($val['tasks']);
-        if ($task_count < 1) {
+        if ($task_count < 1 || !isset($val['name'])) {
           continue;
         }
 
@@ -221,7 +231,7 @@ final class PhabricatorProjectReportsController
           ->setColor("blue");
         $workboard_stats->appendChild($bar);
       }
-      $col2->appendChild($workboard_stats);
+      $col1->appendChild($workboard_stats);
     }
 
     return $this->newPage()
