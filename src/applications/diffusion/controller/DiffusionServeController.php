@@ -922,21 +922,18 @@ final class DiffusionServeController extends DiffusionController {
     // This is a pretty funky fix: it would be nice to more precisely detect
     // that a request is a `--depth N` clone request, but we don't have any code
     // to decode protocol frames yet. Instead, look for reasonable evidence
-    // in the output that we're looking at a `--depth` clone.
+    // in the error and output that we're looking at a `--depth` clone.
 
-    // A valid x-git-upload-pack-result response during packfile negotiation
-    // should end with a flush packet ("0000"). As long as that packet
-    // terminates the response body in the response, we'll assume the response
-    // is correct and complete.
-
-    // See https://git-scm.com/docs/pack-protocol#_packfile_negotiation
+    // For evidence this isn't completely crazy, see:
+    // https://github.com/schacon/grack/pull/7
 
     $stdout_regexp = '(^Content-Type: application/x-git-upload-pack-result)m';
+    $stderr_regexp = '(The remote end hung up unexpectedly)';
 
     $has_pack = preg_match($stdout_regexp, $stdout);
-    $has_flush_packet = substr($stdout, -5) == "\n0000";
+    $is_hangup = preg_match($stderr_regexp, $stderr);
 
-    return $has_pack && $has_flush_packet;
+    return $has_pack && $is_hangup;
   }
 
   private function getCommonEnvironment(PhabricatorUser $viewer) {
