@@ -26,6 +26,10 @@ abstract class PhabricatorWorkerManagementWorkflow
         'param' => 'int',
         'help' => pht('Limit the total number of tasks to act on.'),
       ),
+      array(
+        'name' => 'active',
+        'help' => pht('Select all active tasks.'),
+      ),
     );
   }
 
@@ -34,10 +38,13 @@ abstract class PhabricatorWorkerManagementWorkflow
     $class = $args->getArg('class');
     $min_failures = $args->getArg('min-failure-count');
     $limit = $args->getArg('limit');
+    $active = $args->getArg('active');
 
-    if (!$ids && !$class && !$min_failures) {
+    if (!$ids && !$class && !$min_failures && !$active) {
       throw new PhutilArgumentUsageException(
-        pht('Use --id, --class, or --min-failure-count to select tasks.'));
+        pht(
+          'Use "--id", "--class", "--active", and/or "--min-failure-count" '.
+          'to select tasks.'));
     }
 
     $active_query = new PhabricatorWorkerActiveTaskQuery();
@@ -67,7 +74,13 @@ abstract class PhabricatorWorkerManagementWorkflow
     }
 
     $active_tasks = $active_query->execute();
-    $archive_tasks = $archive_query->execute();
+
+    if ($active) {
+      $archive_tasks = array();
+    } else {
+      $archive_tasks = $archive_query->execute();
+    }
+
     $tasks =
       mpull($active_tasks, null, 'getID') +
       mpull($archive_tasks, null, 'getID');

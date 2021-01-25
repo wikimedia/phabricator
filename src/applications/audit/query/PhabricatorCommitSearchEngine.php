@@ -54,8 +54,8 @@ final class PhabricatorCommitSearchEngine
       $query->withUnreachable($map['unreachable']);
     }
 
-    if ($map['unpublished'] !== null) {
-      $query->withUnpublished($map['unpublished']);
+    if ($map['permanent'] !== null) {
+      $query->withPermanent($map['permanent']);
     }
 
     if ($map['ancestorsOf']) {
@@ -132,15 +132,15 @@ final class PhabricatorCommitSearchEngine
             'Find or exclude unreachable commits which are not ancestors of '.
             'any branch, tag, or ref.')),
       id(new PhabricatorSearchThreeStateField())
-        ->setLabel(pht('Unpublished'))
-        ->setKey('unpublished')
+        ->setLabel(pht('Permanent'))
+        ->setKey('permanent')
         ->setOptions(
           pht('(Show All)'),
-          pht('Show Only Unpublished Commits'),
-          pht('Hide Unpublished Commits'))
+          pht('Show Only Permanent Commits'),
+          pht('Hide Permanent Commits'))
         ->setDescription(
           pht(
-            'Find or exclude unpublished commits which are not ancestors of '.
+            'Find or exclude permanent commits which are ancestors of '.
             'any permanent branch, tag, or ref.')),
       id(new PhabricatorSearchStringListField())
         ->setLabel(pht('Ancestors Of'))
@@ -221,9 +221,9 @@ final class PhabricatorCommitSearchEngine
 
     $bucket = $this->getResultBucket($query);
 
-    $template = id(new PhabricatorAuditListView())
+    $template = id(new DiffusionCommitGraphView())
       ->setViewer($viewer)
-      ->setShowDrafts(true);
+      ->setShowAuditors(true);
 
     $views = array();
     if ($bucket) {
@@ -235,37 +235,31 @@ final class PhabricatorCommitSearchEngine
         foreach ($groups as $group) {
           // Don't show groups in Dashboard Panels
           if ($group->getObjects() || !$this->isPanelContext()) {
-            $views[] = id(clone $template)
+            $item_list = id(clone $template)
+              ->setCommits($group->getObjects())
+              ->newObjectItemListView();
+
+            $views[] = $item_list
               ->setHeader($group->getName())
-              ->setNoDataString($group->getNoDataString())
-              ->setCommits($group->getObjects());
+              ->setNoDataString($group->getNoDataString());
           }
         }
       } catch (Exception $ex) {
         $this->addError($ex->getMessage());
       }
-    } else {
-      $views[] = id(clone $template)
-        ->setCommits($commits)
-        ->setNoDataString(pht('No commits found.'));
     }
 
     if (!$views) {
-      $views[] = id(new PhabricatorAuditListView())
-        ->setViewer($viewer)
+      $item_list = id(clone $template)
+        ->setCommits($commits)
+        ->newObjectItemListView();
+
+      $views[] = $item_list
         ->setNoDataString(pht('No commits found.'));
     }
 
-    if (count($views) == 1) {
-      $list = head($views)->buildList();
-    } else {
-      $list = $views;
-    }
-
-    $result = new PhabricatorApplicationSearchResultView();
-    $result->setContent($list);
-
-    return $result;
+    return id(new PhabricatorApplicationSearchResultView())
+      ->setContent($views);
   }
 
   protected function getNewUserBody() {

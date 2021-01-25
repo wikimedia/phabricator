@@ -219,9 +219,6 @@ abstract class DiffusionController extends PhabricatorController {
       case 'history':
         $view_name = pht('History');
         break;
-      case 'graph':
-        $view_name = pht('Graph');
-        break;
       case 'browse':
         $view_name = pht('Browse');
         break;
@@ -561,17 +558,6 @@ abstract class DiffusionController extends PhabricatorController {
           'action' => 'history',
         )))
         ->setSelected($key == 'history'));
-
-    $view->addMenuItem(
-      id(new PHUIListItemView())
-        ->setKey('graph')
-        ->setName(pht('Graph'))
-        ->setIcon('fa-code-fork')
-        ->setHref($drequest->generateURI(
-        array(
-          'action' => 'graph',
-        )))
-        ->setSelected($key == 'graph'));
 
     return $view;
 

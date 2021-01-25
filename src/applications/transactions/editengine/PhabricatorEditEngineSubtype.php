@@ -217,7 +217,8 @@ class PhabricatorEditEngineSubtype
             pht(
               'Subtype configuration is invalid: subtype with key "%s" '.
               'specifies both child subtypes and child forms. Specify one '.
-              'or the other, but not both.'));
+              'or the other, but not both.',
+              $key));
         }
       }
 
