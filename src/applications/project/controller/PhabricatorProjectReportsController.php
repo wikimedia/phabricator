@@ -80,10 +80,16 @@ final class PhabricatorProjectReportsController
     $completed = id(new PHUIObjectBoxView())
       ->setHeaderText(pht('Throughput'))
       ->appendChild(
-        pht("%d tasks completed this %s.",
-        $project_metrics->getMetric('completed'),
-        $period))
+        pht("Tasks completed this %s: %d",
+        $period,
+        $project_metrics->getMetric('completed')))
+      ->appendChild($break)
+      ->appendChild(
+        pht('Remaining open tasks: %d',
+          $project_metrics->getMetric('open_task_count'))
+      )
       ->appendChild($break);
+
 
     $overdue = $project_metrics->getMetric('overdue');
     if ($overdue) {
@@ -105,7 +111,7 @@ final class PhabricatorProjectReportsController
     }
 
     $task_age_view = id(new PHUIObjectBoxView())
-      ->setHeaderText(pht('Age of open tasks'));
+      ->setHeaderText(pht('Age Distribution:'));
 
     $histogram = $project_metrics->getMetric('histogram');
     if (is_array($histogram)) {
@@ -139,13 +145,34 @@ final class PhabricatorProjectReportsController
     $assignments = $project_metrics->getMetric('tasks_by_owner');
     if ($assignments) {
       arsort($assignments);
+      $assigned = array_sum($assignments);
+      $count = 0;
+      $unassigned = $project_metrics->getMetric('unassigned_count');
+      $total = $assigned + $unassigned;
 
       $handles = $viewer->loadHandles(array_keys($assignments));
-      $box = id(new PHUIObjectBoxView())
-        ->setHeaderText(pht('Assigned Workload'));
+      $box = id(new PHUIObjectBoxView());
+      if ($assigned < $total) {
+        $box->setHeaderText(
+          pht('Workload: %d of %d open tasks are assigned to %d people.',
+           $assigned, $total, count($assignments)));
+      } else {
+        $box->setHeaderText(
+          pht('Workload: All %d open tasks are assigned to %d people.',
+          $total, count($assignments))
+        );
+      }
+      $assignedView = id(new PHUISegmentBarView())
+        ->setBigbars(true);
+      $box->appendChild($assignedView);
+      $assignedView
+        ->setLabel(pht('Unassigned'))
+        ->newSegment()
+        ->setWidth($unassigned / $total)
+        ->setColor('grey')
+        ->setValue($unassigned);
+      $assignment_count = count($assignments);
 
-      $total = array_sum($assignments);
-      $count = 0;
       foreach ($assignments as $phid=>$tasks) {
         if (empty($phid)) {
           continue;
@@ -164,7 +191,7 @@ final class PhabricatorProjectReportsController
             ->setColor('blue')
             ->setValue($tasks);
         }
-        if ($tasks < 2 || $count > 8) {
+        if ($tasks < 1 || $count == $assignment_count) {
           $base_uri = PhabricatorEnv::getAnyBaseURI();
           $link = new PhutilURI($base_uri);
           $link->setPath("/maniphest/report/user/");
@@ -188,9 +215,7 @@ final class PhabricatorProjectReportsController
           break;
         }
       }
-      if ($count > 0) {
-        $col2->appendChild($box);
-      }
+      $col2->appendChild($box);
     }
 
     $view = id(new PHUIBoxView())

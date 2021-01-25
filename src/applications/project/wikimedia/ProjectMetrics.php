@@ -48,32 +48,6 @@ class ProjectMetrics {
     return $columns;
   }
 
-  public function getAssignmentMetrics(array $projectPHIDs) {
-    if (empty($projectPHIDs)) {
-      return [];
-    }
-    $query = new ManiphestTaskQuery();
-    $query->setViewer(PhabricatorUser::getOmnipotentUser())
-      ->withStatuses(ManiphestTaskStatus::getOpenStatusConstants())
-      ->withEdgeLogicPHIDs(
-        PhabricatorProjectObjectHasProjectEdgeType::EDGECONST,
-        PhabricatorQueryConstraint::OPERATOR_OR,
-        $projectPHIDs);
-    $tasks = $query->execute();
-
-    $task_owner_phids = mpull($tasks, 'getOwnerPHID');
-    $owner_tasks = [];
-    foreach($task_owner_phids as $task=>$owner) {
-      if (!$owner) {}
-      if (!isset($owner_tasks[$owner])) {
-        $owner_tasks[$owner] = 1;
-      } else {
-        $owner_tasks[$owner] += 1;
-      }
-    }
-
-    return $owner_tasks;
-  }
 
   public function getBoardContainerPHIDs() {
     $project = $this->getProject();
@@ -141,10 +115,12 @@ class ProjectMetrics {
     $task_phids = mpull($tasks, 'getPHID');
     $task_owner_phids = mpull($tasks, 'getOwnerPHID');
     $owner_tasks = [];
+    $unassigned = 0;
 
     // find the task count per owner
     foreach($task_owner_phids as $task=>$owner) {
       if (!$owner) {
+        $unassigned++;
         continue;
       }
       if (!isset($owner_tasks[$owner])) {
@@ -154,7 +130,7 @@ class ProjectMetrics {
       }
     }
     $this->metrics['tasks_by_owner'] = $owner_tasks;
-
+    $this->metrics['unassigned_count'] = $unassigned;
     // get workboard columns
     $engine = id(new PhabricatorBoardLayoutEngine())
       ->setViewer($this->getViewer())
@@ -166,7 +142,7 @@ class ProjectMetrics {
     $task_ages = [];
     $due_dates = self::getTaskDueByPHID($task_phids);
     $this->metrics['overdue'] = [];
-
+    $this->metrics['open_task_count'] = count($tasks);
     // compute ages and columns for each task
     foreach($tasks as $task){
       $phid = $task->getPHID();
