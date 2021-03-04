@@ -30,7 +30,7 @@ final class PhabricatorGlobalLock extends PhutilLock {
 
   private $parameters;
   private $conn;
-  private $isExternalConnection = false;
+  private $externalConnection;
   private $log;
   private $disableLogging;
 
@@ -91,9 +91,14 @@ final class PhabricatorGlobalLock extends PhutilLock {
    * @param  AphrontDatabaseConnection
    * @return this
    */
-  public function useSpecificConnection(AphrontDatabaseConnection $conn) {
-    $this->conn = $conn;
-    $this->isExternalConnection = true;
+  public function setExternalConnection(AphrontDatabaseConnection $conn) {
+    if ($this->conn) {
+      throw new Exception(
+        pht(
+          'Lock is already held, and must be released before the '.
+          'connection may be changed.'));
+    }
+    $this->externalConnection = $conn;
     return $this;
   }
 
@@ -103,10 +108,48 @@ final class PhabricatorGlobalLock extends PhutilLock {
   }
 
 
+/* -(  Connection Pool  )---------------------------------------------------- */
+
+  public static function getConnectionPoolSize() {
+    return count(self::$pool);
+  }
+
+  public static function clearConnectionPool() {
+    self::$pool = array();
+  }
+
+  public static function newConnection() {
+    // NOTE: Use of the "repository" database is somewhat arbitrary, mostly
+    // because the first client of locks was the repository daemons.
+
+    // We must always use the same database for all locks, because different
+    // databases may be on different hosts if the database is partitioned.
+
+    // However, we don't access any tables so we could use any valid database.
+    // We could build a database-free connection instead, but that's kind of
+    // messy and unusual.
+
+    $dao = new PhabricatorRepository();
+
+    // NOTE: Using "force_new" to make sure each lock is on its own connection.
+
+    // See T13627. This is critically important in versions of MySQL older
+    // than MySQL 5.7, because they can not hold more than one lock per
+    // connection simultaneously.
+
+    return $dao->establishConnection('w', $force_new = true);
+  }
+
 /* -(  Implementation  )----------------------------------------------------- */
 
   protected function doLock($wait) {
     $conn = $this->conn;
+
+    if (!$conn) {
+      if ($this->externalConnection) {
+        $conn = $this->externalConnection;
+      }
+    }
 
     if (!$conn) {
       // Try to reuse a connection from the connection pool.
@@ -114,18 +157,21 @@ final class PhabricatorGlobalLock extends PhutilLock {
     }
 
     if (!$conn) {
-      // NOTE: Using the 'repository' database somewhat arbitrarily, mostly
-      // because the first client of locks is the repository daemons. We must
-      // always use the same database for all locks, but don't access any
-      // tables so we could use any valid database. We could build a
-      // database-free connection instead, but that's kind of messy and we
-      // might forget about it in the future if we vertically partition the
-      // application.
-      $dao = new PhabricatorRepository();
+      $conn = self::newConnection();
+    }
 
-      // NOTE: Using "force_new" to make sure each lock is on its own
-      // connection.
-      $conn = $dao->establishConnection('w', $force_new = true);
+    // See T13627. We must never hold more than one lock per connection, so
+    // make sure this connection has no existing locks. (Normally, we should
+    // only be able to get here if callers explicitly provide the same external
+    // connection to multiple locks.)
+
+    if ($conn->isHoldingAnyLock()) {
+      throw new Exception(
+        pht(
+          'Unable to establish lock on connection: this connection is '.
+          'already holding a lock. Acquiring a second lock on the same '.
+          'connection would release the first lock in MySQL versions '.
+          'older than 5.7.'));
     }
 
     // NOTE: Since MySQL will disconnect us if we're idle for too long, we set
@@ -149,12 +195,17 @@ final class PhabricatorGlobalLock extends PhutilLock {
       // is still good. We're done with it, so add it to the pool, just as we
       // would if we were releasing the lock.
 
-      // If we don't  do this, we may establish a huge number of connections
+      // If we don't do this, we may establish a huge number of connections
       // very rapidly if many workers try to acquire a lock at once. For
       // example, this can happen if there are a large number of webhook tasks
       // in the queue.
 
-      self::$pool[] = $conn;
+      // See T13627. If this is an external connection, don't put it into
+      // the shared connection pool.
+
+      if (!$this->externalConnection) {
+        self::$pool[] = $conn;
+      }
 
       throw id(new PhutilLockException($lock_name))
         ->setHint($this->newHint($lock_name, $wait));
@@ -201,9 +252,8 @@ final class PhabricatorGlobalLock extends PhutilLock {
     }
 
     $this->conn = null;
-    $this->isExternalConnection = false;
 
-    if (!$this->isExternalConnection) {
+    if (!$this->externalConnection) {
       $conn->close();
       self::$pool[] = $conn;
     }

@@ -156,7 +156,7 @@ abstract class PhabricatorStorageManagementWorkflow
     return $err;
   }
 
-  final private function doAdjustSchemata(
+  private function doAdjustSchemata(
     PhabricatorStorageManagementAPI $api,
     $unsafe) {
 
@@ -913,7 +913,7 @@ abstract class PhabricatorStorageManagementWorkflow
     }
   }
 
-  final private function doUpgradeSchemata(
+  private function doUpgradeSchemata(
     array $apis,
     $apply_only,
     $no_quickstart,
@@ -921,6 +921,10 @@ abstract class PhabricatorStorageManagementWorkflow
 
     $patches = $this->patches;
     $is_dryrun = $this->dryRun;
+
+    // We expect that patches should already be sorted properly. However,
+    // phase behavior will be wrong if they aren't, so make sure.
+    $patches = msortv($patches, 'newSortVector');
 
     $api_map = array();
     foreach ($apis as $api) {
@@ -1225,7 +1229,7 @@ abstract class PhabricatorStorageManagementWorkflow
     // log table yet, or may need to adjust it.
 
     return PhabricatorGlobalLock::newLock('adjust', $parameters)
-      ->useSpecificConnection($api->getConn(null))
+      ->setExternalConnection($api->getConn(null))
       ->setDisableLogging(true)
       ->lock();
   }

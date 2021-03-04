@@ -214,6 +214,11 @@ final class DiffusionServeController extends DiffusionController {
       $viewer = new PhabricatorUser();
     }
 
+    // See T13590. Some pathways, like error handling, may require unusual
+    // access to things like timezone information. These are fine to build
+    // inline; this pathway is not lightweight anyway.
+    $viewer->setAllowInlineCacheGeneration(true);
+
     $this->setServiceViewer($viewer);
 
     $allow_public = PhabricatorEnv::getEnvConfig('policy.allow-public');
@@ -392,7 +397,25 @@ final class DiffusionServeController extends DiffusionController {
       switch ($vcs_type) {
         case PhabricatorRepositoryType::REPOSITORY_TYPE_GIT:
         case PhabricatorRepositoryType::REPOSITORY_TYPE_MERCURIAL:
-          $result = $this->serveVCSRequest($repository, $viewer);
+          $caught = null;
+          try {
+            $result = $this->serveVCSRequest($repository, $viewer);
+          } catch (Exception $ex) {
+            $caught = $ex;
+          } catch (Throwable $ex) {
+            $caught = $ex;
+          }
+
+          if ($caught) {
+            // We never expect an uncaught exception here, so dump it to the
+            // log. All routine errors should have been converted into Response
+            // objects by a lower layer.
+            phlog($caught);
+
+            $result = new PhabricatorVCSResponse(
+              500,
+              phutil_string_cast($caught->getMessage()));
+          }
           break;
         case PhabricatorRepositoryType::REPOSITORY_TYPE_SVN:
           $result = new PhabricatorVCSResponse(
