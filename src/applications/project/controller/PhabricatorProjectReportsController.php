@@ -120,9 +120,14 @@ final class PhabricatorProjectReportsController
       $max_age = max($ages);
       foreach ($histogram as $age => $count) {
         $bar = new PHUISegmentBarView();
+        $weeks = ceil($age/7);
+        $weeksEnd=$weeks-1;
+        $label = pht("%d week(s)", $weeks);
+        $href = "/maniphest/?createdStart=$weeks weeks ago&createdEnd=$weeksEnd weeks ago";
+        $link = phutil_tag('a', ['href'=>$href], $label);
         $bar
           ->setBigbars(true)
-          ->setLabel(pht("%d week(s)", $age/7));
+          ->setLabel($link);
         if ($age == $max_age) {
           $bar->setLabel('Older');
         }

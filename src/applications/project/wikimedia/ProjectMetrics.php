@@ -222,7 +222,6 @@ class ProjectMetrics {
         } else {
           $current = key($buckets);
         }
-        $buckets[$current]++;
       }
     }
     return $buckets;
