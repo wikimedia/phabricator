@@ -246,9 +246,10 @@ final class PhabricatorProjectReportsController
           continue;
         }
 
+        $label = phutil_tag('a', ['href'=>$val['href']], $val['name']);
         $bar = id(new PHUISegmentBarView())
           ->setBigbars(true)
-          ->setLabel($val['name']);
+          ->setLabel($label);
 
         $bar->newSegment()
           ->setWidth($task_count / $total )
@@ -334,7 +335,7 @@ final class PhabricatorProjectReportsController
         $year = $start->format('Y');
         if ($month < 4) {
             $start->modify('first day of january ' . $year);
-            $end->modify('first day of january ' . $year);
+            $end->modify('last day of march ' . $year);
         } else if ($month < 7) {
             $start->modify('first day of april ' . $year);
             $end->modify('last day of june ' . $year);

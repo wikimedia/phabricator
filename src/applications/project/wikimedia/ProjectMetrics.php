@@ -77,10 +77,19 @@ class ProjectMetrics {
     // initialize structure for workboard columns
     foreach($columns as $col) {
       $phid = $col->getPHID();
+      $proxy = $col->getProxy();
+
+      if ($proxy) {
+        $proxyphid = $proxy->getPHID();
+        $col_search_url = "/maniphest/?tags=$proxyphid#R";
+      } else {
+        $col_search_url = "/maniphest/?columns=$phid#R";
+      }
       $tasks_by_column[$phid] = [
-        "name" => $col->getDisplayName(),
+        "name"  => $col->getDisplayName(),
+        "href"  => $col_search_url,
         "tasks" => [],
-        "ages" => []
+        "ages"  => []
       ];
     }
 
