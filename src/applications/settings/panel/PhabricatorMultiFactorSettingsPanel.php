@@ -60,8 +60,6 @@ final class PhabricatorMultiFactorSettingsPanel
     $rowc = array();
 
     $highlight_id = $request->getInt('id');
-    $showWarning = false;
-
     foreach ($factors as $factor) {
       $provider = $factor->getFactorProvider();
 
@@ -71,22 +69,14 @@ final class PhabricatorMultiFactorSettingsPanel
         $rowc[] = null;
       }
 
-      if ($factor->getDateCreated() < 1564704000) {
-        $status_icon = "fa-exclamation-triangle";
-        $status_color = "yellow";
-        $icon = id(new PHUIIconView())
-          ->setIcon("{$status_icon} {$status_color}")
-          ->setTooltip(pht('Invalidated.'));
-        $showWarning = true;
-      } else {
-        $status = $provider->newStatus();
-        $status_icon = $status->getFactorIcon();
-        $status_color = $status->getFactorColor();
+      $status = $provider->newStatus();
+      $status_icon = $status->getFactorIcon();
+      $status_color = $status->getFactorColor();
 
-        $icon = id(new PHUIIconView())
-          ->setIcon("{$status_icon} {$status_color}")
-          ->setTooltip(pht('Provider: %s', $status->getName()));
-      }
+      $icon = id(new PHUIIconView())
+        ->setIcon("{$status_icon} {$status_color}")
+        ->setTooltip(pht('Provider: %s', $status->getName()));
+
       $details = $provider->getConfigurationListDetails($factor, $viewer);
 
       $rows[] = array(
@@ -179,24 +169,7 @@ final class PhabricatorMultiFactorSettingsPanel
       ->setHref($help_uri)
       ->setColor(PHUIButtonView::GREY);
 
-    $box = $this->newBox(pht('Authentication Factors'), $table, $buttons);
-    if ($showWarning) {
-      $warningView = new PHUIInfoView();
-      $warningView->setSeverity('warning');
-      $warningView->setTitle('One of your factors needs to be replaced.');
-      $warningView->setErrors( [
-        [
-          'Please replace any authentication factor which was created prior to August of 2019. ',
-          'You can simply remove the old factor and then click "+ Add Auth Factor" to replace it.',
-          ' See ', phutil_tag('a', [
-            'href' => 'https://lists.wikimedia.org/pipermail/wikitech-l/2020-January/092960.html',
-            'target' => '_blank' ],
-            'this mailing list thread'), ' for more information',
-          ]]);
-      $box->appendChild(phutil_tag('br'));
-      $box->appendChild($warningView);
-    }
-    return $box;
+    return $this->newBox(pht('Authentication Factors'), $table, $buttons);
   }
 
   private function processNew(AphrontRequest $request) {
