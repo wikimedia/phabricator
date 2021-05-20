@@ -198,7 +198,7 @@ final class DifferentialTransactionEditor
         ->setNewValue($want_downgrade);
     }
 
-    $is_commandeer = false;
+    $new_author_phid = null;
     switch ($xaction->getTransactionType()) {
       case DifferentialRevisionUpdateTransaction::TRANSACTIONTYPE:
         if ($this->getIsCloseByCommit()) {
@@ -239,12 +239,22 @@ final class DifferentialTransactionEditor
         break;
 
       case DifferentialRevisionCommandeerTransaction::TRANSACTIONTYPE:
-        $is_commandeer = true;
+        $new_author_phid = $actor_phid;
         break;
+
+      case DifferentialRevisionAuthorTransaction::TRANSACTIONTYPE:
+        $new_author_phid = $xaction->getNewValue();
+        break;
+
     }
 
-    if ($is_commandeer) {
-      $results[] = $this->newCommandeerReviewerTransaction($object);
+    if ($new_author_phid) {
+      $swap_xaction = $this->newSwapReviewersTransaction(
+        $object,
+        $new_author_phid);
+      if ($swap_xaction) {
+        $results[] = $swap_xaction;
+      }
     }
 
     if (!$this->didExpandInlineState) {
@@ -330,21 +340,57 @@ final class DifferentialTransactionEditor
         pht('Failed to load revision from transaction finalization.'));
     }
 
+    $active_diff = $new_revision->getActiveDiff();
+    $new_diff_phid = $active_diff->getPHID();
+
     $object->attachReviewers($new_revision->getReviewers());
-    $object->attachActiveDiff($new_revision->getActiveDiff());
+    $object->attachActiveDiff($active_diff);
     $object->attachRepository($new_revision->getRepository());
+
+    $has_new_diff = false;
+    $should_index_paths = false;
+    $should_index_hashes = false;
+    $need_changesets = false;
 
     foreach ($xactions as $xaction) {
       switch ($xaction->getTransactionType()) {
         case DifferentialRevisionUpdateTransaction::TRANSACTIONTYPE:
-          $diff = $this->requireDiff($xaction->getNewValue(), true);
+          $need_changesets = true;
 
-          // Update these denormalized index tables when we attach a new
-          // diff to a revision.
+          $new_diff_phid = $xaction->getNewValue();
+          $has_new_diff = true;
 
-          $this->updateRevisionHashTable($object, $diff);
-          $this->updateAffectedPathTable($object, $diff);
+          $should_index_paths = true;
+          $should_index_hashes = true;
           break;
+        case DifferentialRevisionRepositoryTransaction::TRANSACTIONTYPE:
+          // The "AffectedPath" table denormalizes the repository, so we
+          // want to update the index if the repository changes.
+
+          $need_changesets = true;
+
+          $should_index_paths = true;
+          break;
+      }
+    }
+
+    if ($need_changesets) {
+      $new_diff = $this->requireDiff($new_diff_phid, true);
+
+      if ($should_index_paths) {
+        id(new DifferentialAffectedPathEngine())
+          ->setRevision($object)
+          ->setDiff($new_diff)
+          ->updateAffectedPaths();
+      }
+
+      if ($should_index_hashes) {
+        $this->updateRevisionHashTable($object, $new_diff);
+      }
+
+      if ($has_new_diff) {
+        $this->ownersDiff = $new_diff;
+        $this->ownersChangesets = $new_diff->getChangesets();
       }
     }
 
@@ -1246,99 +1292,6 @@ final class DifferentialTransactionEditor
   }
 
   /**
-   * Update the table which links Differential revisions to paths they affect,
-   * so Diffusion can efficiently find pending revisions for a given file.
-   */
-  private function updateAffectedPathTable(
-    DifferentialRevision $revision,
-    DifferentialDiff $diff) {
-
-    $repository = $revision->getRepository();
-    if (!$repository) {
-      // The repository where the code lives is untracked.
-      return;
-    }
-
-    $path_prefix = null;
-
-    $local_root = $diff->getSourceControlPath();
-    if ($local_root) {
-      // We're in a working copy which supports subdirectory checkouts (e.g.,
-      // SVN) so we need to figure out what prefix we should add to each path
-      // (e.g., trunk/projects/example/) to get the absolute path from the
-      // root of the repository. DVCS systems like Git and Mercurial are not
-      // affected.
-
-      // Normalize both paths and check if the repository root is a prefix of
-      // the local root. If so, throw it away. Note that this correctly handles
-      // the case where the remote path is "/".
-      $local_root = id(new PhutilURI($local_root))->getPath();
-      $local_root = rtrim($local_root, '/');
-
-      $repo_root = id(new PhutilURI($repository->getRemoteURI()))->getPath();
-      $repo_root = rtrim($repo_root, '/');
-
-      if (!strncmp($repo_root, $local_root, strlen($repo_root))) {
-        $path_prefix = substr($local_root, strlen($repo_root));
-      }
-    }
-
-    $changesets = $diff->getChangesets();
-    $paths = array();
-    foreach ($changesets as $changeset) {
-      $paths[] = $path_prefix.'/'.$changeset->getFilename();
-    }
-
-    // If this change affected paths, save the changesets so we can apply
-    // Owners rules to them later.
-    if ($paths) {
-      $this->ownersDiff = $diff;
-      $this->ownersChangesets = $changesets;
-    }
-
-    // Mark this as also touching all parent paths, so you can see all pending
-    // changes to any file within a directory.
-    $all_paths = array();
-    foreach ($paths as $local) {
-      foreach (DiffusionPathIDQuery::expandPathToRoot($local) as $path) {
-        $all_paths[$path] = true;
-      }
-    }
-    $all_paths = array_keys($all_paths);
-
-    $path_ids =
-      PhabricatorRepositoryCommitChangeParserWorker::lookupOrCreatePaths(
-        $all_paths);
-
-    $table = new DifferentialAffectedPath();
-    $conn_w = $table->establishConnection('w');
-
-    $sql = array();
-    foreach ($path_ids as $path_id) {
-      $sql[] = qsprintf(
-        $conn_w,
-        '(%d, %d, %d, %d)',
-        $repository->getID(),
-        $path_id,
-        time(),
-        $revision->getID());
-    }
-
-    queryfx(
-      $conn_w,
-      'DELETE FROM %T WHERE revisionID = %d',
-      $table->getTableName(),
-      $revision->getID());
-    foreach (array_chunk($sql, 256) as $chunk) {
-      queryfx(
-        $conn_w,
-        'INSERT INTO %T (repositoryID, pathID, epoch, revisionID) VALUES %LQ',
-        $table->getTableName(),
-        $chunk);
-    }
-  }
-
-  /**
    * Update the table connecting revisions to DVCS local hashes, so we can
    * identify revisions by commit/tree hashes.
    */
@@ -1472,21 +1425,25 @@ final class DifferentialTransactionEditor
     return $this;
   }
 
-  private function newCommandeerReviewerTransaction(
-    DifferentialRevision $revision) {
+  private function newSwapReviewersTransaction(
+    DifferentialRevision $revision,
+    $new_author_phid) {
 
-    $actor_phid = $this->getActingAsPHID();
-    $owner_phid = $revision->getAuthorPHID();
+    $old_author_phid = $revision->getAuthorPHID();
 
-    // If the user is commandeering, add the previous owner as a
-    // reviewer and remove the actor.
+    if ($old_author_phid === $new_author_phid) {
+      return;
+    }
+
+    // If the revision is changing authorship, add the previous author as a
+    // reviewer and remove the new author.
 
     $edits = array(
       '-' => array(
-        $actor_phid,
+        $new_author_phid,
       ),
       '+' => array(
-        $owner_phid,
+        $old_author_phid,
       ),
     );
 
@@ -1502,6 +1459,7 @@ final class DifferentialTransactionEditor
       ->setIsCommandeerSideEffect(true)
       ->setNewValue($edits);
   }
+
 
   public function getActiveDiff($object) {
     if ($this->getIsNewObject()) {
