@@ -79,7 +79,7 @@
     "xhpast": {
       "type": "xhpast",
       "include": "(\\.php$)",
-      "standard": "phutil.xhpast"
+      "standard": "wikimedia.xhpast"
     }
   }
 }
