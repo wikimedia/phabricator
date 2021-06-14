@@ -535,10 +535,14 @@ class PhabricatorApplicationTransactionView extends AphrontView {
         $xaction->getObject());
       $event->setCanInteract($can_interact);
     }
-
-    $comment = $this->renderTransactionContent($xaction);
-    if ($comment) {
-      $event->appendChild($comment);
+    try {
+      $comment = $this->renderTransactionContent($xaction);
+      if ($comment) {
+        $event->appendChild($comment);
+      }
+    } catch(Exception $e) {
+      phlog($xaction);
+      phlog($e);
     }
 
     return $event;
