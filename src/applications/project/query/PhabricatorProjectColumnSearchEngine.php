@@ -26,7 +26,11 @@ final class PhabricatorProjectColumnSearchEngine
         ->setKey('projectPHIDs')
         ->setConduitKey('projects')
         ->setAliases(array('project', 'projects', 'projectPHID')),
-    );
+      id(new PhabricatorSearchCheckboxesField())
+        ->setKey('statuses')
+        ->setLabel(pht('Status'))
+        ->setOptions(PhabricatorProjectColumn::getStatusNameMap()),
+      );
   }
 
   protected function buildQueryFromParameters(array $map) {
@@ -34,6 +38,10 @@ final class PhabricatorProjectColumnSearchEngine
 
     if ($map['projectPHIDs']) {
       $query->withProjectPHIDs($map['projectPHIDs']);
+    }
+
+    if ($map['statuses']) {
+      $query->withStatuses($map['statuses']);
     }
 
     return $query;

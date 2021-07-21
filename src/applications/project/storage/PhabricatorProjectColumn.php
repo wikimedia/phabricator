@@ -24,6 +24,13 @@ final class PhabricatorProjectColumn
   private $proxy = self::ATTACHABLE;
   private $trigger = self::ATTACHABLE;
 
+  public static function getStatusNameMap() {
+    return array(
+      self::STATUS_ACTIVE => pht('Active'),
+      self::STATUS_HIDDEN => pht('Hidden'),
+    );
+  }
+
   public static function initializeNewColumn(PhabricatorUser $user) {
     return id(new PhabricatorProjectColumn())
       ->setName('')
@@ -256,6 +263,14 @@ final class PhabricatorProjectColumn
           pht(
             'For columns that proxy another object (like a subproject or '.
             'milestone), the PHID of the object they proxy.')),
+      id(new PhabricatorConduitSearchFieldSpecification())
+        ->setKey('status')
+        ->setType('string')
+        ->setDescription(pht('Active or hidden status of the column.')),
+      id(new PhabricatorConduitSearchFieldSpecification())
+        ->setKey('isDefaultColumn')
+        ->setType('bool')
+        ->setDescription(pht('Whether this is the default column.')),
     );
   }
 
@@ -264,6 +279,8 @@ final class PhabricatorProjectColumn
       'name' => $this->getDisplayName(),
       'proxyPHID' => $this->getProxyPHID(),
       'project' => $this->getProject()->getRefForConduit(),
+      'status' => $this->getStatus(),
+      'isDefaultColumn' => $this->isDefaultColumn(),
     );
   }
 
